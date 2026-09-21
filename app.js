@@ -754,6 +754,7 @@
     } catch (error) {
       disconnectRealTransport();
       setDeviceState("disconnected");
+      stateBannerCopy.textContent = error.message;
       connectMIDI.textContent = "Reconnect";
       $("#hardware-title").textContent = "disting NT";
       $("#hardware-detail").textContent = error.message;

@@ -192,7 +192,19 @@
     }
 
     static choosePort(ports, direction) {
-      const candidates = [...ports.values()];
+      const candidates = [];
+      if (ports && typeof ports.forEach === "function") {
+        ports.forEach(port => candidates.push(port));
+      } else if (ports && typeof ports.values === "function") {
+        const iterator = ports.values();
+        let next = iterator.next();
+        while (!next.done) {
+          candidates.push(next.value);
+          next = iterator.next();
+        }
+      } else if (ports && typeof ports === "object") {
+        Object.keys(ports).forEach(key => candidates.push(ports[key]));
+      }
       const preferredSuffix = direction === "input" ? "midi in" : "midi out";
       return candidates.find(port => port.name?.toLowerCase() === `disting nt ${preferredSuffix}`) ||
         candidates.find(port => {
@@ -200,6 +212,7 @@
           return name.includes("disting nt") && name.includes(preferredSuffix);
         }) ||
         candidates.find(port => port.name?.toLowerCase().includes("disting nt")) ||
+        (candidates.length === 1 ? candidates[0] : null) ||
         null;
     }
 
@@ -248,7 +261,7 @@
         wallTime: Date.now()
       });
       const header = [...PRODUCT_HEADER, this.sysexId];
-      if (bytes.length < 8 || !bytesMatch(bytes, header) || bytes.at(-1) !== 0xF7) return;
+      if (bytes.length < 8 || !bytesMatch(bytes, header) || bytes[bytes.length - 1] !== 0xF7) return;
       this.onEvent({ type: "received", command: bytes[6], byteLength: bytes.length });
       if (!this.pending || bytes[6] !== this.pending.responseCommand) return;
       if (this.pending.match && !this.pending.match(bytes)) return;
