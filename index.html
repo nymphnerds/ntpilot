@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NTPilot — iPad MIDI Lab</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260921-6">
 </head>
 <body>
   <div class="prototype-bar" aria-label="Prototype controls">
@@ -64,13 +64,13 @@
             <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>
             <span>Editor</span>
           </button>
-          <button class="nav-item" data-view="control">
-            <svg viewBox="0 0 24 24"><path d="M5 5v14M12 5v14M19 5v14M3 9h4m3 6h4m3-7h4"/></svg>
-            <span>Performance</span>
-          </button>
           <button class="nav-item" data-view="mapping">
             <svg viewBox="0 0 24 24"><path d="M5 7h6l2 3h6M5 17h6l2-3h6M5 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm18 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm18-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/></svg>
             <span>Mapping</span>
+          </button>
+          <button class="nav-item" data-view="control">
+            <svg viewBox="0 0 24 24"><path d="M5 5v14M12 5v14M19 5v14M3 9h4m3 6h4m3-7h4"/></svg>
+            <span>Performance</span>
           </button>
           <button class="nav-item" data-view="assistant">
             <svg viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 5h8m-8 4h5"/></svg>
@@ -200,36 +200,42 @@
                     <span>This visual pass only carries the WitchboardX parameter fixture. Production parameter definitions come live from the NT.</span>
                   </div>
                   <div class="parameter-list" id="parameter-list">
-                    <div class="parameter-row">
-                      <div class="parameter-name"><strong>Switch fade</strong><span>Global</span></div>
-                      <input type="range" min="0" max="100" value="0" aria-label="Switch fade">
-                      <output>0 ms</output>
-                      <button class="map-shortcut" title="Map Switch fade" data-param="Switch fade">+</button>
-                    </div>
-                    <div class="parameter-row selected">
-                      <div class="parameter-name"><strong>Sidechain</strong><span>Master</span></div>
-                      <input type="range" min="0" max="1" value="1" aria-label="Sidechain">
-                      <output>On</output>
-                      <button class="map-shortcut mapped" title="MIDI channel 15 · CC 80" data-param="Sidechain">15:80</button>
-                    </div>
-                    <div class="parameter-row">
-                      <div class="parameter-name"><strong>SC Depth</strong><span>Master</span></div>
-                      <input type="range" min="0" max="100" value="9" aria-label="Sidechain depth">
-                      <output>9%</output>
-                      <button class="map-shortcut" title="Map SC Depth" data-param="SC Depth">+</button>
-                    </div>
-                    <div class="parameter-row">
-                      <div class="parameter-name"><strong>Filter sweep</strong><span>Master filter</span></div>
-                      <input type="range" min="-100" max="100" value="26" aria-label="Filter sweep">
-                      <output>+26</output>
-                      <button class="map-shortcut mapped" title="MIDI channel 16 · CC 9" data-param="Filter sweep">16:9</button>
-                    </div>
-                    <div class="parameter-row">
-                      <div class="parameter-name"><strong>Master Gain</strong><span>Output</span></div>
-                      <input type="range" min="-12" max="6" value="0" aria-label="Master Gain">
-                      <output>0 dB</output>
-                      <button class="map-shortcut" title="Map Master Gain" data-param="Master Gain">+</button>
-                    </div>
+                    <section class="parameter-section collapsed">
+                      <button class="parameter-section-heading" type="button" aria-expanded="false"><strong>Global</strong><span>1 parameter</span></button>
+                      <div class="parameter-row">
+                        <div class="parameter-name"><strong>Switch fade</strong><span>Parameter 1</span></div>
+                        <input type="range" min="0" max="100" value="0" aria-label="Switch fade">
+                        <output>0 ms</output>
+                        <button class="map-shortcut" title="Map Switch fade" data-param="Switch fade">+</button>
+                      </div>
+                    </section>
+                    <section class="parameter-section collapsed">
+                      <button class="parameter-section-heading" type="button" aria-expanded="false"><strong>Sidechain/Master</strong><span>4 sample parameters</span></button>
+                      <div class="parameter-row selected">
+                        <div class="parameter-name"><strong>Sidechain</strong><span>Parameter 2</span></div>
+                        <input type="range" min="0" max="1" value="1" aria-label="Sidechain">
+                        <output>On</output>
+                        <button class="map-shortcut mapped" title="MIDI channel 15 · CC 80" data-param="Sidechain">15:80</button>
+                      </div>
+                      <div class="parameter-row">
+                        <div class="parameter-name"><strong>SC Depth</strong><span>Parameter 3</span></div>
+                        <input type="range" min="0" max="100" value="9" aria-label="Sidechain depth">
+                        <output>9%</output>
+                        <button class="map-shortcut" title="Map SC Depth" data-param="SC Depth">+</button>
+                      </div>
+                      <div class="parameter-row">
+                        <div class="parameter-name"><strong>Filter sweep</strong><span>Parameter 4</span></div>
+                        <input type="range" min="-100" max="100" value="26" aria-label="Filter sweep">
+                        <output>+26</output>
+                        <button class="map-shortcut mapped" title="MIDI channel 16 · CC 9" data-param="Filter sweep">16:9</button>
+                      </div>
+                      <div class="parameter-row">
+                        <div class="parameter-name"><strong>Master Gain</strong><span>Parameter 5</span></div>
+                        <input type="range" min="-12" max="6" value="0" aria-label="Master Gain">
+                        <output>0 dB</output>
+                        <button class="map-shortcut" title="Map Master Gain" data-param="Master Gain">+</button>
+                      </div>
+                    </section>
                   </div>
                 </div>
               </div>
@@ -265,20 +271,7 @@
               <div><p class="eyebrow">Native NT assignments</p><h1 id="mapping-heading">MIDI mapping</h1></div>
               <div class="mapping-heading-actions">
                 <span class="verified-source"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg> <span id="mapping-source-copy">Read from NT</span></span>
-                <button class="primary-button" id="new-mapping-button">+ New mapping</button>
               </div>
-            </div>
-            <div class="new-mapping-picker hidden" id="new-mapping-picker">
-              <div><strong>Create native NT mapping</strong><span>Choose an unmapped parameter. This creates a draft only.</span></div>
-              <label>Parameter
-                <select id="new-mapping-target">
-                  <option value="Master Gain">WitchboardX · Master Gain</option>
-                  <option value="SC Depth">WitchboardX · SC Depth</option>
-                  <option value="Switch fade">WitchboardX · Switch fade</option>
-                </select>
-              </label>
-              <button class="secondary-button" id="cancel-new-mapping">Cancel</button>
-              <button class="primary-button" id="create-mapping-draft">Create draft</button>
             </div>
             <div class="mapping-layout">
               <div class="mapping-browser">
@@ -286,7 +279,7 @@
                   <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
                   <input id="mapping-search" type="search" placeholder="Find a parameter" aria-label="Find a parameter">
                 </div>
-                <div class="mapping-section-label"><span>Slot 7 · WitchboardX</span><span id="mapping-count">4 mapped · 3 available</span></div>
+                <div class="mapping-section-label"><span id="mapping-slot-label">Slot 7 · WitchboardX</span><span id="mapping-count">4 mappings</span></div>
                 <div class="mapping-items" id="mapping-items">
                   <button class="mapping-item active" data-name="Sidechain" data-category="Master" data-cc="80" data-channel="15" data-min="0" data-max="1">
                     <span><strong>Sidechain</strong><small>Master</small></span><em class="mapped-label">Ch 15 · CC 80</em>
@@ -300,16 +293,8 @@
                   <button class="mapping-item" data-name="Kick Insert 1" data-category="Channel 1 · Kick" data-cc="80" data-channel="1" data-min="0" data-max="4">
                     <span><strong>Kick Insert 1</strong><small>Channel 1</small></span><em class="mapped-label">Ch 1 · CC 80</em>
                   </button>
-                  <button class="mapping-item" data-name="Master Gain" data-category="Output" data-cc="" data-channel="1" data-min="-12" data-max="6">
-                    <span><strong>Master Gain</strong><small>Output</small></span><em>Not mapped</em>
-                  </button>
-                  <button class="mapping-item" data-name="SC Depth" data-category="Master" data-cc="" data-channel="1" data-min="0" data-max="100">
-                    <span><strong>SC Depth</strong><small>Master</small></span><em>Not mapped</em>
-                  </button>
-                  <button class="mapping-item" data-name="Switch fade" data-category="Global" data-cc="" data-channel="1" data-min="0" data-max="100">
-                    <span><strong>Switch fade</strong><small>Global</small></span><em>Not mapped</em>
-                  </button>
                 </div>
+                <p class="mapping-empty hidden" id="mapping-empty">No MIDI mappings in this slot. Add one with a parameter’s + button in Editor.</p>
               </div>
 
               <form class="mapping-card" id="mapping-form">
@@ -327,12 +312,12 @@
                 </div>
                 <div class="toggle-row">
                   <label class="switch-line"><input id="map-enabled" type="checkbox" checked><span class="switch"></span><span><strong>Enabled</strong><small>NT responds to this assignment</small></span></label>
-                  <label class="switch-line"><input type="checkbox"><span class="switch"></span><span><strong>Relative</strong><small>Interpret controller deltas</small></span></label>
-                  <label class="switch-line"><input type="checkbox"><span class="switch"></span><span><strong>Symmetric</strong><small>Centre around zero</small></span></label>
+                  <label class="switch-line"><input id="map-relative" type="checkbox"><span class="switch"></span><span><strong>Relative</strong><small>Interpret controller deltas</small></span></label>
+                  <label class="switch-line"><input id="map-symmetric" type="checkbox"><span class="switch"></span><span><strong>Symmetric</strong><small>Centre around zero</small></span></label>
                 </div>
                 <div class="mapping-warning hidden" id="mapping-warning">
                   <svg viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3Zm0 6v5m0 3v1"/></svg>
-                  <div><strong>CC already used</strong><p>Channel 1 · CC 9 already controls Kick Gain. Continue only if you deliberately want both parameters to move together.</p></div>
+                  <div><strong>CC already used</strong><p id="mapping-warning-copy">This channel and CC already control another parameter. Continue only if you deliberately want both parameters to move together.</p></div>
                 </div>
                 <div class="mapping-route-note"><span class="info-icon">i</span><p>This edits the NT's own mapping. Your DAW must route controller MIDI to the disting NT.</p><button type="button">Routing help</button></div>
                 <div class="form-actions">
@@ -340,6 +325,10 @@
                   <button type="submit" class="primary-button" id="apply-mapping" disabled>Apply to NT</button>
                 </div>
               </form>
+              <div class="mapping-card mapping-empty-card hidden" id="mapping-empty-card">
+                <strong>No mapping selected</strong>
+                <p>Open an existing mapping, or use a parameter’s + button in Editor to begin a new mapping.</p>
+              </div>
             </div>
           </section>
 
@@ -424,7 +413,7 @@
     </section>
   </main>
 
-  <script src="web-midi-transport.js?v=20260921-5"></script>
-  <script src="app.js?v=20260921-5"></script>
+  <script src="web-midi-transport.js?v=20260921-6"></script>
+  <script src="app.js?v=20260921-6"></script>
 </body>
 </html>

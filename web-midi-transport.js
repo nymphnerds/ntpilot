@@ -30,6 +30,86 @@
     return bytes.map(value => value.toString(16).padStart(2, "0")).join("");
   }
 
+  const MIDI_MAPPING_TYPES = [
+    "CC",
+    "Note — momentary",
+    "Note — toggle",
+    "14-bit CC — low",
+    "14-bit CC — high",
+    "Pitch bend",
+    "Channel pressure"
+  ];
+
+  function parseParameterPages(payload) {
+    const data = payload.slice(1);
+    const pageCount = data[0] ?? 0;
+    const pages = [];
+    let offset = 1;
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+      const nameEnd = data.indexOf(0, offset);
+      if (nameEnd < 0 || nameEnd - offset > 32) throw new Error("NT returned malformed parameter pages.");
+      const name = decodeText(data.slice(offset, nameEnd));
+      offset = nameEnd + 1;
+      const parameterCount = data[offset++] ?? 0;
+      const parameterIndices = [];
+      for (let index = 0; index < parameterCount; index += 1) {
+        if (offset + 1 >= data.length) throw new Error("NT returned incomplete parameter pages.");
+        parameterIndices.push((data[offset] << 7) | data[offset + 1]);
+        offset += 2;
+      }
+      pages.push({ index: pageIndex, name: name || `Page ${pageIndex + 1}`, parameterIndices });
+    }
+    return pages;
+  }
+
+  function parseMappingPayload(payload) {
+    const data = payload.slice(1);
+    if (data.length < 4) throw new Error("NT returned an incomplete mapping.");
+    const parameterIndex = decodeUnsigned21(data.slice(0, 3));
+    const version = data[3];
+    if (version < 1 || version > 7) throw new Error(`NT returned unsupported mapping version ${version}.`);
+    let offset = 4;
+    const cvSource = version >= 4 ? data[offset++] : null;
+    const cvInput = data[offset++] ?? 0;
+    const cvFlags = data[offset++] ?? 0;
+    const cvVolts = data[offset++] ?? 0;
+    const cvDelta = decodeSignedShort(data.slice(offset, offset + 3));
+    offset += 3;
+
+    const cc = data[offset++] ?? 0;
+    const midiFlags = data[offset++] ?? 0;
+    const midiFlags2 = version >= 2 ? (data[offset++] ?? 0) : 0;
+    const min = decodeSignedShort(data.slice(offset, offset + 3));
+    offset += 3;
+    const max = decodeSignedShort(data.slice(offset, offset + 3));
+    const typeCode = midiFlags2 >> 2;
+    return {
+      parameterIndex,
+      version,
+      cv: {
+        source: cvSource,
+        input: cvInput,
+        enabled: Boolean(cvFlags & 1),
+        symmetric: Boolean(cvFlags & 2),
+        volts: cvVolts,
+        delta: cvDelta
+      },
+      midi: {
+        cc,
+        channel: ((midiFlags >> 3) & 0x0F) + 1,
+        typeCode,
+        type: MIDI_MAPPING_TYPES[typeCode] || `Type ${typeCode}`,
+        enabled: Boolean(midiFlags & 1),
+        symmetric: Boolean(midiFlags & 2),
+        relative: Boolean(midiFlags2 & 1),
+        viewChange: Boolean(midiFlags2 & 2),
+        min,
+        max
+      },
+      raw: data
+    };
+  }
+
   function parseMIDIMessage(bytes) {
     const status = bytes[0] ?? 0;
     const hex = bytes.map(value => value.toString(16).padStart(2, "0").toUpperCase()).join(" ");
@@ -291,6 +371,14 @@
         });
       }
 
+      const values = await this.readSlotParameterValues(slot);
+      parameters.forEach((parameter, index) => {
+        parameter.value = values[index] ?? parameter.defaultValue;
+      });
+      return parameters;
+    }
+
+    async readSlotParameterValues(slot) {
       const valuesPayload = await this.request(
         0x44,
         0x44,
@@ -298,13 +386,41 @@
         bytes => bytes[7] === slot
       );
       const valueBytes = valuesPayload.slice(1);
-      parameters.forEach((parameter, index) => {
-        const offset = index * 3;
-        parameter.value = offset + 3 <= valueBytes.length
-          ? decodeSignedShort(valueBytes.slice(offset, offset + 3))
-          : parameter.defaultValue;
+      const values = [];
+      for (let offset = 0; offset + 3 <= valueBytes.length; offset += 3) {
+        values.push(decodeSignedShort(valueBytes.slice(offset, offset + 3)));
+      }
+      return values;
+    }
+
+    async readParameterPages(slot) {
+      const payload = await this.request(0x52, 0x52, [slot], bytes => bytes[7] === slot);
+      return parseParameterPages(payload);
+    }
+
+    async readParameterMapping(slot, parameter) {
+      const encodedParameter = encodeUnsigned21(parameter);
+      const payload = await this.request(
+        0x4B,
+        0x4B,
+        [slot, ...encodedParameter],
+        bytes => bytes[7] === slot && decodeUnsigned21(bytes.slice(8, 11)) === parameter
+      );
+      return parseMappingPayload(payload);
+    }
+
+    async readSlotEditorState(slot) {
+      const parameters = await this.readSlotParameters(slot);
+      const pages = await this.readParameterPages(slot);
+      const mappings = [];
+      for (const parameter of parameters) {
+        mappings.push(await this.readParameterMapping(slot, parameter.index));
+      }
+      const mappingsByParameter = new Map(mappings.map(mapping => [mapping.parameterIndex, mapping]));
+      parameters.forEach(parameter => {
+        parameter.mapping = mappingsByParameter.get(parameter.index) || null;
       });
-      return parameters;
+      return { parameters, pages, mappings };
     }
 
     async readSnapshot() {
@@ -340,6 +456,8 @@
       decodeSignedShort,
       encodeUnsigned21,
       guidKey,
+      parseParameterPages,
+      parseMappingPayload,
       parseMIDIMessage
     };
   }

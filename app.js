@@ -21,13 +21,14 @@
   const mapChannel = $("#map-channel");
   const mapType = $("#map-type");
   const mapEnabled = $("#map-enabled");
+  const mapRelative = $("#map-relative");
+  const mapSymmetric = $("#map-symmetric");
   const mapMin = $("#map-min");
   const mapMax = $("#map-max");
-  const newMappingButton = $("#new-mapping-button");
-  const newMappingPicker = $("#new-mapping-picker");
-  const newMappingTarget = $("#new-mapping-target");
   const mappingCount = $("#mapping-count");
   const mappingSourceCopy = $("#mapping-source-copy");
+  const mappingEmpty = $("#mapping-empty");
+  const mappingEmptyCard = $("#mapping-empty-card");
   const transportMode = $("#transport-mode");
   const connectMIDI = $("#connect-midi");
   const deviceStateControl = $("#device-state");
@@ -53,6 +54,13 @@
     learnTimer: null,
     parameterReadToken: 0,
     parameterReadQueue: Promise.resolve(),
+    liveParameters: new Map(),
+    activeLiveSlotIndex: null,
+    syncMode: "smart",
+    pollTimer: null,
+    pollToken: 0,
+    pollInFlight: null,
+    lastPollError: null,
     midiEvents: [],
     midiRenderPending: false,
     midiCounts: { all: 0, channel: 0, sysex: 0 }
@@ -104,7 +112,7 @@
     labConnected: {
       label: "NT detected",
       title: "Real NT connected in safe read-only mode",
-      copy: "Preset, slots, and the selected slot's parameters are live. Hardware writes remain blocked; mappings and performance are still fixtures.",
+      copy: "Preset, slots, parameter pages, values, and the selected slot's MIDI mappings are live. Hardware writes remain blocked.",
       action: "Read again",
       bannerClass: "offline"
     }
@@ -177,6 +185,82 @@
     state.midiEvents.unshift(event);
     if (state.midiEvents.length > 200) state.midiEvents.length = 200;
     scheduleMIDIMonitorRender();
+    if (event.message.subtype === "cc") applyLiveCCFeedback(event.message);
+  }
+
+  function applyLiveCCFeedback(message) {
+    if (state.transport !== "real") return;
+    state.liveParameters.forEach(entry => {
+      const midi = entry.parameter.mapping?.midi;
+      if (!midi?.enabled || midi.type !== "CC" || midi.relative) return;
+      if (midi.channel !== message.channel || midi.cc !== message.controller) return;
+      const lower = Math.min(midi.min, midi.max);
+      const upper = Math.max(midi.min, midi.max);
+      const mapped = midi.min + (message.value / 127) * (midi.max - midi.min);
+      const value = Math.min(entry.parameter.max, Math.max(entry.parameter.min,
+        Math.min(upper, Math.max(lower, Math.round(mapped)))));
+      updateLiveParameterEntry(entry, value, "midi-feedback");
+    });
+  }
+
+  function updateLiveParameterEntry(entry, value, feedbackClass = "poll-feedback") {
+    if (entry.parameter.value === value) return;
+    entry.parameter.value = value;
+    entry.slider.value = String(value);
+    entry.output.textContent = formatParameterValue(entry.parameter);
+    entry.row.classList.remove("midi-feedback", "poll-feedback");
+    requestAnimationFrame(() => entry.row.classList.add(feedbackClass));
+    clearTimeout(entry.feedbackTimer);
+    entry.feedbackTimer = setTimeout(() => entry.row.classList.remove(feedbackClass), 180);
+  }
+
+  function stopLivePolling() {
+    clearTimeout(state.pollTimer);
+    state.pollTimer = null;
+    state.pollToken += 1;
+    return state.pollInFlight;
+  }
+
+  function pollingDelay() {
+    if (state.syncMode === "fast") return 100;
+    if (state.syncMode === "smart") return 250;
+    return null;
+  }
+
+  function startLivePolling(slotIndex) {
+    stopLivePolling();
+    state.activeLiveSlotIndex = slotIndex;
+    const delay = pollingDelay();
+    if (delay == null || !state.ntTransport || document.hidden) return;
+    const token = state.pollToken;
+
+    const poll = async () => {
+      if (token !== state.pollToken || !state.ntTransport || state.activeLiveSlotIndex !== slotIndex) return;
+      const request = state.ntTransport.readSlotParameterValues(slotIndex);
+      state.pollInFlight = request;
+      try {
+        const values = await request;
+        if (token !== state.pollToken || state.activeLiveSlotIndex !== slotIndex) return;
+        state.liveParameters.forEach(entry => {
+          if (entry.slotInfo.index !== slotIndex) return;
+          const value = values[entry.parameter.index];
+          if (value != null) updateLiveParameterEntry(entry, value);
+        });
+        state.lastPollError = null;
+      } catch (error) {
+        if (token === state.pollToken && error.message !== state.lastPollError) {
+          state.lastPollError = error.message;
+          showToast(`Live refresh delayed · ${error.message}`);
+        }
+      } finally {
+        if (state.pollInFlight === request) state.pollInFlight = null;
+        if (token === state.pollToken && state.ntTransport && state.activeLiveSlotIndex === slotIndex) {
+          state.pollTimer = setTimeout(poll, delay);
+        }
+      }
+    };
+
+    state.pollTimer = setTimeout(poll, delay);
   }
 
   function setView(view) {
@@ -219,8 +303,8 @@
     stateBannerTitle.textContent = detail.title;
     stateBannerCopy.textContent = detail.copy;
     stateAction.textContent = detail.action;
-    mappingSourceCopy.textContent = nextState === "offline" ? "Local draft" :
-      state.transport === "real" ? "Demo fixture · not live" : "Fake NT fixture";
+    if (nextState === "offline") mappingSourceCopy.textContent = "Local draft";
+    else if (state.transport !== "real") mappingSourceCopy.textContent = "Fake NT fixture";
     mappingForm.setAttribute("aria-disabled", String(!canMutate()));
     applyMapping.textContent = nextState === "offline" ? "Save to draft" : "Apply to NT";
     applyMapping.disabled = !canMutate() || !state.mappingDirty;
@@ -234,7 +318,9 @@
       cc: mapCC.value,
       min: mapMin.value,
       max: mapMax.value,
-      enabled: mapEnabled.checked
+      enabled: mapEnabled.checked,
+      relative: mapRelative.checked,
+      symmetric: mapSymmetric.checked
     };
   }
 
@@ -249,6 +335,8 @@
     mapMin.value = item.dataset.min || "0";
     mapMax.value = item.dataset.max || "100";
     mapEnabled.checked = Boolean(item.dataset.cc);
+    mapRelative.checked = item.dataset.relative === "true";
+    mapSymmetric.checked = item.dataset.symmetric === "true";
     state.mappingBaseline = currentMappingValues();
     state.mappingDirty = false;
     state.undoMapping = null;
@@ -257,40 +345,29 @@
   }
 
   function mappingIsConflicted() {
-    return mapChannel.value === "1" && mapCC.value === "9";
+    if (!mapEnabled.checked || mapType.value !== "CC") return false;
+    return $$(".mapping-item").some(item => item !== state.selectedMapping &&
+      item.dataset.cc !== "" && item.dataset.type === "CC" &&
+      item.dataset.channel === mapChannel.value && item.dataset.cc === mapCC.value);
   }
 
   function updateMappingState() {
-    mappingWarning.classList.toggle("hidden", !mappingIsConflicted());
+    const conflicted = mappingIsConflicted();
+    mappingWarning.classList.toggle("hidden", !conflicted);
+    if (conflicted) $("#mapping-warning-copy").textContent = `Channel ${mapChannel.value} · CC ${mapCC.value} already controls another parameter. Continue only if you deliberately want both parameters to move together.`;
     mappingConfirmation.className = `confirmed-badge${state.mappingDirty ? " draft" : ""}`;
     const settledLabel = state.device === "offline" ? "Local draft" :
-      state.transport === "real" ? "Fixture only" : "Confirmed";
+      state.transport === "real" ? "Read from NT" : "Confirmed";
     mappingConfirmation.innerHTML = `<i></i> ${state.mappingDirty ? "Not applied" : settledLabel}`;
     applyMapping.disabled = !canMutate() || !state.mappingDirty;
   }
 
   function updateMappingSummary() {
     const items = $$(".mapping-item");
-    const mapped = items.filter(item => item.dataset.cc !== "").length;
-    mappingCount.textContent = `${mapped} mapped · ${items.length - mapped} available`;
-    const previousTarget = newMappingTarget.value;
-    newMappingTarget.replaceChildren();
-    items.forEach((item, index) => {
-      if (!item.dataset.mappingKey) item.dataset.mappingKey = `fixture:${index}:${item.dataset.name}`;
-      const option = document.createElement("option");
-      option.value = item.dataset.mappingKey;
-      option.textContent = item.dataset.name;
-      option.disabled = item.dataset.cc !== "";
-      newMappingTarget.appendChild(option);
-    });
-    if ([...newMappingTarget.options].some(option => option.value === previousTarget && !option.disabled)) {
-      newMappingTarget.value = previousTarget;
-    }
-    const firstAvailable = [...newMappingTarget.options].find(option => !option.disabled);
-    if (newMappingTarget.selectedOptions[0]?.disabled && firstAvailable) {
-      newMappingTarget.value = firstAvailable.value;
-    }
-    newMappingButton.disabled = !firstAvailable;
+    mappingCount.textContent = `${items.length} mapping${items.length === 1 ? "" : "s"}`;
+    mappingEmpty.classList.toggle("hidden", items.length > 0);
+    mappingForm.classList.toggle("hidden", items.length === 0);
+    mappingEmptyCard.classList.toggle("hidden", items.length > 0);
   }
 
   function openMappingItem(item) {
@@ -338,6 +415,9 @@
     item.dataset.cc = values.enabled ? values.cc : "";
     item.dataset.min = values.min;
     item.dataset.max = values.max;
+    item.dataset.relative = String(Boolean(values.relative));
+    item.dataset.symmetric = String(Boolean(values.symmetric));
+    item.dataset.draft = "false";
     const label = $("em", item);
     label.textContent = mappingLabel(values);
     label.className = values.enabled ? "mapped-label" : "";
@@ -348,6 +428,10 @@
       label.append(" ", warning);
     }
     updateEditorMappingBadge(item, values);
+    if (!values.enabled) {
+      item.remove();
+      state.selectedMapping = null;
+    }
     updateMappingSummary();
   }
 
@@ -358,6 +442,8 @@
     mapMin.value = values.min;
     mapMax.value = values.max;
     mapEnabled.checked = values.enabled;
+    mapRelative.checked = Boolean(values.relative);
+    mapSymmetric.checked = Boolean(values.symmetric);
   }
 
   function showSimulatedIdentity() {
@@ -401,47 +487,80 @@
     return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
   }
 
-  function createMappingItem(parameter, slotInfo) {
+  function mappingKey(slotIndex, parameterIndex) {
+    return `live:${slotIndex}:${parameterIndex}`;
+  }
+
+  function createMappingItem(parameter, slotInfo, { draft = false } = {}) {
+    const midi = parameter.mapping?.midi;
+    if (!draft && !midi?.enabled) return null;
     const item = document.createElement("button");
     item.className = "mapping-item";
     item.type = "button";
-    item.dataset.mappingKey = `live:${slotInfo.index}:${parameter.index}`;
+    item.dataset.mappingKey = mappingKey(slotInfo.index, parameter.index);
     item.dataset.name = parameter.name;
-    item.dataset.category = slotInfo.algorithmName;
-    item.dataset.path = `Slot ${slotInfo.index + 1} · ${slotInfo.name} · Parameter ${parameter.index + 1}`;
+    item.dataset.category = parameter.pageName || slotInfo.algorithmName;
+    item.dataset.path = `Slot ${slotInfo.index + 1} · ${slotInfo.name} · ${parameter.pageName || `Parameter ${parameter.index + 1}`}`;
     item.dataset.parameterIndex = String(parameter.index);
     item.dataset.slotIndex = String(slotInfo.index);
-    item.dataset.cc = "";
-    item.dataset.channel = "1";
-    item.dataset.type = "CC";
-    item.dataset.min = String(parameter.min);
-    item.dataset.max = String(parameter.max);
+    item.dataset.cc = draft ? "" : String(midi.cc);
+    item.dataset.channel = String(midi?.channel || 1);
+    item.dataset.type = midi?.type || "CC";
+    item.dataset.min = String(midi?.min ?? parameter.min);
+    item.dataset.max = String(midi?.max ?? parameter.max);
+    item.dataset.relative = String(Boolean(midi?.relative));
+    item.dataset.symmetric = String(Boolean(midi?.symmetric));
+    item.dataset.draft = String(draft);
     const copy = document.createElement("span");
     const name = document.createElement("strong");
     name.textContent = parameter.name;
     const detail = document.createElement("small");
-    detail.textContent = `Parameter ${parameter.index + 1} · ${slotInfo.algorithmName}`;
+    detail.textContent = `${parameter.pageName || slotInfo.algorithmName} · Parameter ${parameter.index + 1}`;
     copy.append(name, detail);
     const status = document.createElement("em");
-    status.textContent = "Not mapped";
+    status.className = draft ? "" : "mapped-label";
+    status.textContent = draft ? "New draft" : mappingLabel({ ...midi, channel: String(midi.channel), cc: String(midi.cc) });
     item.append(copy, status);
     return item;
   }
 
-  function syncLiveMappingTargets(parameters, slotInfo) {
+  function syncLiveMappings(parameters, slotInfo) {
     const items = $("#mapping-items");
-    items.replaceChildren(...parameters.filter(parameter => parameter.name)
-      .map(parameter => createMappingItem(parameter, slotInfo)));
-    mappingSourceCopy.textContent = "Live parameters · draft only";
+    const liveItems = parameters
+      .filter(parameter => parameter.name && parameter.mapping?.midi?.enabled)
+      .map(parameter => createMappingItem(parameter, slotInfo));
+    items.replaceChildren(...liveItems);
+    $("#mapping-slot-label").textContent = `Slot ${slotInfo.index + 1} · ${slotInfo.name}`;
+    mappingSourceCopy.textContent = `Live · Slot ${slotInfo.index + 1}`;
+    state.selectedMapping = liveItems[0] || null;
+    if (state.selectedMapping) populateMapping(state.selectedMapping);
     updateMappingSummary();
   }
 
-  function renderLiveParameters(parameters, slotInfo) {
+  function renderLiveParameters(editorState, slotInfo) {
+    const { parameters, pages } = editorState;
     const visibleParameters = parameters.filter(parameter => parameter.name);
     const list = $("#parameter-list");
     list.replaceChildren();
-    syncLiveMappingTargets(parameters, slotInfo);
-    visibleParameters.forEach(parameter => {
+    state.liveParameters.clear();
+
+    const parametersByIndex = new Map(visibleParameters.map(parameter => [parameter.index, parameter]));
+    const usedIndices = new Set();
+    const sections = pages.map(page => {
+      const sectionParameters = page.parameterIndices.map(index => parametersByIndex.get(index)).filter(Boolean);
+      sectionParameters.forEach(parameter => {
+        parameter.pageName = page.name;
+        usedIndices.add(parameter.index);
+      });
+      return { name: page.name, parameters: sectionParameters };
+    }).filter(section => section.parameters.length);
+    const remaining = visibleParameters.filter(parameter => !usedIndices.has(parameter.index));
+    if (remaining.length) {
+      remaining.forEach(parameter => { parameter.pageName = "Other"; });
+      sections.push({ name: "Other", parameters: remaining });
+    }
+
+    const createParameterRow = parameter => {
       const row = document.createElement("div");
       row.className = "parameter-row live-parameter-row";
 
@@ -467,14 +586,47 @@
       const pendingMapping = document.createElement("button");
       pendingMapping.className = "map-shortcut";
       pendingMapping.type = "button";
-      pendingMapping.dataset.mappingKey = `live:${slotInfo.index}:${parameter.index}`;
-      pendingMapping.title = `Add mapping for ${parameter.name}`;
-      pendingMapping.setAttribute("aria-label", `Add mapping for ${parameter.name}`);
-      pendingMapping.textContent = "+";
+      pendingMapping.dataset.mappingKey = mappingKey(slotInfo.index, parameter.index);
+      const midi = parameter.mapping?.midi;
+      if (midi?.enabled) {
+        pendingMapping.classList.add("mapped");
+        pendingMapping.title = `MIDI channel ${midi.channel} · ${midi.type}${midi.type === "CC" ? ` ${midi.cc}` : ""}`;
+        pendingMapping.setAttribute("aria-label", `Edit mapping for ${parameter.name}`);
+        pendingMapping.textContent = midi.type === "CC" ? `${midi.channel}:${midi.cc}` : midi.type;
+      } else {
+        pendingMapping.title = `Add mapping for ${parameter.name}`;
+        pendingMapping.setAttribute("aria-label", `Add mapping for ${parameter.name}`);
+        pendingMapping.textContent = "+";
+      }
 
       row.append(name, slider, output, pendingMapping);
-      list.appendChild(row);
+      state.liveParameters.set(pendingMapping.dataset.mappingKey, {
+        parameter,
+        slotInfo,
+        row,
+        slider,
+        output,
+        feedbackTimer: null
+      });
+      return row;
+    };
+
+    sections.forEach(sectionData => {
+      const section = document.createElement("section");
+      section.className = "parameter-section collapsed";
+      const heading = document.createElement("button");
+      heading.className = "parameter-section-heading";
+      heading.type = "button";
+      heading.setAttribute("aria-expanded", "false");
+      const title = document.createElement("strong");
+      title.textContent = sectionData.name;
+      const count = document.createElement("span");
+      count.textContent = `${sectionData.parameters.length} parameter${sectionData.parameters.length === 1 ? "" : "s"}`;
+      heading.append(title, count);
+      section.append(heading, ...sectionData.parameters.map(createParameterRow));
+      list.appendChild(section);
     });
+    syncLiveMappings(parameters, slotInfo);
     list.classList.remove("hidden");
     $("#parameter-fixture-note").classList.toggle("hidden", visibleParameters.length > 0);
     if (!visibleParameters.length) {
@@ -484,24 +636,28 @@
   }
 
   function queueLiveParameterRead(slot) {
+    const pendingPoll = stopLivePolling();
     const token = ++state.parameterReadToken;
     const slotIndex = Number(slot.dataset.index);
     $("#parameter-list").classList.add("hidden");
     $("#parameter-fixture-note").classList.remove("hidden");
     $("#fixture-algorithm").textContent = `Reading ${slot.dataset.algorithm}…`;
-    $("#parameter-fixture-note span").textContent = "Reading parameter definitions and current values from the NT.";
+    $("#parameter-fixture-note span").textContent = "Reading parameter pages, current values, and native MIDI mappings from the NT.";
 
     state.parameterReadQueue = state.parameterReadQueue.catch(() => {}).then(async () => {
+      if (pendingPoll) await pendingPoll.catch(() => {});
       if (token !== state.parameterReadToken || !state.ntTransport) return;
       try {
-        const parameters = await state.ntTransport.readSlotParameters(slotIndex);
+        const editorState = await state.ntTransport.readSlotEditorState(slotIndex);
         if (token !== state.parameterReadToken) return;
-        renderLiveParameters(parameters, {
+        renderLiveParameters(editorState, {
           index: slotIndex,
           name: slot.dataset.slot,
           algorithmName: slot.dataset.algorithm
         });
-        showToast(`Read ${parameters.filter(parameter => parameter.name).length} parameters from ${slot.dataset.slot}`);
+        const mappedCount = editorState.mappings.filter(mapping => mapping.midi.enabled).length;
+        showToast(`Read ${editorState.parameters.filter(parameter => parameter.name).length} parameters · ${mappedCount} mappings`);
+        startLivePolling(slotIndex);
       } catch (error) {
         if (token !== state.parameterReadToken) return;
         $("#fixture-algorithm").textContent = "Parameter read failed";
@@ -550,6 +706,8 @@
   }
 
   function disconnectRealTransport() {
+    stopLivePolling();
+    state.activeLiveSlotIndex = null;
     if (state.ntTransport) state.ntTransport.disconnect();
     state.ntTransport = null;
     state.liveIdentity = null;
@@ -561,6 +719,8 @@
     connectMIDI.textContent = "Reading…";
     setDeviceState("syncing");
     try {
+      const pendingPoll = stopLivePolling();
+      if (pendingPoll) await pendingPoll.catch(() => {});
       if (!state.ntTransport) {
         resetMIDIMonitor();
         state.ntTransport = new window.NTWebMIDITransport({
@@ -612,6 +772,7 @@
     if (mode === "real") {
       resetMIDIMonitor();
       $(".prototype-note").textContent = "Real Web MIDI · writes blocked";
+      mappingSourceCopy.textContent = "Not read yet";
       $("#hardware-detail").textContent = "Waiting for Web MIDI permission";
       $("#hardware-status").textContent = "Not connected";
       connectMIDI.textContent = "Connect";
@@ -654,8 +815,24 @@
   $$(".sync-option").forEach(button => button.addEventListener("click", () => {
     $$(".sync-option").forEach(option => option.classList.remove("active"));
     button.classList.add("active");
-    showToast(`${button.textContent} synchronization selected`);
+    state.syncMode = button.textContent.trim().toLowerCase();
+    if (state.transport === "real" && state.activeLiveSlotIndex != null) {
+      startLivePolling(state.activeLiveSlotIndex);
+    }
+    const detail = state.syncMode === "manual" ? "background polling off" :
+      state.syncMode === "fast" ? "100 ms selected-slot polling" : "250 ms selected-slot polling";
+    showToast(`${button.textContent.trim()} sync · ${detail}`);
   }));
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      stopLivePolling();
+      return;
+    }
+    if (state.transport === "real" && state.activeLiveSlotIndex != null) {
+      startLivePolling(state.activeLiveSlotIndex);
+    }
+  });
 
   slotList.addEventListener("click", event => {
     const slot = event.target.closest(".slot:not(.muted)");
@@ -669,39 +846,50 @@
 
   $$("[data-jump=mapping]").forEach(button => button.addEventListener("click", () => setView("mapping")));
   $("#parameter-list").addEventListener("click", event => {
+    const sectionHeading = event.target.closest(".parameter-section-heading");
+    if (sectionHeading) {
+      const section = sectionHeading.closest(".parameter-section");
+      const collapsed = section.classList.toggle("collapsed");
+      sectionHeading.setAttribute("aria-expanded", String(!collapsed));
+      return;
+    }
     const button = event.target.closest(".map-shortcut");
     if (!button) return;
     const target = button.dataset.mappingKey
       ? $(`.mapping-item[data-mapping-key="${button.dataset.mappingKey}"]`)
       : $(`.mapping-item[data-name="${button.dataset.param}"]`);
-    if (target) openMappingItem(target);
+    if (target) {
+      openMappingItem(target);
+      return;
+    }
+
+    $$('.mapping-item[data-draft="true"]').forEach(item => item.remove());
+    let draft;
+    if (button.dataset.mappingKey && state.liveParameters.has(button.dataset.mappingKey)) {
+      const liveTarget = state.liveParameters.get(button.dataset.mappingKey);
+      draft = createMappingItem(liveTarget.parameter, liveTarget.slotInfo, { draft: true });
+    } else {
+      const row = button.closest(".parameter-row");
+      const slider = $("input[type=range]", row);
+      const parameter = {
+        index: $$(".parameter-row", $("#parameter-list")).indexOf(row),
+        name: button.dataset.param || $(".parameter-name strong", row).textContent,
+        min: Number(slider.min),
+        max: Number(slider.max),
+        pageName: $(".parameter-section-heading strong", row.closest(".parameter-section"))?.textContent || $(".parameter-name span", row).textContent,
+        mapping: null
+      };
+      draft = createMappingItem(parameter, { index: 6, name: "WitchboardX", algorithmName: "Witchboard custom plug-in" }, { draft: true });
+      draft.dataset.mappingKey = "";
+    }
+    $("#mapping-items").prepend(draft);
+    updateMappingSummary();
+    openMappingItem(draft);
   });
 
   $("#mapping-items").addEventListener("click", event => {
     const item = event.target.closest(".mapping-item");
     if (item) populateMapping(item);
-  });
-
-  newMappingButton.addEventListener("click", () => {
-    updateMappingSummary();
-    if (newMappingButton.disabled) {
-      showToast("Every shown parameter already has a mapping");
-      return;
-    }
-    newMappingPicker.classList.toggle("hidden");
-  });
-
-  $("#cancel-new-mapping").addEventListener("click", () => newMappingPicker.classList.add("hidden"));
-
-  $("#create-mapping-draft").addEventListener("click", () => {
-    const target = $$(".mapping-item").find(item => item.dataset.mappingKey === newMappingTarget.value);
-    if (!target) return;
-    populateMapping(target);
-    mapEnabled.checked = true;
-    markMappingDirty();
-    newMappingPicker.classList.add("hidden");
-    mapCC.focus();
-    showToast(`New ${target.dataset.name} mapping draft`);
   });
 
   $("#mapping-search").addEventListener("input", event => {
@@ -759,6 +947,16 @@
   }));
 
   resetMapping.addEventListener("click", () => {
+    if (state.selectedMapping?.dataset.draft === "true") {
+      const name = state.selectedMapping.dataset.name;
+      state.selectedMapping.remove();
+      state.selectedMapping = null;
+      state.mappingDirty = false;
+      updateMappingSummary();
+      setView("editor");
+      showToast(`${name} mapping draft discarded`);
+      return;
+    }
     if (state.undoMapping) {
       const current = currentMappingValues();
       restoreMapping(state.undoMapping);
