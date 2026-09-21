@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>NTPilot — iPad MIDI Lab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="prototype-bar" aria-label="Prototype controls">
+    <div class="prototype-brand">
+      <span class="prototype-dot"></span>
+      <span>NTPilot lab</span>
+      <span class="prototype-note">Fake data · no MIDI</span>
+    </div>
+    <div class="prototype-controls">
+      <label class="select-label">Transport
+        <select id="transport-mode">
+          <option value="simulation">Simulation</option>
+          <option value="real">Real NT · read only</option>
+        </select>
+      </label>
+      <label class="select-label real-midi-control hidden">SysEx ID
+        <select id="sysex-id"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option></select>
+      </label>
+      <button class="prototype-action real-midi-control hidden" id="connect-midi" type="button">Connect</button>
+      <div class="segmented compact" aria-label="Surface">
+        <button class="segment active" data-surface="app">iPad app</button>
+        <button class="segment" data-surface="auv3">AUv3</button>
+      </div>
+      <label class="select-label">State
+        <select id="device-state">
+          <option value="ready">Ready</option>
+          <option value="offline">Offline draft</option>
+          <option value="syncing">Synchronizing</option>
+          <option value="disconnected">Disconnected</option>
+          <option value="owned">Owned elsewhere</option>
+        </select>
+      </label>
+      <label class="select-label host-size-control hidden">Size
+        <select id="host-size">
+          <option value="expanded">Expanded</option>
+          <option value="standard">Standard</option>
+          <option value="compact">Compact</option>
+        </select>
+      </label>
+      <button class="icon-button" id="theme-toggle" title="Toggle appearance" aria-label="Toggle appearance">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <main class="stage">
+    <section class="device-frame surface-app" id="device-frame" aria-label="NT Editor prototype">
+      <aside class="app-sidebar">
+        <div class="app-mark" aria-label="NT Editor">
+          <span class="mark-glyph">NT</span>
+          <span class="mark-copy"><strong>Editor</strong><small>for disting NT</small></span>
+        </div>
+
+        <nav class="primary-nav" aria-label="Primary">
+          <button class="nav-item active" data-view="editor">
+            <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>
+            <span>Editor</span>
+          </button>
+          <button class="nav-item" data-view="control">
+            <svg viewBox="0 0 24 24"><path d="M5 5v14M12 5v14M19 5v14M3 9h4m3 6h4m3-7h4"/></svg>
+            <span>Performance</span>
+          </button>
+          <button class="nav-item" data-view="mapping">
+            <svg viewBox="0 0 24 24"><path d="M5 7h6l2 3h6M5 17h6l2-3h6M5 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm18 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm18-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/></svg>
+            <span>Mapping</span>
+          </button>
+          <button class="nav-item" data-view="assistant">
+            <svg viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 5h8m-8 4h5"/></svg>
+            <span>Assistant</span>
+            <span class="nav-badge">1</span>
+          </button>
+        </nav>
+
+        <button class="nav-item settings-link" data-view="status">
+          <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12l2-1-2-4-2 .5L15 5l-.5-2h-5L9 5 7 7.5 5 7l-2 4 2 1v3l-2 1 2 4 2-.5L9 22h6l2-2.5 2 .5 2-4-2-1v-3Z"/></svg>
+          <span>Status & setup</span>
+        </button>
+      </aside>
+
+      <div class="app-main">
+        <header class="status-bar">
+          <div class="status-leading">
+            <span class="connection-pill ready" id="connection-pill">
+              <span class="pulse-dot"></span>
+              <span id="connection-label">Ready</span>
+            </span>
+            <div class="device-title">
+              <strong>disting NT</strong>
+              <span class="divider"></span>
+              <span id="preset-title">WitchboardX</span>
+            </div>
+          </div>
+          <div class="status-actions">
+            <div class="sync-picker" aria-label="Synchronization mode">
+              <span>Sync</span>
+              <button class="sync-option">Manual</button>
+              <button class="sync-option active">Smart</button>
+              <button class="sync-option">Fast</button>
+            </div>
+            <button class="status-icon" aria-label="Pending activity" title="One pending conversation">
+              <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg>
+              <span class="activity-dot"></span>
+            </button>
+          </div>
+        </header>
+
+        <div class="state-banner hidden" id="state-banner">
+          <div>
+            <strong id="state-banner-title">Synchronizing with disting NT</strong>
+            <p id="state-banner-copy">Reading the current preset. Editing remains locked until the snapshot is complete.</p>
+          </div>
+          <button class="secondary-button" id="state-action">View progress</button>
+        </div>
+
+        <div class="host-tabs" aria-label="AUv3 tabs">
+          <button class="host-tab active" data-view="control">Performance</button>
+          <button class="host-tab" data-view="editor">Editor</button>
+          <button class="host-tab" data-view="mapping">Mapping</button>
+          <button class="host-tab" data-view="assistant">Assistant <span>1</span></button>
+        </div>
+
+        <div class="view-stack">
+          <section class="view editor-view active" data-panel="editor" aria-labelledby="editor-heading">
+            <div class="view-heading">
+              <div>
+                <p class="eyebrow">Preset workspace</p>
+                <h1 id="editor-heading">WitchboardX</h1>
+              </div>
+              <div class="heading-actions">
+                <button class="secondary-button refresh-button">
+                  <svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18.5 9a7 7 0 0 0-12-2L4 11m16 2-2.5 4a7 7 0 0 1-12-2"/></svg>
+                  Refresh
+                </button>
+                <button class="primary-button">Save preset</button>
+              </div>
+            </div>
+
+            <div class="editor-shell">
+              <div class="editor-toolbar">
+                <div class="editor-tabs">
+                  <button class="active">Parameters</button>
+                  <button>Overview</button>
+                  <button>Performance</button>
+                </div>
+                <div class="editor-meta">
+                  <span id="editor-slot-count">10 slots</span><span>CPU 48%</span>
+                  <span class="freshness"><i></i> Updated now</span>
+                </div>
+              </div>
+
+              <div class="editor-columns">
+                <div class="slot-list" aria-label="Algorithm slots">
+                  <button class="slot" data-slot="iPad USB Returns" data-algorithm="USB audio (from host)">
+                    <span class="slot-number">1</span><span><strong>iPad USB Returns</strong><small>USB audio (from host)</small></span><i class="slot-colour mint"></i>
+                  </button>
+                  <button class="slot" data-slot="Master Clocks" data-algorithm="Clock">
+                    <span class="slot-number">2</span><span><strong>Master Clocks</strong><small>Clock</small></span><i class="slot-colour yellow"></i>
+                  </button>
+                  <button class="slot" data-slot="Kick Snare Spare" data-algorithm="Sample Player">
+                    <span class="slot-number">3</span><span><strong>Kick Snare Spare</strong><small>Sample Player</small></span><i class="slot-colour lilac"></i>
+                  </button>
+                  <button class="slot" data-slot="Perc Poly" data-algorithm="Poly Multisample (legacy)">
+                    <span class="slot-number">4</span><span><strong>Perc Poly</strong><small>Poly Multisample (legacy)</small></span><i class="slot-colour blue"></i>
+                  </button>
+                  <button class="slot" data-slot="Chimera" data-algorithm="Chimera custom plug-in">
+                    <span class="slot-number">5</span><span><strong>Chimera</strong><small>Chimera custom plug-in</small></span><i class="slot-colour mint"></i>
+                  </button>
+                  <button class="slot" data-slot="Poly Res" data-algorithm="Poly Resonator">
+                    <span class="slot-number">6</span><span><strong>Poly Res</strong><small>Poly Resonator</small></span><i class="slot-colour yellow"></i>
+                  </button>
+                  <button class="slot active" data-slot="WitchboardX" data-algorithm="Witchboard custom plug-in">
+                    <span class="slot-number">7</span><span><strong>WitchboardX</strong><small>Witchboard custom plug-in</small></span><i class="slot-colour lilac"></i>
+                  </button>
+                  <button class="slot" data-slot="Kirbinator" data-algorithm="Kirbinator">
+                    <span class="slot-number">8</span><span><strong>Kirbinator</strong><small>Kirbinator</small></span><i class="slot-colour blue"></i>
+                  </button>
+                  <button class="slot" data-slot="LoopyDial" data-algorithm="LoopyDial custom plug-in">
+                    <span class="slot-number">9</span><span><strong>LoopyDial</strong><small>LoopyDial custom plug-in</small></span><i class="slot-colour mint"></i>
+                  </button>
+                  <button class="slot" data-slot="iPad USB Sends" data-algorithm="USB audio (to host)">
+                    <span class="slot-number">10</span><span><strong>iPad USB Sends</strong><small>USB audio (to host)</small></span><i class="slot-colour yellow"></i>
+                  </button>
+                </div>
+
+                <div class="parameter-panel">
+                  <div class="parameter-title">
+                    <div><span id="slot-kicker">Slot 7 · Witchboard custom plug-in</span><h2 id="slot-heading">WitchboardX</h2></div>
+                    <button class="ghost-button" data-jump="mapping">View mappings</button>
+                  </div>
+                  <div class="parameter-fixture-note hidden" id="parameter-fixture-note">
+                    <strong id="fixture-algorithm">Algorithm</strong>
+                    <span>This visual pass only carries the WitchboardX parameter fixture. Production parameter definitions come live from the NT.</span>
+                  </div>
+                  <div class="parameter-list" id="parameter-list">
+                    <div class="parameter-row">
+                      <div class="parameter-name"><strong>Switch fade</strong><span>Global</span></div>
+                      <input type="range" min="0" max="100" value="0" aria-label="Switch fade">
+                      <output>0 ms</output>
+                      <button class="map-shortcut" title="Map Switch fade" data-param="Switch fade">+</button>
+                    </div>
+                    <div class="parameter-row selected">
+                      <div class="parameter-name"><strong>Sidechain</strong><span>Master</span></div>
+                      <input type="range" min="0" max="1" value="1" aria-label="Sidechain">
+                      <output>On</output>
+                      <button class="map-shortcut mapped" title="MIDI channel 15 · CC 80" data-param="Sidechain">15:80</button>
+                    </div>
+                    <div class="parameter-row">
+                      <div class="parameter-name"><strong>SC Depth</strong><span>Master</span></div>
+                      <input type="range" min="0" max="100" value="9" aria-label="Sidechain depth">
+                      <output>9%</output>
+                      <button class="map-shortcut" title="Map SC Depth" data-param="SC Depth">+</button>
+                    </div>
+                    <div class="parameter-row">
+                      <div class="parameter-name"><strong>Filter sweep</strong><span>Master filter</span></div>
+                      <input type="range" min="-100" max="100" value="26" aria-label="Filter sweep">
+                      <output>+26</output>
+                      <button class="map-shortcut mapped" title="MIDI channel 16 · CC 9" data-param="Filter sweep">16:9</button>
+                    </div>
+                    <div class="parameter-row">
+                      <div class="parameter-name"><strong>Master Gain</strong><span>Output</span></div>
+                      <input type="range" min="-12" max="6" value="0" aria-label="Master Gain">
+                      <output>0 dB</output>
+                      <button class="map-shortcut" title="Map Master Gain" data-param="Master Gain">+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="view control-view" data-panel="control" aria-labelledby="control-heading">
+            <div class="view-heading">
+              <div><p class="eyebrow">Native NT controls</p><h1 id="control-heading">Performance Page</h1></div>
+              <span class="verified-source"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg> 1 of 30 assigned</span>
+            </div>
+            <div class="performance-toolbar">
+              <div><strong id="performance-page-title">Page 1</strong><span>Four controls match the NT front-panel page</span></div>
+              <div class="page-picker" aria-label="Performance page">
+                <button class="active" data-performance-page="1">1</button><button data-performance-page="2">2</button><button data-performance-page="3">3</button><button data-performance-page="4">4</button><button data-performance-page="5">5</button><button data-performance-page="6">6</button><button data-performance-page="7">7</button><button data-performance-page="8">8</button>
+              </div>
+            </div>
+            <div class="control-grid performance-grid">
+              <article class="control-card accent-mint assigned-performance">
+                <div class="control-card-head"><span>LoopyDial</span><button>•••</button></div>
+                <div class="performance-value"><strong>Profile 3</strong><span>Current value</span></div>
+                <h2>Profile</h2><p>Slot 9 · Parameter 1</p>
+              </article>
+              <article class="control-card empty-performance"><span>2</span><strong>Unassigned</strong><button>Assign parameter</button></article>
+              <article class="control-card empty-performance"><span>3</span><strong>Unassigned</strong><button>Assign parameter</button></article>
+              <article class="control-card empty-performance"><span>4</span><strong>Unassigned</strong><button>Assign parameter</button></article>
+            </div>
+            <div class="control-footnote"><span class="info-icon">i</span> The preset can hold 30 Performance Page items. The NT displays them in pages of four; the iPad is not limited to four total.</div>
+          </section>
+
+          <section class="view mapping-view" data-panel="mapping" aria-labelledby="mapping-heading">
+            <div class="view-heading mapping-heading">
+              <div><p class="eyebrow">Native NT assignments</p><h1 id="mapping-heading">MIDI mapping</h1></div>
+              <div class="mapping-heading-actions">
+                <span class="verified-source"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg> <span id="mapping-source-copy">Read from NT</span></span>
+                <button class="primary-button" id="new-mapping-button">+ New mapping</button>
+              </div>
+            </div>
+            <div class="new-mapping-picker hidden" id="new-mapping-picker">
+              <div><strong>Create native NT mapping</strong><span>Choose an unmapped parameter. This creates a draft only.</span></div>
+              <label>Parameter
+                <select id="new-mapping-target">
+                  <option value="Master Gain">WitchboardX · Master Gain</option>
+                  <option value="SC Depth">WitchboardX · SC Depth</option>
+                  <option value="Switch fade">WitchboardX · Switch fade</option>
+                </select>
+              </label>
+              <button class="secondary-button" id="cancel-new-mapping">Cancel</button>
+              <button class="primary-button" id="create-mapping-draft">Create draft</button>
+            </div>
+            <div class="mapping-layout">
+              <div class="mapping-browser">
+                <div class="search-box">
+                  <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+                  <input id="mapping-search" type="search" placeholder="Find a parameter" aria-label="Find a parameter">
+                </div>
+                <div class="mapping-section-label"><span>Slot 7 · WitchboardX</span><span id="mapping-count">4 mapped · 3 available</span></div>
+                <div class="mapping-items" id="mapping-items">
+                  <button class="mapping-item active" data-name="Sidechain" data-category="Master" data-cc="80" data-channel="15" data-min="0" data-max="1">
+                    <span><strong>Sidechain</strong><small>Master</small></span><em class="mapped-label">Ch 15 · CC 80</em>
+                  </button>
+                  <button class="mapping-item" data-name="Filter sweep" data-category="Master filter" data-cc="9" data-channel="16" data-min="-100" data-max="100">
+                    <span><strong>Filter sweep</strong><small>Master filter</small></span><em class="mapped-label">Ch 16 · CC 9</em>
+                  </button>
+                  <button class="mapping-item" data-name="Kick Gain" data-category="Channel 1 · Kick" data-cc="9" data-channel="1" data-min="-60" data-max="6">
+                    <span><strong>Kick Gain</strong><small>Channel 1</small></span><em class="mapped-label">Ch 1 · CC 9</em>
+                  </button>
+                  <button class="mapping-item" data-name="Kick Insert 1" data-category="Channel 1 · Kick" data-cc="80" data-channel="1" data-min="0" data-max="4">
+                    <span><strong>Kick Insert 1</strong><small>Channel 1</small></span><em class="mapped-label">Ch 1 · CC 80</em>
+                  </button>
+                  <button class="mapping-item" data-name="Master Gain" data-category="Output" data-cc="" data-channel="1" data-min="-12" data-max="6">
+                    <span><strong>Master Gain</strong><small>Output</small></span><em>Not mapped</em>
+                  </button>
+                  <button class="mapping-item" data-name="SC Depth" data-category="Master" data-cc="" data-channel="1" data-min="0" data-max="100">
+                    <span><strong>SC Depth</strong><small>Master</small></span><em>Not mapped</em>
+                  </button>
+                  <button class="mapping-item" data-name="Switch fade" data-category="Global" data-cc="" data-channel="1" data-min="0" data-max="100">
+                    <span><strong>Switch fade</strong><small>Global</small></span><em>Not mapped</em>
+                  </button>
+                </div>
+              </div>
+
+              <form class="mapping-card" id="mapping-form">
+                <div class="mapping-card-title">
+                  <div><span id="mapping-path">Slot 7 · WitchboardX · Master</span><h2 id="mapping-param">Sidechain</h2></div>
+                  <span class="confirmed-badge" id="mapping-confirmation"><i></i> Confirmed</span>
+                </div>
+                <div class="form-grid">
+                  <label>Channel<select id="map-channel"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option></select></label>
+                  <label>Type<select id="map-type"><option>CC</option><option>Note — momentary</option><option>Note — toggle</option><option>14-bit CC — low</option><option>14-bit CC — high</option><option>Pitch bend</option><option>Channel pressure</option></select></label>
+                  <label>Controller<input id="map-cc" type="number" min="0" max="127" value="80"></label>
+                  <label class="learn-field">MIDI Learn<button type="button" class="learn-button" id="learn-button"><span class="learn-dot"></span><span id="learn-label">Learn</span></button></label>
+                  <label>Minimum<input id="map-min" type="number" min="-32768" max="32767" value="0"></label>
+                  <label>Maximum<input id="map-max" type="number" min="-32768" max="32767" value="1"></label>
+                </div>
+                <div class="toggle-row">
+                  <label class="switch-line"><input id="map-enabled" type="checkbox" checked><span class="switch"></span><span><strong>Enabled</strong><small>NT responds to this assignment</small></span></label>
+                  <label class="switch-line"><input type="checkbox"><span class="switch"></span><span><strong>Relative</strong><small>Interpret controller deltas</small></span></label>
+                  <label class="switch-line"><input type="checkbox"><span class="switch"></span><span><strong>Symmetric</strong><small>Centre around zero</small></span></label>
+                </div>
+                <div class="mapping-warning hidden" id="mapping-warning">
+                  <svg viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3Zm0 6v5m0 3v1"/></svg>
+                  <div><strong>CC already used</strong><p>Channel 1 · CC 9 already controls Kick Gain. Continue only if you deliberately want both parameters to move together.</p></div>
+                </div>
+                <div class="mapping-route-note"><span class="info-icon">i</span><p>This edits the NT's own mapping. Your DAW must route controller MIDI to the disting NT.</p><button type="button">Routing help</button></div>
+                <div class="form-actions">
+                  <button type="button" class="text-button" id="reset-mapping">Cancel</button>
+                  <button type="submit" class="primary-button" id="apply-mapping" disabled>Apply to NT</button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <section class="view assistant-view" data-panel="assistant" aria-labelledby="assistant-heading">
+            <div class="assistant-layout">
+              <div class="conversation">
+                <div class="assistant-header">
+                  <div><p class="eyebrow">Preset-aware help</p><h1 id="assistant-heading">Assistant</h1></div>
+                  <button class="model-button"><span class="model-dot"></span> OpenRouter · Claude Sonnet <svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button>
+                </div>
+                <div class="context-strip"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 0v8m8-4-8 4-8-4"/></svg><span>Live context: <strong>WitchboardX</strong> · 10 slots · refreshed now</span><button>Inspect</button></div>
+                <div class="messages" id="messages">
+                  <article class="message user-message"><p>Make the Witchboard master filter movement a little gentler.</p></article>
+                  <article class="message assistant-message">
+                    <div class="assistant-avatar">AI</div>
+                    <div class="message-body"><p>I’d reduce the filter sweep and Q slightly while leaving routing and channel gains untouched. I’ve prepared two bounded changes.</p><div class="source-row"><span>Live preset</span><span>Witchboard definition</span></div></div>
+                  </article>
+                  <article class="change-card" id="change-card">
+                    <div class="change-card-head"><div><span class="change-kind">Proposed change</span><strong>Gentler master filter movement</strong></div><span class="risk-pill">2 parameters</span></div>
+                    <div class="change-list">
+                      <div><span><strong>Filter sweep</strong><small>Slot 7 · WitchboardX</small></span><span class="value-change"><del>+26</del><b>→</b><ins>+18</ins></span></div>
+                      <div><span><strong>Filter Q</strong><small>Slot 7 · WitchboardX</small></span><span class="value-change"><del>10</del><b>→</b><ins>8</ins></span></div>
+                    </div>
+                    <div class="change-safety"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg><span>Validated against the current snapshot · read-back and undo available</span></div>
+                    <div class="change-actions"><button class="secondary-button" id="reject-change">Reject</button><button class="secondary-button">Edit proposal</button><button class="primary-button" id="approve-change">Approve & apply</button></div>
+                  </article>
+                </div>
+                <form class="composer" id="chat-form">
+                  <textarea id="chat-input" rows="1" placeholder="Ask about this preset…" aria-label="Message Assistant"></textarea>
+                  <button type="submit" aria-label="Send message"><svg viewBox="0 0 24 24"><path d="m4 12 16-8-6 16-2-6-8-2Zm8 2 3-3"/></svg></button>
+                </form>
+              </div>
+              <aside class="assistant-context">
+                <div class="context-card"><span class="context-label">Current target</span><h3>WitchboardX</h3><p>disting NT · saved from firmware 1.18.0</p><div class="context-facts"><span><b>10</b> slots</span><span><b>48%</b> CPU</span><span><b>Smart</b> sync</span></div></div>
+                <div class="context-card"><span class="context-label">Available knowledge</span><ul><li><i class="ok"></i> Live preset state</li><li><i class="ok"></i> Algorithm documentation</li><li><i class="ok"></i> NT API and mapping guide</li><li><i class="ok"></i> Routing reference</li></ul></div>
+                <p class="privacy-note"><svg viewBox="0 0 24 24"><path d="M6 10V7a6 6 0 0 1 12 0v3m-14 0h16v11H4V10Z"/></svg>Only the disclosed context is sent to the selected provider.</p>
+              </aside>
+            </div>
+          </section>
+
+          <section class="view status-view" data-panel="status" aria-labelledby="status-heading">
+            <div class="view-heading"><div><p class="eyebrow">Device and accounts</p><h1 id="status-heading">Status & setup</h1></div></div>
+            <div class="settings-grid">
+              <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 8h6m-6 4h6m-6 4h3"/></svg></div><div><span>Hardware</span><h2 id="hardware-title">disting NT</h2><p id="hardware-detail">Simulation · SysEx ID 0</p></div><span class="settings-status good" id="hardware-status">Ready</span></article>
+              <article class="settings-card"><div class="settings-icon sync"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18 9a7 7 0 0 0-12-2l-2 4m16 2-2 4a7 7 0 0 1-12-2"/></svg></div><div><span>Synchronization</span><h2>Smart</h2><p>Visible and mapped parameters · refreshed now</p></div><button class="secondary-button">Change</button></article>
+              <article class="settings-card"><div class="settings-icon ai"><svg viewBox="0 0 24 24"><path d="M5 6h14v11H9l-4 3V6Zm4 4h6m-6 3h4"/></svg></div><div><span>AI provider</span><h2>OpenRouter</h2><p>Connected · credential protected by Keychain</p></div><button class="secondary-button">Manage</button></article>
+              <article class="settings-card"><div class="settings-icon knowledge"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zm9 0h7v14h-7M7 9h1m8 0h1"/></svg></div><div><span>Knowledge</span><h2>NT reference library</h2><p>API, algorithms, mappings, routing · versioned</p></div><button class="secondary-button">Details</button></article>
+            </div>
+            <article class="midi-monitor real-midi-control hidden" aria-labelledby="midi-monitor-title">
+              <div class="midi-monitor-heading">
+                <div>
+                  <p class="eyebrow">Diagnostic · receives only</p>
+                  <h2 id="midi-monitor-title">Incoming MIDI monitor</h2>
+                  <p id="midi-monitor-status">Waiting for the real NT connection</p>
+                </div>
+                <div class="midi-monitor-actions">
+                  <label>Show
+                    <select id="midi-monitor-filter">
+                      <option value="channel">Channel MIDI</option>
+                      <option value="sysex">SysEx</option>
+                      <option value="all">All messages</option>
+                    </select>
+                  </label>
+                  <button class="secondary-button" id="clear-midi-monitor" type="button">Clear</button>
+                </div>
+              </div>
+              <div class="midi-monitor-counts" aria-label="Received message counts">
+                <span><strong id="midi-count-all">0</strong>Total</span>
+                <span><strong id="midi-count-channel">0</strong>Channel MIDI</span>
+                <span><strong id="midi-count-sysex">0</strong>SysEx</span>
+              </div>
+              <p class="midi-monitor-instruction"><strong>NT setup:</strong> Settings → MIDI → Send CCs → On parameter change. Test a parameter that already has a MIDI CC mapping.</p>
+              <ol class="midi-monitor-log" id="midi-monitor-log" aria-live="polite">
+                <li class="midi-monitor-empty">Move a controller after connecting. This monitor has no send control.</li>
+              </ol>
+            </article>
+          </section>
+        </div>
+
+        <div class="toast" id="toast" role="status" aria-live="polite"><span></span></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="web-midi-transport.js?v=20260921-5"></script>
+  <script src="app.js?v=20260921-5"></script>
+</body>
+</html>
