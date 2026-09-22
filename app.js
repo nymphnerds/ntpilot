@@ -134,6 +134,13 @@
       copy: "Routing writes are enabled with confirmation and readback. Other live editor surfaces remain read-only.",
       action: "Read again",
       bannerClass: "offline"
+    },
+    labReadOnly: {
+      label: "Read only",
+      title: "Real NT connected · read only",
+      copy: "Live NT data is available. Hardware writes are blocked.",
+      action: "Read again",
+      bannerClass: "offline"
     }
   };
 
@@ -692,6 +699,10 @@
   async function handleRoutingConnectionClick(target) {
     const port = target.closest(".routing-port, .routing-node.endpoint");
     if (!port) return false;
+    if (state.transport === "readonly") {
+      showToast("Read-only mode · routing changes are blocked");
+      return true;
+    }
     const side = port.dataset.routingSide;
     const isSource = side === "output" || side === "source" || side === "both";
     const selection = {
@@ -817,6 +828,10 @@
   async function handleAuxPaletteClick(target) {
     const chip = target.closest(".routing-aux-chip");
     if (!chip || !state.routingSnapshot) return false;
+    if (state.transport === "readonly") {
+      showToast("Read-only mode · bus changes are blocked");
+      return true;
+    }
     const bus = Number(chip.dataset.bus);
     if (state.routingSelection?.parameterIndex != null) {
       const selection = state.routingSelection;
@@ -838,6 +853,10 @@
   async function handleRoutingModeClick(target) {
     const control = target.closest(".routing-mode-toggle");
     if (!control) return false;
+    if (state.transport === "readonly") {
+      showToast("Read-only mode · output-mode changes are blocked");
+      return true;
+    }
     const rawParameterIndex = control.dataset.parameterIndex;
     const parameterIndex = rawParameterIndex === "" ? null : Number(rawParameterIndex);
     if (!Number.isInteger(parameterIndex)) {
@@ -1392,7 +1411,7 @@
 
   function showLiveIdentity(identity) {
     const presetName = identity.presetName || "Unnamed preset";
-    $(".prototype-note").textContent = "Live NT · routing writes enabled";
+    $(".prototype-note").textContent = state.transport === "real" ? "Live NT · read + write" : "Live NT · read only";
     $("#preset-title").textContent = presetName;
     $("#editor-heading").textContent = presetName;
     $("#editor-slot-count").textContent = `${identity.slotCount} slots`;
@@ -1454,7 +1473,7 @@
       const identity = await state.ntTransport.readSnapshot();
       state.liveIdentity = identity;
       showLiveIdentity(identity);
-      setDeviceState("labConnected");
+      setDeviceState(state.transport === "real" ? "labConnected" : "labReadOnly");
       connectMIDI.textContent = "Read again";
       showToast(`Read ${identity.presetName || "unnamed preset"} from the real NT`);
       if (state.view === "routing") await loadLiveRouting();
@@ -1475,11 +1494,11 @@
   function setTransportMode(mode) {
     disconnectRealTransport();
     state.transport = mode;
-    $$(".real-midi-control").forEach(control => control.classList.toggle("hidden", mode !== "real"));
-    deviceStateControl.disabled = mode === "real";
-    if (mode === "real") {
+    $$(".real-midi-control").forEach(control => control.classList.toggle("hidden", mode === "simulation"));
+    deviceStateControl.disabled = mode !== "simulation";
+    if (mode !== "simulation") {
       resetMIDIMonitor();
-      $(".prototype-note").textContent = "Real Web MIDI · routing writes enabled";
+      $(".prototype-note").textContent = mode === "real" ? "Real Web MIDI · read + write" : "Real Web MIDI · read only";
       mappingSourceCopy.textContent = "Not read yet";
       routingSourceCopy.textContent = "Connect to read live NT";
       routingNodes.replaceChildren();
