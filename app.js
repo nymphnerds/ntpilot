@@ -124,14 +124,14 @@
     labWaiting: {
       label: "Not connected",
       title: "Real NT lab mode",
-      copy: "Connect to read firmware and preset identity. Hardware writes are blocked in this milestone.",
+      copy: "Connect to read the NT. Confirmed routing changes can write to the loaded preset.",
       action: "Connect",
       bannerClass: "offline"
     },
     labConnected: {
       label: "NT detected",
-      title: "Real NT connected in safe read-only mode",
-      copy: "Preset, slots, parameters, mappings, and on-demand whole-preset routing are live. Hardware writes remain blocked.",
+      title: "Real NT connected",
+      copy: "Routing writes are enabled with confirmation and readback. Other live editor surfaces remain read-only.",
       action: "Read again",
       bannerClass: "offline"
     }
@@ -1392,13 +1392,13 @@
 
   function showLiveIdentity(identity) {
     const presetName = identity.presetName || "Unnamed preset";
-    $(".prototype-note").textContent = "Live preset + slots · writes blocked";
+    $(".prototype-note").textContent = "Live NT · routing writes enabled";
     $("#preset-title").textContent = presetName;
     $("#editor-heading").textContent = presetName;
     $("#editor-slot-count").textContent = `${identity.slotCount} slots`;
     $("#hardware-title").textContent = "disting NT · live";
     $("#hardware-detail").textContent = `${identity.version || "Unknown firmware"} · SysEx ID ${identity.sysexId}`;
-    $("#hardware-status").textContent = "Read only";
+    $("#hardware-status").textContent = "Connected";
     renderLiveSlots(identity.slots);
     routingSourceCopy.textContent = "Ready to read live NT";
     routingReadButton.textContent = "Read routing";
@@ -1437,7 +1437,7 @@
               return;
             }
             if (event.type === "connected") {
-              $("#midi-monitor-status").textContent = `Listening on ${event.input} · read-only capture`;
+              $("#midi-monitor-status").textContent = `Listening on ${event.input}`;
               return;
             }
             if (event.type === "disconnected") {
@@ -1479,12 +1479,12 @@
     deviceStateControl.disabled = mode === "real";
     if (mode === "real") {
       resetMIDIMonitor();
-      $(".prototype-note").textContent = "Real Web MIDI · writes blocked";
+      $(".prototype-note").textContent = "Real Web MIDI · routing writes enabled";
       mappingSourceCopy.textContent = "Not read yet";
       routingSourceCopy.textContent = "Connect to read live NT";
       routingNodes.replaceChildren();
       routingWires.replaceChildren();
-      $("span", $("div", routingInspector)).textContent = "Read-only graph";
+      $("span", $("div", routingInspector)).textContent = "Routing graph";
       $("strong", $("div", routingInspector)).textContent = "Connect to inspect the complete loaded preset.";
       $("p", routingInspector).textContent = "No routing data has been requested from the NT yet.";
       $("#hardware-detail").textContent = "Waiting for Web MIDI permission";
