@@ -36,6 +36,17 @@
   const simulatedSlotMarkup = slotList.innerHTML;
   const midiMonitorLog = $("#midi-monitor-log");
   const midiMonitorFilter = $("#midi-monitor-filter");
+  const routingViewport = $("#routing-viewport");
+  const routingZoomLayer = $("#routing-zoom-layer");
+  const routingCanvas = $("#routing-canvas");
+  const routingWires = $("#routing-wires");
+  const routingNodes = $("#routing-nodes");
+  const routingAuxPalette = $("#routing-aux-palette");
+  const routingLoading = $("#routing-loading");
+  const routingReadButton = $("#routing-read-button");
+  const routingConnectButton = $("#routing-connect-button");
+  const routingSourceCopy = $("#routing-source-copy");
+  const routingInspector = $("#routing-inspector");
 
   const state = {
     surface: "app",
@@ -43,6 +54,14 @@
     transport: "simulation",
     ntTransport: null,
     liveIdentity: null,
+    liveRouting: null,
+    routingReadPromise: null,
+    routingReadToken: 0,
+    routingZoom: 1,
+    routingCanvasSize: { width: 1180, height: 760 },
+    routingSnapshot: null,
+    routingSelection: null,
+    routingBusSelection: null,
     device: "ready",
     view: "editor",
     mappingDirty: false,
@@ -112,7 +131,7 @@
     labConnected: {
       label: "NT detected",
       title: "Real NT connected in safe read-only mode",
-      copy: "Preset, slots, parameter pages, values, and the selected slot's MIDI mappings are live. Hardware writes remain blocked.",
+      copy: "Preset, slots, parameters, mappings, and on-demand whole-preset routing are live. Hardware writes remain blocked.",
       action: "Read again",
       bannerClass: "offline"
     }
@@ -263,11 +282,686 @@
     state.pollTimer = setTimeout(poll, delay);
   }
 
+  function routingMask(indices) {
+    return indices.reduce((mask, index) => mask | (1n << BigInt(index)), 0n);
+  }
+
+  function routingRecord(slot, inputs = [], outputs = [], mappings = [], replaces = outputs) {
+    const masks = [routingMask(inputs), routingMask(outputs), routingMask(replaces), 0n, 0n, routingMask(mappings)];
+    return {
+      slot,
+      format: "fixture",
+      inputMask: masks[0],
+      outputMask: masks[1],
+      replaceMask: masks[2],
+      mappingInputMask: masks[5],
+      masks
+    };
+  }
+
+  function makeSimulatedRoutingSnapshot() {
+    const inputBusCount = 12;
+    const outputBusCount = 8;
+    const aux = number => inputBusCount + outputBusCount + number - 1;
+    const output = number => inputBusCount + number - 1;
+    const fixture = [
+      { inputs: [], outputs: [aux(2), aux(3), aux(8), aux(9)] },
+      { inputs: [], outputs: [aux(13), aux(14), aux(15)] },
+      { inputs: [0, 1], outputs: [aux(1), aux(2), aux(3), aux(4)] },
+      { inputs: [0, 1], outputs: [aux(4), aux(5)] },
+      { inputs: [aux(4), aux(5)], outputs: [aux(8), aux(9)] },
+      { inputs: [4, 5], outputs: [aux(6), aux(7)] },
+      { inputs: [aux(1), aux(2), aux(3), aux(4), aux(6), aux(7), aux(8), aux(9), aux(13)], outputs: [output(1), output(2), output(3), output(4), output(5), output(7), output(8), aux(17), aux(18), aux(19), aux(20)], mappings: [aux(15), aux(16)] },
+      { inputs: [aux(9), aux(13), aux(23), aux(24), aux(25), aux(26)], outputs: [aux(27), aux(28)], mappings: [aux(30)] },
+      { inputs: [aux(17), aux(18)], outputs: [aux(21), aux(22)] },
+      { inputs: [aux(17), aux(18), aux(19), aux(20), aux(27), aux(28)], outputs: [] }
+    ];
+    const slots = $$(".slot", slotList).map((element, index) => {
+      const route = fixture[index] || { inputs: [], outputs: [] };
+      const inputParameters = route.inputs.map((bus, parameter) => ({ index: parameter, name: `Input ${parameter + 1}`, unit: 1, ioFlags: 1, value: bus + 1 }));
+      let nextParameter = inputParameters.length;
+      const outputModeMap = {};
+      const outputParameters = route.outputs.flatMap((bus, outputIndex) => {
+        const outputParameterIndex = nextParameter++;
+        const modeParameterIndex = nextParameter++;
+        outputModeMap[modeParameterIndex] = [outputParameterIndex];
+        return [
+          { index: outputParameterIndex, name: `Output ${outputIndex + 1}`, unit: 1, ioFlags: 2, value: bus + 1 },
+          { index: modeParameterIndex, name: `Output ${outputIndex + 1} mode`, unit: 0, ioFlags: 8, value: (route.replaces || route.outputs).includes(bus) ? 1 : 0 }
+        ];
+      });
+      const parameters = [...inputParameters, ...outputParameters];
+      return {
+        index,
+        name: element.dataset.slot || `Slot ${index + 1}`,
+        algorithmName: element.dataset.algorithm || "Unknown algorithm",
+        parameters,
+        ioParameters: parameters.filter(parameter => parameter.ioFlags & 0x03),
+        outputModeMap,
+        routing: routingRecord(index, route.inputs, route.outputs, route.mappings || [], route.replaces)
+      };
+    });
+    return { presetName: "Demo preset", inputBusCount, outputBusCount, auxBusCount: 44, slots };
+  }
+
+  function routingBusLabel(index, snapshot) {
+    if (index < snapshot.inputBusCount) return `I${index + 1}`;
+    const outputIndex = index - snapshot.inputBusCount;
+    if (outputIndex < snapshot.outputBusCount) return `O${outputIndex + 1}`;
+    return `A${outputIndex - snapshot.outputBusCount + 1}`;
+  }
+
+  function routingBusKind(index, snapshot) {
+    if (index < snapshot.inputBusCount) return "input";
+    if (index < snapshot.inputBusCount + snapshot.outputBusCount) return "output";
+    return "aux";
+  }
+
+  function routingAuxColour(bus, snapshot) {
+    const auxIndex = bus - snapshot.inputBusCount - snapshot.outputBusCount;
+    return `hsl(${Math.round((auxIndex * 360) / snapshot.auxBusCount)} 78% 48%)`;
+  }
+
+  function renderAuxPalette(snapshot) {
+    const used = new Set(snapshot.slots.flatMap(slot => (slot.ioParameters || []).map(parameter => Number(parameter.value) - 1)));
+    const firstAux = snapshot.inputBusCount + snapshot.outputBusCount;
+    const fragment = document.createDocumentFragment();
+    const none = document.createElement("button");
+    none.type = "button";
+    none.className = "routing-aux-chip none";
+    none.dataset.bus = "-1";
+    none.textContent = "None";
+    fragment.appendChild(none);
+    for (let index = 0; index < snapshot.auxBusCount; index += 1) {
+      const bus = firstAux + index;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = `routing-aux-chip${used.has(bus) ? " used" : ""}`;
+      chip.dataset.bus = String(bus);
+      chip.style.setProperty("--aux-colour", routingAuxColour(bus, snapshot));
+      chip.textContent = `A${index + 1}`;
+      fragment.appendChild(chip);
+    }
+    routingAuxPalette.replaceChildren(fragment);
+  }
+
+  function routingMaskIndices(mask, total) {
+    const result = [];
+    for (let index = 0; index < total; index += 1) {
+      if (mask & (1n << BigInt(index))) result.push(index);
+    }
+    return result;
+  }
+
+  function routingSlotMasks(slot, total) {
+    const routing = slot.routing;
+    const directInputs = routingMaskIndices(routing.inputMask, total);
+    const outputs = routingMaskIndices(routing.outputMask, total);
+    const replaces = routingMaskIndices(routing.replaceMask, total);
+    const implicitInputs = outputs.filter(bus => !replaces.includes(bus));
+    return {
+      inputs: [...new Set([...directInputs, ...implicitInputs])].sort((a, b) => a - b),
+      mappings: routingMaskIndices(routing.mappingInputMask, total),
+      outputs,
+      replaces
+    };
+  }
+
+  function makeRoutingNode(definition) {
+    const node = document.createElement(definition.slotIndex == null ? "div" : "button");
+    node.className = `routing-node ${definition.kind}`;
+    node.style.left = `${definition.x}px`;
+    node.style.top = `${definition.y}px`;
+    node.style.width = `${definition.width}px`;
+    node.style.height = `${definition.height}px`;
+    node.dataset.nodeKey = definition.key;
+    if (definition.slotIndex == null) {
+      if (definition.kind.includes("endpoint-bank")) {
+        const title = document.createElement("strong");
+        title.textContent = definition.label;
+        node.appendChild(title);
+        return node;
+      }
+      node.dataset.routingSide = definition.side;
+      node.dataset.bus = String(definition.bus);
+      const title = document.createElement("strong");
+      title.textContent = definition.label;
+      const kind = document.createElement("span");
+      kind.textContent = definition.caption;
+      node.append(title, kind);
+      return node;
+    }
+    node.type = "button";
+    node.dataset.slotIndex = String(definition.slotIndex);
+    const head = document.createElement("div");
+    head.className = "routing-node-head";
+    const number = document.createElement("span");
+    number.className = "routing-slot-number";
+    number.textContent = String(definition.slotIndex + 1);
+    const title = document.createElement("span");
+    title.className = "routing-node-title";
+    const name = document.createElement("strong");
+    name.textContent = definition.name;
+    name.title = definition.name;
+    const algorithm = document.createElement("small");
+    algorithm.className = "routing-algorithm-name";
+    algorithm.title = definition.algorithmName;
+    const algorithmKind = document.createElement("b");
+    algorithmKind.textContent = definition.isPlugin ? "PLUG-IN" : "ALGO";
+    const algorithmText = document.createElement("span");
+    algorithmText.textContent = definition.algorithmName;
+    algorithm.append(algorithmKind, algorithmText);
+    title.append(name, algorithm);
+    head.append(number, title);
+    const body = document.createElement("div");
+    body.className = "routing-node-ports";
+    const addColumn = (side, ports) => {
+      const column = document.createElement("div");
+      column.className = `routing-port-column ${side}`;
+      ports.forEach(port => {
+        const row = document.createElement("div");
+        row.className = `routing-port ${side} ${port.kind}`;
+        row.dataset.portKey = port.key;
+        row.dataset.routingSide = side;
+        row.dataset.slotIndex = String(definition.slotIndex);
+        row.dataset.parameterIndex = port.parameterIndex == null ? "" : String(port.parameterIndex);
+        row.dataset.bus = String(port.bus);
+        if (port.kind === "aux") row.style.setProperty("--aux-colour", routingAuxColour(port.bus, state.routingSnapshot));
+        row.title = `${port.name} · ${port.busLabel}`;
+        const dot = document.createElement("i");
+        const label = document.createElement("span");
+        label.textContent = port.name;
+        const bus = document.createElement("b");
+        bus.className = `routing-bus-badge ${port.kind}`;
+        bus.textContent = side === "output" && port.kind === "input" ? `${port.busLabel} downstream` : port.busLabel;
+        if (port.kind === "aux") bus.style.setProperty("--aux-colour", routingAuxColour(port.bus, state.routingSnapshot));
+        if (side === "output" && port.outputMode) {
+          const mode = document.createElement("span");
+          mode.className = `routing-mode-toggle ${port.outputMode}${port.modeParameterIndex == null ? " readonly" : ""}`;
+          mode.dataset.slotIndex = String(definition.slotIndex);
+          mode.dataset.parameterIndex = port.modeParameterIndex == null ? "" : String(port.modeParameterIndex);
+          mode.dataset.mode = port.outputMode;
+          mode.textContent = port.outputMode === "replace" ? "REPLACE" : "ADD";
+          mode.title = port.modeParameterIndex == null
+            ? `${port.outputMode === "replace" ? "Replace" : "Add"} mode (reported by routing summary)`
+            : `${port.outputMode === "replace" ? "Replace" : "Add"} mode · click to change`;
+          row.append(mode, bus, label, dot);
+        } else {
+          row.append(...(side === "input" ? [dot, label, bus] : [bus, label, dot]));
+        }
+        column.appendChild(row);
+      });
+      if (!ports.length) {
+        const empty = document.createElement("em");
+        empty.textContent = "No ports";
+        column.appendChild(empty);
+      }
+      body.appendChild(column);
+    };
+    addColumn("input", definition.inputPorts);
+    addColumn("output", definition.outputPorts);
+    node.append(head, body);
+    return node;
+  }
+
+  function routingPath(edge, nodes) {
+    const from = nodes.get(edge.from);
+    const to = nodes.get(edge.to);
+    const sx = from.side === "both" ? from.x : from.x + from.width;
+    const sy = edge.fromPort ? from.y + edge.fromPort.y : from.y + (from.height / 2);
+    const tx = to.x;
+    const ty = edge.toPort ? to.y + edge.toPort.y : to.y + (to.height / 2);
+    const shoulder = Math.min(42, Math.max(18, Math.abs(tx - sx) * .18));
+    return `M ${sx} ${sy} C ${sx + shoulder} ${sy}, ${sx + shoulder} ${sy}, ${sx + shoulder * 1.35} ${sy} L ${tx - shoulder * 1.35} ${ty} C ${tx - shoulder} ${ty}, ${tx - shoulder} ${ty}, ${tx} ${ty}`;
+  }
+
+  function renderRoutingGraph(snapshot, { live = false, preserveView = false } = {}) {
+    const previousView = preserveView
+      ? { left: routingViewport.scrollLeft, top: routingViewport.scrollTop, zoom: state.routingZoom }
+      : null;
+    state.routingSnapshot = snapshot;
+    state.routingSelection = null;
+    state.routingBusSelection = null;
+    renderAuxPalette(snapshot);
+    const total = snapshot.inputBusCount + snapshot.outputBusCount + snapshot.auxBusCount;
+    const slotLayouts = snapshot.slots.map(slot => {
+      const masks = routingSlotMasks(slot, total);
+      const io = slot.ioParameters || [];
+      const makePort = (parameter, side, ordinal) => {
+        const bus = Number(parameter.value) > 0 ? Number(parameter.value) - 1 : -1;
+        const port = { key: `${side}:${slot.index}:${parameter.index ?? ordinal}`, parameterIndex: parameter.index, name: parameter.name || `${side === "input" ? "Input" : "Output"} ${ordinal + 1}`, bus, busLabel: bus < 0 ? "—" : routingBusLabel(bus, snapshot), kind: bus < 0 ? "disconnected" : routingBusKind(bus, snapshot) };
+        if (side === "output") {
+          const modeEntry = Object.entries(slot.outputModeMap || {}).find(([, outputs]) => outputs.includes(parameter.index));
+          const modeParameterIndex = modeEntry == null ? null : Number(modeEntry[0]);
+          const modeParameter = (slot.parameters || []).find(item => item.index === modeParameterIndex);
+          if (modeParameter) {
+            port.modeParameterIndex = modeParameterIndex;
+            port.outputMode = Number(modeParameter.value) === 1 ? "replace" : "add";
+          } else if (bus >= 0) {
+            port.outputMode = masks.replaces.includes(bus) ? "replace" : "add";
+          }
+        }
+        return port;
+      };
+      let inputPorts = io.filter(parameter => parameter.ioFlags & 0x01).map((parameter, index) => makePort(parameter, "input", index));
+      let outputPorts = io.filter(parameter => parameter.ioFlags & 0x02).map((parameter, index) => makePort(parameter, "output", index));
+      return { slot, masks, inputPorts, outputPorts };
+    });
+    const edges = [];
+    const writersByBus = new Map();
+    slotLayouts.forEach(layout => layout.outputPorts.forEach(port => {
+      if (port.bus < 0) return;
+      const writers = writersByBus.get(port.bus) || [];
+      writers.push({ layout, port, replaces: port.outputMode ? port.outputMode === "replace" : layout.masks.replaces.includes(port.bus) });
+      writersByBus.set(port.bus, writers);
+    }));
+
+    const connectRead = (slot, bus, type, toPort = null) => {
+      if (type === "signal" && routingBusKind(bus, snapshot) === "aux") return;
+      const previous = (writersByBus.get(bus) || []).filter(writer => writer.layout.slot.index < slot.index);
+      let activeWriters = previous;
+      let includeBase = true;
+      for (let index = previous.length - 1; index >= 0; index -= 1) {
+        if (previous[index].replaces) {
+          activeWriters = previous.slice(index);
+          includeBase = false;
+          break;
+        }
+      }
+      activeWriters.forEach(writer => {
+        edges.push({ from: `slot:${writer.layout.slot.index}`, to: `slot:${slot.index}`, bus, type, fromPort: writer.port, toPort, fromSlot: writer.layout.slot.index, toSlot: slot.index });
+      });
+      if ((includeBase || !activeWriters.length) && routingBusKind(bus, snapshot) === "input") {
+        edges.push({ from: `source:${bus}`, to: `slot:${slot.index}`, bus, type, toPort, toSlot: slot.index });
+      }
+    };
+
+    slotLayouts.forEach(({ slot, masks, inputPorts, outputPorts }) => {
+      inputPorts.filter(port => port.bus >= 0).forEach(port => connectRead(slot, port.bus, "signal", port));
+      outputPorts.forEach(port => {
+        const bus = port.bus;
+        if (bus < 0) return;
+        const kind = routingBusKind(bus, snapshot);
+        if (kind === "output") edges.push({ from: `slot:${slot.index}`, to: `sink:${bus}`, bus, type: "signal", fromPort: port, fromSlot: slot.index });
+      });
+    });
+
+    const width = 1180;
+    const nodeDefinitions = new Map();
+    let slotY = 34;
+    snapshot.slots.forEach((slot, index) => {
+      const { masks, inputPorts, outputPorts } = slotLayouts[index];
+      const rows = Math.max(1, inputPorts.length, outputPorts.length);
+      const slotHeight = 54 + (rows * 25) + 18;
+      inputPorts.forEach((port, row) => { port.y = 66 + (row * 25); });
+      outputPorts.forEach((port, row) => { port.y = 66 + (row * 25); });
+      nodeDefinitions.set(`slot:${slot.index}`, {
+        key: `slot:${slot.index}`,
+        kind: "slot",
+        slotIndex: slot.index,
+        name: slot.name,
+        algorithmName: slot.algorithmName,
+        isPlugin: Boolean(slot.isPlugin || /plug[ -]?in/i.test(slot.algorithmName)),
+        inputPorts,
+        mappings: masks.mappings.map(bus => routingBusLabel(bus, snapshot)),
+        outputPorts,
+        x: 420,
+        y: slotY,
+        width: 310,
+        height: slotHeight
+      });
+      slotY += slotHeight + 42;
+    });
+    const endpointGap = 38;
+    const outputBankHeight = snapshot.outputBusCount * endpointGap + 42;
+    const height = Math.max(720, slotY + 20);
+    const addEndpointBank = (side, count, bankTop, kind = null) => {
+      const source = side === "source";
+      const x = source ? 24 : 1000;
+      const gap = endpointGap;
+      const bankHeight = count * gap + 42;
+      const top = bankTop + 32;
+      const endpointKind = kind || (source ? "input" : "output");
+      const bankKey = kind === "aux" ? "aux" : side;
+      nodeDefinitions.set(`bank:${bankKey}`, { key: `bank:${bankKey}`, kind: `endpoint-bank ${endpointKind}`, label: kind === "aux" ? "Aux buses" : source ? "NT Inputs" : "NT Outputs", x: x - 12, y: bankTop, width: 142, height: bankHeight });
+      for (let index = 0; index < count; index += 1) {
+        const bus = kind === "aux" ? snapshot.inputBusCount + snapshot.outputBusCount + index : source ? index : snapshot.inputBusCount + index;
+        const key = kind === "aux" ? `aux:${bus}` : `${side}:${bus}`;
+        nodeDefinitions.set(key, { key, kind: `endpoint ${endpointKind}`, bus, side: kind === "aux" ? "both" : side, label: routingBusLabel(bus, snapshot), caption: kind === "aux" ? "Aux bus" : source ? "NT input" : "NT output", x, y: top + index * gap, width: 118, height: 30 });
+      }
+      return bankHeight;
+    };
+    const inputBankHeight = snapshot.inputBusCount * endpointGap + 42;
+    addEndpointBank("source", snapshot.inputBusCount, Math.max(18, Math.round((height - inputBankHeight) / 2)));
+    const rightStackTop = Math.max(18, Math.round((height - outputBankHeight) / 2));
+    addEndpointBank("sink", snapshot.outputBusCount, rightStackTop);
+
+    state.routingCanvasSize = { width, height };
+    routingCanvas.style.width = `${width}px`;
+    routingCanvas.style.height = `${height}px`;
+    routingWires.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    routingNodes.replaceChildren();
+    nodeDefinitions.forEach(definition => routingNodes.appendChild(makeRoutingNode(definition)));
+    routingWires.replaceChildren();
+    const svgNS = "http://www.w3.org/2000/svg";
+    edges.forEach((edge, index) => {
+      const geometry = routingPath(edge, nodeDefinitions);
+      const path = document.createElementNS(svgNS, "path");
+      path.setAttribute("d", geometry);
+      const busKind = routingBusKind(edge.bus, snapshot);
+      path.setAttribute("class", `routing-wire ${edge.type} ${busKind}`);
+      path.dataset.edgeIndex = String(index);
+      if (edge.fromSlot != null) path.dataset.fromSlot = String(edge.fromSlot);
+      if (edge.toSlot != null) path.dataset.toSlot = String(edge.toSlot);
+      routingWires.appendChild(path);
+      if (busKind === "aux") {
+        const from = nodeDefinitions.get(edge.from);
+        const to = nodeDefinitions.get(edge.to);
+        if (from && to) {
+          const label = document.createElementNS(svgNS, "text");
+          label.setAttribute("x", String((from.x + from.width + to.x) / 2));
+          label.setAttribute("y", String(((edge.fromPort ? from.y + edge.fromPort.y : from.y + from.height / 2) + (edge.toPort ? to.y + edge.toPort.y : to.y + to.height / 2)) / 2 - 4));
+          label.setAttribute("class", `routing-wire-label ${edge.type} aux`);
+          label.textContent = routingBusLabel(edge.bus, snapshot);
+          routingWires.appendChild(label);
+        }
+      }
+    });
+    routingSourceCopy.textContent = live ? `Live NT · ${snapshot.slots.length} slots` : "Simulation fixture";
+    const mappingCount = slotLayouts.reduce((count, item) => count + item.masks.mappings.length, 0);
+    $("#routing-mapping-count").textContent = String(mappingCount);
+    $("#routing-show-mappings").disabled = mappingCount === 0;
+    routingReadButton.textContent = live ? "Read again" : "Read routing";
+    routingReadButton.disabled = !live;
+    applyRoutingZoom();
+    updateRoutingLayers();
+    selectRoutingSlot(null, snapshot);
+    if (state.view === "routing") {
+      requestAnimationFrame(() => {
+        if (previousView) {
+          state.routingZoom = previousView.zoom;
+          applyRoutingZoom();
+          routingViewport.scrollTo({ left: previousView.left, top: previousView.top, behavior: "auto" });
+        } else {
+          fitRoutingGraph("auto");
+        }
+      });
+    }
+  }
+
+  async function handleRoutingConnectionClick(target) {
+    const port = target.closest(".routing-port, .routing-node.endpoint");
+    if (!port) return false;
+    const side = port.dataset.routingSide;
+    const isSource = side === "output" || side === "source" || side === "both";
+    const selection = {
+      element: port,
+      side,
+      bus: Number(port.dataset.bus),
+      slotIndex: port.dataset.slotIndex === undefined ? null : Number(port.dataset.slotIndex),
+      parameterIndex: port.dataset.parameterIndex !== undefined && port.dataset.parameterIndex !== "" ? Number(port.dataset.parameterIndex) : null
+    };
+    if (state.routingBusSelection != null && selection.parameterIndex != null) {
+      const bus = state.routingBusSelection;
+      state.routingBusSelection = null;
+      return assignRoutingPort(selection, bus);
+    }
+    if (!state.routingSelection) {
+      if (!isSource) {
+        if (side !== "input" || selection.parameterIndex == null) {
+          showToast("Choose an output or NT input first");
+          return true;
+        }
+        state.routingSelection = selection;
+        port.classList.add("routing-selected-source");
+        showToast("Choose an aux bus above, a physical source, or None");
+        return true;
+      }
+      state.routingSelection = selection;
+      port.classList.add("routing-selected-source");
+      showToast("Now choose an algorithm input or NT output");
+      return true;
+    }
+    const source = state.routingSelection;
+    source.element.classList.remove("routing-selected-source");
+    state.routingSelection = null;
+    if (source.element === port && source.parameterIndex != null && source.bus >= 0) {
+      const name = port.title || port.textContent.trim();
+      if (state.transport === "real" && !window.confirm(`Disconnect ${name}?`)) return true;
+      try {
+        if (state.transport === "real") {
+          await state.ntTransport.writeParameter(source.slotIndex, source.parameterIndex, 0);
+          await loadLiveRouting({ preserveView: true });
+          showToast("Connection removed and verified from the NT");
+        } else {
+          const slot = state.routingSnapshot.slots.find(item => item.index === source.slotIndex);
+          const parameter = slot?.ioParameters?.find(item => item.index === source.parameterIndex);
+          if (parameter) parameter.value = 0;
+          renderRoutingGraph(state.routingSnapshot, { live: false, preserveView: true });
+          showToast("Simulation connection removed");
+        }
+      } catch (error) {
+        showToast(error.message);
+      }
+      return true;
+    }
+    const destinationValid = side === "input" || side === "sink" || side === "both";
+    if (!destinationValid) {
+      showToast("Route cancelled · choose a source again");
+      return true;
+    }
+    const destinationIsParameter = side === "input";
+    const writeTarget = destinationIsParameter ? selection : source;
+    let bus = destinationIsParameter ? source.bus : selection.bus;
+    if (writeTarget.parameterIndex == null || writeTarget.slotIndex == null) {
+      showToast("That route has no writable NT parameter");
+      return true;
+    }
+    const sourceName = source.element.title || source.element.textContent.trim();
+    const destinationName = port.title || port.textContent.trim();
+    if (state.transport === "real" && !window.confirm(`Connect ${sourceName} to ${destinationName}?`)) return true;
+    try {
+      const write = async (targetSlot, parameterIndex, nextValue) => {
+        if (state.transport === "real") return state.ntTransport.writeParameter(targetSlot, parameterIndex, nextValue);
+        const slot = state.routingSnapshot.slots.find(item => item.index === targetSlot);
+        const parameter = slot?.ioParameters?.find(item => item.index === parameterIndex);
+        if (!parameter) throw new Error("That simulated port has no writable parameter.");
+        parameter.value = nextValue;
+      };
+      if (destinationIsParameter && source.side === "output" && bus < 0) {
+        const used = new Set(state.routingSnapshot.slots.flatMap(slot => (slot.ioParameters || []).map(parameter => Number(parameter.value) - 1)).filter(value => value >= 0));
+        const firstAux = state.routingSnapshot.inputBusCount + state.routingSnapshot.outputBusCount;
+        bus = Array.from({ length: state.routingSnapshot.auxBusCount }, (_, index) => firstAux + index).find(candidate => !used.has(candidate));
+        if (bus == null) throw new Error("No free aux bus is available for this connection.");
+        await write(source.slotIndex, source.parameterIndex, bus + 1);
+      }
+      if (state.transport === "real") {
+        await write(writeTarget.slotIndex, writeTarget.parameterIndex, bus + 1);
+        await loadLiveRouting({ preserveView: true });
+        showToast("Routing changed and verified from the NT");
+      } else {
+        await write(writeTarget.slotIndex, writeTarget.parameterIndex, bus + 1);
+        renderRoutingGraph(state.routingSnapshot, { live: false, preserveView: true });
+        showToast("Simulation route changed");
+      }
+    } catch (error) {
+      showToast(error.message);
+    }
+    return true;
+  }
+
+  async function assignRoutingPort(selection, bus) {
+    if (selection.parameterIndex == null || selection.slotIndex == null) {
+      showToast("Select an algorithm input or output first");
+      return true;
+    }
+    try {
+      if (state.transport === "real") {
+        await state.ntTransport.writeParameter(selection.slotIndex, selection.parameterIndex, bus + 1);
+        await loadLiveRouting({ preserveView: true });
+        showToast(`${bus < 0 ? "Disconnected" : `Assigned ${routingBusLabel(bus, state.routingSnapshot)}`} and verified from the NT`);
+      } else {
+        const slot = state.routingSnapshot.slots.find(item => item.index === selection.slotIndex);
+        const parameter = slot?.ioParameters?.find(item => item.index === selection.parameterIndex);
+        if (!parameter) throw new Error("That simulated port has no writable parameter.");
+        parameter.value = bus + 1;
+        renderRoutingGraph(state.routingSnapshot, { live: false, preserveView: true });
+        showToast(bus < 0 ? "Simulation port disconnected" : `Simulation port assigned to ${routingBusLabel(bus, state.routingSnapshot)}`);
+      }
+    } catch (error) {
+      showToast(error.message);
+    }
+    return true;
+  }
+
+  async function handleAuxPaletteClick(target) {
+    const chip = target.closest(".routing-aux-chip");
+    if (!chip || !state.routingSnapshot) return false;
+    const bus = Number(chip.dataset.bus);
+    if (state.routingSelection?.parameterIndex != null) {
+      const selection = state.routingSelection;
+      selection.element.classList.remove("routing-selected-source");
+      state.routingSelection = null;
+      return assignRoutingPort(selection, bus);
+    }
+    if (state.routingSelection) {
+      state.routingSelection.element.classList.remove("routing-selected-source");
+      state.routingSelection = null;
+    }
+    state.routingBusSelection = bus;
+    $$(".routing-aux-chip", routingAuxPalette).forEach(item => item.classList.toggle("selected", item === chip));
+    $$(".routing-port", routingNodes).forEach(port => port.classList.toggle("bus-match", Number(port.dataset.bus) === bus));
+    showToast(bus < 0 ? "Now choose a port to disconnect" : `Now choose a port for ${routingBusLabel(bus, state.routingSnapshot)}`);
+    return true;
+  }
+
+  async function handleRoutingModeClick(target) {
+    const control = target.closest(".routing-mode-toggle");
+    if (!control) return false;
+    const rawParameterIndex = control.dataset.parameterIndex;
+    const parameterIndex = rawParameterIndex === "" ? null : Number(rawParameterIndex);
+    if (!Number.isInteger(parameterIndex)) {
+      showToast("The NT reports this mode, but did not expose its controlling parameter");
+      return true;
+    }
+    const slotIndex = Number(control.dataset.slotIndex);
+    const nextValue = control.dataset.mode === "replace" ? 0 : 1;
+    const nextName = nextValue === 1 ? "Replace" : "Add";
+    if (state.transport === "real" && !window.confirm(`Change this output to ${nextName} mode?`)) return true;
+    try {
+      if (state.transport === "real") {
+        await state.ntTransport.writeParameter(slotIndex, parameterIndex, nextValue);
+        await loadLiveRouting({ preserveView: true });
+        showToast(`Output mode changed to ${nextName} and verified from the NT`);
+      } else {
+        const slot = state.routingSnapshot.slots.find(item => item.index === slotIndex);
+        const parameter = slot?.parameters?.find(item => item.index === parameterIndex);
+        if (!parameter) throw new Error("The simulated mode parameter is unavailable.");
+        parameter.value = nextValue;
+        renderRoutingGraph(state.routingSnapshot, { live: false, preserveView: true });
+        showToast(`Simulation output mode changed to ${nextName}`);
+      }
+    } catch (error) {
+      showToast(error.message);
+    }
+    return true;
+  }
+
+  function selectRoutingSlot(slotIndex, snapshot = state.liveRouting || makeSimulatedRoutingSnapshot()) {
+    $$(".routing-node.slot", routingNodes).forEach(node => node.classList.toggle("selected", Number(node.dataset.slotIndex) === slotIndex));
+    $$(".routing-wire", routingWires).forEach(wire => {
+      const related = slotIndex == null || Number(wire.dataset.fromSlot) === slotIndex || Number(wire.dataset.toSlot) === slotIndex;
+      wire.classList.toggle("dimmed", !related);
+      wire.classList.toggle("highlighted", slotIndex != null && related);
+    });
+    const copy = $("div", routingInspector);
+    const detail = $("p", routingInspector);
+    if (slotIndex == null) {
+      $("span", copy).textContent = "Routing graph";
+      $("strong", copy).textContent = "Choose a port and an aux colour, or connect physical I/O directly. Use None to disconnect.";
+      detail.textContent = `${snapshot.slots.length} slots · ${snapshot.inputBusCount} inputs · ${snapshot.outputBusCount} outputs · ${snapshot.auxBusCount} aux buses`;
+      return;
+    }
+    const slot = snapshot.slots.find(item => item.index === slotIndex);
+    const masks = routingSlotMasks(slot, snapshot.inputBusCount + snapshot.outputBusCount + snapshot.auxBusCount);
+    const list = values => values.map(bus => routingBusLabel(bus, snapshot)).join(", ") || "none";
+    $("span", copy).textContent = `Slot ${slot.index + 1} · ${slot.algorithmName}`;
+    $("strong", copy).textContent = slot.name;
+    detail.textContent = `Reads ${list(masks.inputs)} · writes ${list(masks.outputs)}${masks.mappings.length ? ` · maps ${list(masks.mappings)}` : ""}`;
+  }
+
+  function applyRoutingZoom() {
+    const { width, height } = state.routingCanvasSize;
+    routingCanvas.style.zoom = "";
+    routingCanvas.style.transform = `scale(${state.routingZoom})`;
+    routingZoomLayer.style.width = `${Math.ceil(width * state.routingZoom)}px`;
+    routingZoomLayer.style.height = `${Math.ceil(height * state.routingZoom)}px`;
+    $("#routing-zoom-value").textContent = `${Math.round(state.routingZoom * 100)}%`;
+  }
+
+  function fitRoutingGraph(behavior = "smooth") {
+    const { width, height } = state.routingCanvasSize;
+    const availableWidth = Math.max(320, routingViewport.clientWidth - 24);
+    const availableHeight = Math.max(260, routingViewport.clientHeight - 24);
+    state.routingZoom = Math.max(.55, Math.min(1, availableWidth / width));
+    applyRoutingZoom();
+    routingViewport.scrollTo({ left: 0, top: 0, behavior: "auto" });
+    requestAnimationFrame(() => {
+      routingViewport.scrollLeft = 0;
+      routingViewport.scrollTop = 0;
+    });
+  }
+
+  function updateRoutingLayers() {
+    const hideSignals = !$("#routing-show-signals").checked;
+    const hideMappings = !$("#routing-show-mappings").checked;
+    routingCanvas.classList.toggle("hide-signals", hideSignals);
+    routingCanvas.classList.toggle("hide-mappings", hideMappings);
+    $$(".routing-wire.signal, .routing-wire-label.signal", routingCanvas).forEach(element => { element.style.display = hideSignals ? "none" : ""; });
+    $$(".routing-wire.mapping, .routing-wire-label.mapping, .routing-node.endpoint.mapping", routingCanvas).forEach(element => { element.style.display = hideMappings ? "none" : ""; });
+  }
+
+  async function loadLiveRouting({ preserveView = false } = {}) {
+    if (!state.ntTransport || !state.liveIdentity || state.routingReadPromise) return state.routingReadPromise;
+    const token = ++state.routingReadToken;
+    routingLoading.classList.remove("hidden");
+    routingReadButton.disabled = true;
+    routingReadButton.textContent = "Reading…";
+    state.routingReadPromise = (async () => {
+      const pendingPoll = stopLivePolling();
+      if (pendingPoll) await pendingPoll.catch(() => {});
+      await state.parameterReadQueue.catch(() => {});
+      const snapshot = await state.ntTransport.readRoutingSnapshot(state.liveIdentity);
+      if (token !== state.routingReadToken) return;
+      state.liveRouting = snapshot;
+      renderRoutingGraph(snapshot, { live: true, preserveView });
+      showToast(`Read complete NT routing · ${snapshot.slots.length} slots`);
+    })().catch(error => {
+      if (token === state.routingReadToken) {
+        routingSourceCopy.textContent = "Routing read failed";
+        showToast(error.message);
+      }
+    }).finally(() => {
+      if (token === state.routingReadToken) {
+        routingLoading.classList.add("hidden");
+        routingReadButton.disabled = !state.ntTransport;
+        routingReadButton.textContent = state.liveRouting ? "Read again" : "Read routing";
+        if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
+      }
+      state.routingReadPromise = null;
+    });
+    return state.routingReadPromise;
+  }
+
   function setView(view) {
     state.view = view;
     $$("[data-panel]").forEach(panel => panel.classList.toggle("active", panel.dataset.panel === view));
     $$("[data-view]").forEach(button => button.classList.toggle("active", button.dataset.view === view));
     $(".view-stack").scrollTop = 0;
+    if (view === "routing") {
+      requestAnimationFrame(() => fitRoutingGraph("auto"));
+      if (state.transport === "real" && !state.liveRouting) loadLiveRouting();
+    }
   }
 
   function setSurface(surface) {
@@ -447,15 +1141,18 @@
   }
 
   function showSimulatedIdentity() {
+    state.liveRouting = null;
     slotList.innerHTML = simulatedSlotMarkup;
     $(".prototype-note").textContent = "Fake data · no MIDI";
-    $("#preset-title").textContent = "WitchboardX";
-    $("#editor-heading").textContent = "WitchboardX";
+    $("#preset-title").textContent = "Demo preset";
+    $("#editor-heading").textContent = "Demo preset";
     $("#editor-slot-count").textContent = "10 slots";
     $("#hardware-title").textContent = "disting NT";
     $("#hardware-detail").textContent = "Simulation · SysEx ID 0";
     $("#hardware-status").textContent = "Ready";
+    routingConnectButton.textContent = "Connect NT";
     displaySlot($(".slot.active", slotList));
+    renderRoutingGraph(makeSimulatedRoutingSnapshot());
   }
 
   function displaySlot(slot) {
@@ -703,14 +1400,23 @@
     $("#hardware-detail").textContent = `${identity.version || "Unknown firmware"} · SysEx ID ${identity.sysexId}`;
     $("#hardware-status").textContent = "Read only";
     renderLiveSlots(identity.slots);
+    routingSourceCopy.textContent = "Ready to read live NT";
+    routingReadButton.textContent = "Read routing";
+    routingReadButton.disabled = false;
+    routingConnectButton.textContent = "Reconnect";
   }
 
   function disconnectRealTransport() {
     stopLivePolling();
+    state.routingReadToken += 1;
     state.activeLiveSlotIndex = null;
     if (state.ntTransport) state.ntTransport.disconnect();
     state.ntTransport = null;
     state.liveIdentity = null;
+    state.liveRouting = null;
+    routingLoading.classList.add("hidden");
+    routingReadButton.disabled = true;
+    routingReadButton.textContent = "Read routing";
     if ($("#midi-monitor-status")) $("#midi-monitor-status").textContent = "Monitor paused · no NT endpoint";
   }
 
@@ -751,6 +1457,7 @@
       setDeviceState("labConnected");
       connectMIDI.textContent = "Read again";
       showToast(`Read ${identity.presetName || "unnamed preset"} from the real NT`);
+      if (state.view === "routing") await loadLiveRouting();
     } catch (error) {
       disconnectRealTransport();
       setDeviceState("disconnected");
@@ -774,6 +1481,12 @@
       resetMIDIMonitor();
       $(".prototype-note").textContent = "Real Web MIDI · writes blocked";
       mappingSourceCopy.textContent = "Not read yet";
+      routingSourceCopy.textContent = "Connect to read live NT";
+      routingNodes.replaceChildren();
+      routingWires.replaceChildren();
+      $("span", $("div", routingInspector)).textContent = "Read-only graph";
+      $("strong", $("div", routingInspector)).textContent = "Connect to inspect the complete loaded preset.";
+      $("p", routingInspector).textContent = "No routing data has been requested from the NT yet.";
       $("#hardware-detail").textContent = "Waiting for Web MIDI permission";
       $("#hardware-status").textContent = "Not connected";
       connectMIDI.textContent = "Connect";
@@ -803,6 +1516,76 @@
 
   transportMode.addEventListener("change", event => setTransportMode(event.target.value));
   connectMIDI.addEventListener("click", readRealIdentity);
+  routingConnectButton.addEventListener("click", async () => {
+    if (state.transport !== "real") {
+      transportMode.value = "real";
+      setTransportMode("real");
+    } else if (state.ntTransport) {
+      disconnectRealTransport();
+      setDeviceState("labWaiting");
+    }
+    await readRealIdentity();
+  });
+  routingReadButton.addEventListener("click", loadLiveRouting);
+  routingNodes.addEventListener("click", async event => {
+    if (await handleRoutingModeClick(event.target)) return;
+    if (await handleRoutingConnectionClick(event.target)) return;
+    const node = event.target.closest(".routing-node.slot");
+    if (node) selectRoutingSlot(Number(node.dataset.slotIndex));
+  });
+  routingAuxPalette.addEventListener("click", event => handleAuxPaletteClick(event.target));
+  $("#routing-show-signals").addEventListener("change", updateRoutingLayers);
+  $("#routing-show-mappings").addEventListener("change", updateRoutingLayers);
+  $("#routing-zoom-out").addEventListener("click", () => {
+    state.routingZoom = Math.max(.2, Number((state.routingZoom - .1).toFixed(2)));
+    applyRoutingZoom();
+  });
+  $("#routing-zoom-in").addEventListener("click", () => {
+    state.routingZoom = Math.min(1.5, Number((state.routingZoom + .1).toFixed(2)));
+    applyRoutingZoom();
+  });
+  $("#routing-fit").addEventListener("click", () => fitRoutingGraph());
+  routingViewport.addEventListener("wheel", event => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    const rect = routingViewport.getBoundingClientRect();
+    const localX = event.clientX - rect.left;
+    const localY = event.clientY - rect.top;
+    const previousZoom = state.routingZoom;
+    const contentX = (routingViewport.scrollLeft + localX) / previousZoom;
+    const contentY = (routingViewport.scrollTop + localY) / previousZoom;
+    const direction = event.deltaY > 0 ? -.08 : .08;
+    state.routingZoom = Math.max(.2, Math.min(1.5, Number((previousZoom + direction).toFixed(2))));
+    applyRoutingZoom();
+    routingViewport.scrollLeft = (contentX * state.routingZoom) - localX;
+    routingViewport.scrollTop = (contentY * state.routingZoom) - localY;
+  }, { passive: false });
+
+  let routingDrag = null;
+  routingViewport.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || event.target.closest("button, input, label, .routing-node.endpoint, .routing-port")) return;
+    routingDrag = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      left: routingViewport.scrollLeft,
+      top: routingViewport.scrollTop
+    };
+    routingViewport.setPointerCapture(event.pointerId);
+    routingViewport.classList.add("dragging");
+  });
+  routingViewport.addEventListener("pointermove", event => {
+    if (!routingDrag || event.pointerId !== routingDrag.pointerId) return;
+    routingViewport.scrollLeft = routingDrag.left - (event.clientX - routingDrag.x);
+    routingViewport.scrollTop = routingDrag.top - (event.clientY - routingDrag.y);
+  });
+  const finishRoutingDrag = event => {
+    if (!routingDrag || event.pointerId !== routingDrag.pointerId) return;
+    routingDrag = null;
+    routingViewport.classList.remove("dragging");
+  };
+  routingViewport.addEventListener("pointerup", finishRoutingDrag);
+  routingViewport.addEventListener("pointercancel", finishRoutingDrag);
   midiMonitorFilter.addEventListener("change", renderMIDIMonitor);
   $("#clear-midi-monitor").addEventListener("click", resetMIDIMonitor);
   $("#sysex-id").addEventListener("change", () => {

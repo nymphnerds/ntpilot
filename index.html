@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
-  <title>NTPilot — iPad MIDI Lab</title>
-  <link rel="stylesheet" href="styles.css?v=20260921-6">
+  <title>NT Editor — Experience Harness</title>
+  <link rel="stylesheet" href="styles.css?v=20260922-43">
 </head>
 <body>
   <div class="prototype-bar" aria-label="Prototype controls">
     <div class="prototype-brand">
       <span class="prototype-dot"></span>
-      <span>NTPilot lab</span>
+      <span>Experience harness</span>
       <span class="prototype-note">Fake data · no MIDI</span>
     </div>
     <div class="prototype-controls">
@@ -64,6 +64,10 @@
             <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>
             <span>Editor</span>
           </button>
+          <button class="nav-item" data-view="routing">
+            <svg viewBox="0 0 24 24"><path d="M5 5h5v5H5zM14 14h5v5h-5zM10 7h3a4 4 0 0 1 4 4v3M7 10v4a3 3 0 0 0 3 3h4"/></svg>
+            <span>Routing</span>
+          </button>
           <button class="nav-item" data-view="mapping">
             <svg viewBox="0 0 24 24"><path d="M5 7h6l2 3h6M5 17h6l2-3h6M5 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm18 3a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM5 17a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm18-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/></svg>
             <span>Mapping</span>
@@ -95,7 +99,7 @@
             <div class="device-title">
               <strong>disting NT</strong>
               <span class="divider"></span>
-              <span id="preset-title">WitchboardX</span>
+              <span id="preset-title">Demo preset</span>
             </div>
           </div>
           <div class="status-actions">
@@ -123,6 +127,7 @@
         <div class="host-tabs" aria-label="AUv3 tabs">
           <button class="host-tab active" data-view="control">Performance</button>
           <button class="host-tab" data-view="editor">Editor</button>
+          <button class="host-tab" data-view="routing">Routing</button>
           <button class="host-tab" data-view="mapping">Mapping</button>
           <button class="host-tab" data-view="assistant">Assistant <span>1</span></button>
         </div>
@@ -132,7 +137,7 @@
             <div class="view-heading">
               <div>
                 <p class="eyebrow">Preset workspace</p>
-                <h1 id="editor-heading">WitchboardX</h1>
+                <h1 id="editor-heading">Demo preset</h1>
               </div>
               <div class="heading-actions">
                 <button class="secondary-button refresh-button">
@@ -242,6 +247,51 @@
             </div>
           </section>
 
+          <section class="view routing-view" data-panel="routing" aria-labelledby="routing-heading">
+            <div class="view-heading routing-heading">
+              <div><p class="eyebrow">Complete NT signal topology</p><h1 id="routing-heading">Routing</h1></div>
+              <div class="routing-heading-actions">
+                <span class="verified-source"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg> <span id="routing-source-copy">Simulation fixture</span></span>
+                <button class="primary-button" id="routing-connect-button" type="button">Connect NT</button>
+                <button class="secondary-button refresh-button" id="routing-read-button" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18.5 9a7 7 0 0 0-12-2L4 11m16 2-2.5 4a7 7 0 0 1-12-2"/></svg>
+                  Read routing
+                </button>
+              </div>
+            </div>
+            <div class="routing-shell">
+              <div class="routing-toolbar">
+                <div class="routing-filters" aria-label="Routing layers">
+                  <label><input id="routing-show-signals" type="checkbox" checked><span></span>Signals</label>
+                  <label class="hidden" aria-hidden="true"><input id="routing-show-mappings" type="checkbox"><span></span>Parameter modulation <b id="routing-mapping-count">0</b></label>
+                </div>
+                <div class="routing-legend" aria-label="Bus legend">
+                  <span><i class="input"></i>Input</span><span><i class="output"></i>Output</span>
+                </div>
+                <div class="routing-zoom" aria-label="Graph zoom">
+                  <button id="routing-zoom-out" type="button" aria-label="Zoom out">−</button>
+                  <button id="routing-fit" type="button">Fit</button>
+                  <output id="routing-zoom-value" aria-live="polite">100%</output>
+                  <button id="routing-zoom-in" type="button" aria-label="Zoom in">+</button>
+                </div>
+              </div>
+              <div class="routing-aux-palette" id="routing-aux-palette" aria-label="Aux bus selector"></div>
+              <div class="routing-viewport" id="routing-viewport" tabindex="0" aria-label="Interactive disting NT routing graph. Select a source port and then a destination port. Drag empty space to pan.">
+                <div class="routing-zoom-layer" id="routing-zoom-layer">
+                  <div class="routing-canvas" id="routing-canvas">
+                    <svg class="routing-wires" id="routing-wires" aria-hidden="true"></svg>
+                    <div class="routing-nodes" id="routing-nodes"></div>
+                  </div>
+                </div>
+                <div class="routing-loading hidden" id="routing-loading"><span></span><strong>Reading the complete NT routing summary…</strong></div>
+              </div>
+              <div class="routing-inspector" id="routing-inspector">
+                <div><span>Routing graph</span><strong>Choose a port and an aux colour, or connect physical I/O directly.</strong></div>
+                <p>Matching rainbow badges share an internal bus. Choose None to disconnect. Live changes use NT readback.</p>
+              </div>
+            </div>
+          </section>
+
           <section class="view control-view" data-panel="control" aria-labelledby="control-heading">
             <div class="view-heading">
               <div><p class="eyebrow">Native NT controls</p><h1 id="control-heading">Performance Page</h1></div>
@@ -339,7 +389,7 @@
                   <div><p class="eyebrow">Preset-aware help</p><h1 id="assistant-heading">Assistant</h1></div>
                   <button class="model-button"><span class="model-dot"></span> OpenRouter · Claude Sonnet <svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button>
                 </div>
-                <div class="context-strip"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 0v8m8-4-8 4-8-4"/></svg><span>Live context: <strong>WitchboardX</strong> · 10 slots · refreshed now</span><button>Inspect</button></div>
+                <div class="context-strip"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 0v8m8-4-8 4-8-4"/></svg><span>Live context: <strong>Demo preset</strong> · 10 slots · refreshed now</span><button>Inspect</button></div>
                 <div class="messages" id="messages">
                   <article class="message user-message"><p>Make the Witchboard master filter movement a little gentler.</p></article>
                   <article class="message assistant-message">
@@ -362,7 +412,7 @@
                 </form>
               </div>
               <aside class="assistant-context">
-                <div class="context-card"><span class="context-label">Current target</span><h3>WitchboardX</h3><p>disting NT · saved from firmware 1.18.0</p><div class="context-facts"><span><b>10</b> slots</span><span><b>48%</b> CPU</span><span><b>Smart</b> sync</span></div></div>
+                <div class="context-card"><span class="context-label">Current target</span><h3>Demo preset</h3><p>disting NT · saved from firmware 1.18.0</p><div class="context-facts"><span><b>10</b> slots</span><span><b>48%</b> CPU</span><span><b>Smart</b> sync</span></div></div>
                 <div class="context-card"><span class="context-label">Available knowledge</span><ul><li><i class="ok"></i> Live preset state</li><li><i class="ok"></i> Algorithm documentation</li><li><i class="ok"></i> NT API and mapping guide</li><li><i class="ok"></i> Routing reference</li></ul></div>
                 <p class="privacy-note"><svg viewBox="0 0 24 24"><path d="M6 10V7a6 6 0 0 1 12 0v3m-14 0h16v11H4V10Z"/></svg>Only the disclosed context is sent to the selected provider.</p>
               </aside>
@@ -400,7 +450,6 @@
                 <span><strong id="midi-count-channel">0</strong>Channel MIDI</span>
                 <span><strong id="midi-count-sysex">0</strong>SysEx</span>
               </div>
-              <p class="midi-monitor-instruction"><strong>NT setup:</strong> Settings → MIDI → Send CCs → On parameter change. Test a parameter that already has a MIDI CC mapping.</p>
               <ol class="midi-monitor-log" id="midi-monitor-log" aria-live="polite">
                 <li class="midi-monitor-empty">Move a controller after connecting. This monitor has no send control.</li>
               </ol>
@@ -413,7 +462,7 @@
     </section>
   </main>
 
-  <script src="web-midi-transport.js?v=20260921-7"></script>
-  <script src="app.js?v=20260921-7"></script>
+  <script src="web-midi-transport.js?v=20260922-28"></script>
+  <script src="app.js?v=20260922-45"></script>
 </body>
 </html>
