@@ -215,7 +215,7 @@
   }
 
   function applyLiveCCFeedback(message) {
-    if (state.transport !== "real") return;
+    if (state.transport === "simulation") return;
     state.liveParameters.forEach(entry => {
       const midi = entry.parameter.mapping?.midi;
       if (!midi?.enabled || midi.type !== "CC" || midi.relative) return;
@@ -979,7 +979,7 @@
     $(".view-stack").scrollTop = 0;
     if (view === "routing") {
       requestAnimationFrame(() => fitRoutingGraph("auto"));
-      if (state.transport === "real" && !state.liveRouting) loadLiveRouting();
+      if (state.transport !== "simulation" && !state.liveRouting) loadLiveRouting();
     }
   }
 
@@ -1017,7 +1017,7 @@
     stateBannerCopy.textContent = detail.copy;
     stateAction.textContent = detail.action;
     if (nextState === "offline") mappingSourceCopy.textContent = "Local draft";
-    else if (state.transport !== "real") mappingSourceCopy.textContent = "Fake NT fixture";
+    else if (state.transport === "simulation") mappingSourceCopy.textContent = "Fake NT fixture";
     mappingForm.setAttribute("aria-disabled", String(!canMutate()));
     applyMapping.textContent = nextState === "offline" ? "Save to draft" : "Apply to NT";
     applyMapping.disabled = !canMutate() || !state.mappingDirty;
@@ -1070,7 +1070,7 @@
     if (conflicted) $("#mapping-warning-copy").textContent = `Channel ${mapChannel.value} · CC ${mapCC.value} already controls another parameter. Continue only if you deliberately want both parameters to move together.`;
     mappingConfirmation.className = `confirmed-badge${state.mappingDirty ? " draft" : ""}`;
     const settledLabel = state.device === "offline" ? "Local draft" :
-      state.transport === "real" ? "Read from NT" : "Confirmed";
+      state.transport !== "simulation" ? "Read from NT" : "Confirmed";
     mappingConfirmation.innerHTML = `<i></i> ${state.mappingDirty ? "Not applied" : settledLabel}`;
     applyMapping.disabled = !canMutate() || !state.mappingDirty;
   }
@@ -1181,7 +1181,7 @@
     $("#slot-heading").textContent = slot.dataset.slot;
     const slotNumber = $(".slot-number", slot).textContent;
     $("#slot-kicker").textContent = `Slot ${slotNumber} · ${slot.dataset.algorithm}`;
-    if (state.transport === "real" && state.ntTransport) {
+    if (state.transport !== "simulation" && state.ntTransport) {
       queueLiveParameterRead(slot);
       return;
     }
@@ -1189,7 +1189,7 @@
     $("#parameter-list").classList.toggle("hidden", !hasFixture);
     $("#parameter-fixture-note").classList.toggle("hidden", hasFixture);
     $("#fixture-algorithm").textContent = slot.dataset.algorithm;
-    $("#parameter-fixture-note span").textContent = state.transport === "real" ?
+    $("#parameter-fixture-note span").textContent = state.transport !== "simulation" ?
       "This slot identity is live. Parameter definitions and values are the next read-only synchronization milestone." :
       "This visual pass only carries the WitchboardX parameter fixture. Production parameter definitions come live from the NT.";
   }
@@ -1536,9 +1536,9 @@
   transportMode.addEventListener("change", event => setTransportMode(event.target.value));
   connectMIDI.addEventListener("click", readRealIdentity);
   routingConnectButton.addEventListener("click", async () => {
-    if (state.transport !== "real") {
-      transportMode.value = "real";
-      setTransportMode("real");
+    if (state.transport === "simulation") {
+      transportMode.value = "readonly";
+      setTransportMode("readonly");
     } else if (state.ntTransport) {
       disconnectRealTransport();
       setDeviceState("labWaiting");
@@ -1619,7 +1619,7 @@
     $$(".sync-option").forEach(option => option.classList.remove("active"));
     button.classList.add("active");
     state.syncMode = button.textContent.trim().toLowerCase();
-    if (state.transport === "real" && state.activeLiveSlotIndex != null) {
+    if (state.transport !== "simulation" && state.activeLiveSlotIndex != null) {
       startLivePolling(state.activeLiveSlotIndex);
     }
     const detail = state.syncMode === "manual" ? "background polling off" :
@@ -1632,7 +1632,7 @@
       stopLivePolling();
       return;
     }
-    if (state.transport === "real" && state.activeLiveSlotIndex != null) {
+    if (state.transport !== "simulation" && state.activeLiveSlotIndex != null) {
       startLivePolling(state.activeLiveSlotIndex);
     }
   });
@@ -1812,7 +1812,7 @@
   });
 
   $(".refresh-button").addEventListener("click", () => {
-    if (state.transport === "real") {
+    if (state.transport !== "simulation") {
       readRealIdentity();
       return;
     }
