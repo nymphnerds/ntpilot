@@ -61,7 +61,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   grid-template-columns: 206px minmax(0, 1fr);
   border: 1px solid rgba(255,255,255,.11);
   border-radius: var(--radius);
-  background: var(--chrome);
+  background: linear-gradient(90deg, #0e1c2e 0, #122940 120px, #21445f 220px, #65849b 330px, #b3c8d7 470px, #e8eff5 650px, #e8eff5 100%);
   overflow: hidden;
   box-shadow: var(--shadow);
   transition: grid-template-columns .2s ease;
@@ -75,7 +75,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .sidebar-compact .nav-badge { position: absolute; margin: 0 0 21px 22px; }
 .sidebar-compact .settings-link { position: relative; }
 
-.app-sidebar { padding: 22px 13px 16px; display: flex; flex-direction: column; color: #bfd0da; border-right: 1px solid rgba(178,211,225,.16); min-width: 0; background: linear-gradient(90deg, var(--chrome) 0%, #11263b 62%, #19344d 100%); box-shadow: inset -1px 0 rgba(207,228,238,.10); }
+.app-sidebar { padding: 22px 13px 16px; display: flex; flex-direction: column; color: #bfd0da; border-right: 0; min-width: 0; background: transparent; }
 .app-mark { display: flex; align-items: center; gap: 10px; padding: 0 9px 24px; }
 .mark-glyph { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #08221f; background: linear-gradient(145deg, #8cead7, #54ccb5); font-weight: 900; font-size: 13px; letter-spacing: -.05em; }
 .mark-copy { display: flex; flex-direction: column; line-height: 1.05; }
@@ -89,8 +89,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .nav-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 10px; display: grid; place-items: center; background: #d16661; color: white; font-size: 10px; }
 .settings-link { margin-top: auto; }
 
-.app-main { min-width: 0; min-height: 0; background: var(--surface); position: relative; display: flex; flex-direction: column; }
-.status-bar { height: 54px; flex: 0 0 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; background: rgba(249,252,254,.94); border-bottom: 1px solid #d4e0e7; z-index: 8; }
+.app-main { min-width: 0; min-height: 0; background: transparent; position: relative; display: flex; flex-direction: column; }
+.status-bar { height: 54px; flex: 0 0 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; background: rgba(249,252,254,.82); border-bottom: 1px solid rgba(212,224,231,.8); backdrop-filter: blur(10px); z-index: 8; }
 .status-leading { gap: 14px; min-width: 0; }
 .connection-pill { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 11px; border-radius: 16px; background: #dff5ef; color: #14715f; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .055em; white-space: nowrap; }
 .connection-pill .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: #24a98e; box-shadow: 0 0 0 4px rgba(36,169,142,.13); }
