@@ -61,7 +61,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   grid-template-columns: 206px minmax(0, 1fr);
   border: 1px solid rgba(255,255,255,.11);
   border-radius: var(--radius);
-  background: var(--chrome);
+  background: var(--surface);
   overflow: hidden;
   box-shadow: var(--shadow);
   transition: grid-template-columns .2s ease;
