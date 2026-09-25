@@ -6,6 +6,7 @@
 
 - Added live parameter writes during slider movement with NT readback.
 - Replaced native-looking parameter rails with touch-friendly NT Pilot sliders and visible mint progress.
+- Added deterministic, very subtle colour signatures to parameter rows for tracking long lists.
 - Added Fast, Slow and Manual synchronization modes, with Fast as the default.
 - Added a sticky two-row bus dock: Aux buses above, numbered physical inputs and outputs below, and a central None action.
 - Added compact bus chips to firmware-reported bus-assignment parameters and a clear armed assignment state.

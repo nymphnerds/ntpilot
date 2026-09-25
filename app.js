@@ -1801,6 +1801,10 @@
     const createParameterRow = parameter => {
       const row = document.createElement("div");
       row.className = "parameter-row live-parameter-row";
+      const parameterHue = (parameter.index * 47 + slotInfo.index * 23 + 188) % 360;
+      row.style.setProperty("--parameter-tint", `hsla(${parameterHue}, 72%, 58%, .018)`);
+      row.style.setProperty("--parameter-tint-hover", `hsla(${parameterHue}, 72%, 58%, .05)`);
+      row.style.setProperty("--parameter-accent", `hsla(${parameterHue}, 68%, 48%, .46)`);
 
       const name = document.createElement("div");
       name.className = "parameter-name";

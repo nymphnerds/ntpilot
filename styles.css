@@ -219,6 +219,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .parameter-fixture-note strong { color: #354a55; font-size: 14px; }.parameter-fixture-note span { max-width: 420px; color: #7c8c95; font-size: 10px; line-height: 1.5; }
 .parameter-row { min-height: 70px; display: grid; grid-template-columns: minmax(90px, 1.2fr) minmax(110px, 2fr) 62px 50px; align-items: center; gap: 14px; border-bottom: 1px solid #e5ebed; padding: 7px 5px; }
 .parameter-row.selected { background: linear-gradient(90deg, rgba(66,190,166,.07), transparent); }
+.live-parameter-row { border-bottom-color: var(--parameter-accent); background: linear-gradient(90deg, var(--parameter-tint), transparent 76%); box-shadow: inset 2px 0 0 var(--parameter-accent); transition: background .14s; }
+.live-parameter-row:hover { background: linear-gradient(90deg, var(--parameter-tint-hover), transparent 82%); }
 .parameter-row.midi-feedback { background: linear-gradient(90deg, rgba(66,190,166,.16), rgba(66,190,166,.035)); }
 .parameter-row.poll-feedback { background: linear-gradient(90deg, rgba(83,153,232,.14), rgba(83,153,232,.025)); }
 .parameter-name { min-width: 0; display: flex; flex-direction: column; }

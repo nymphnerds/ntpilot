@@ -39,6 +39,7 @@ The central model is the NT bus universe:
 - Fast sync is the default. The UI calls the former Smart mode Slow.
 - Algorithm list and bus dock remain fixed while the parameter pane scrolls.
 - Editor and Performance use the same custom NT Pilot slider language and continuous verified write path.
+- Long parameter lists use deterministic low-opacity row tints and fine matching edges so adjacent controls remain easy to track.
 
 ## Performance and Assistant
 
@@ -86,9 +87,9 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260925-68`
+- `styles.css?v=20260925-69`
 - `web-midi-transport.js?v=20260925-40`
-- `app.js?v=20260925-89`
+- `app.js?v=20260925-90`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
