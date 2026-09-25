@@ -241,7 +241,7 @@ input[type="range"]:disabled { opacity: .48; cursor: wait; }
 .parameter-row output { text-align: right; color: #52656f; font-size: 11px; font-variant-numeric: tabular-nums; }
 .map-shortcut { min-width: 34px; width: 46px; height: 29px; padding: 0 4px; border-radius: 8px; border: 1px dashed #bac7cc; background: white; color: #75858e; font-size: 9px; font-weight: 900; }
 .live-parameter-row .map-shortcut { flex: 0 0 auto; width: auto; min-width: 23px; height: 22px; padding: 0 5px; border-radius: 6px; font-size: 8px; }
-.map-shortcut.mapped { border-style: solid; border-color: #a9d9ce; background: #e4f5f0; color: #0a7764; }
+.map-shortcut.mapped { border-style: solid; border-color: #a9cdef; background: #e8f3fd; color: #28638f; }
 .map-shortcut.warning { border-color: #e7c989; background: #fff4d7; color: #996315; }
 .parameter-bus-slot { min-width: 0; display: flex; align-items: center; justify-content: center; }
 .parameter-bus-chip { position: relative; }
