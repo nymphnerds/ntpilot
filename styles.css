@@ -183,7 +183,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .parameter-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 18px; }
 .parameter-title span { color: #89969e; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .parameter-title h2 { margin: 3px 0 0; font-size: 20px; letter-spacing: -.025em; }
-.editor-bus-dock { z-index: 7; flex: 0 0 auto; width: 100%; overflow: hidden; border-bottom: 1px solid #d7e1e4; background: var(--surface); box-shadow: 0 5px 16px rgba(36,62,74,.07); }
+.editor-bus-dock { z-index: 7; flex: 0 0 auto; width: 100%; overflow: hidden; border-bottom: 1px solid #d7e1e4; background: var(--surface); }
 .editor-bus-dock-row, .editor-physical-bus-row { overflow: hidden; }
 .editor-aux-bus-row { min-height: 41px; padding: 7px 8px; display: grid; grid-template-columns: repeat(44, minmax(0, 1fr)); align-items: center; gap: 2px; border-bottom: 1px solid #dce5e8; }
 .editor-aux-bus-row .editor-bus-chip { min-width: 0; width: 100%; }
