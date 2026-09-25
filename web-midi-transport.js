@@ -684,7 +684,17 @@
             ? { ...parameter, ioFlags: parameter.ioFlags | 0x01 }
             : parameter);
         const outputModeMap = {};
-        slots.push({ ...slot, routing, parameters, ioParameters, outputModeMap });
+        const outputModeParameterIndices = parameters.filter(parameter => parameter.ioFlags & 0x08).map(parameter => parameter.index);
+        slots.push({
+          ...slot,
+          routing,
+          parameters,
+          ioParameters,
+          outputModeMap,
+          outputModeParameterIndices,
+          outputModeStatus: outputModeParameterIndices.length ? "pending" : "fixed",
+          outputModeErrors: []
+        });
       }
       return {
         presetName: identity.presetName,
@@ -698,6 +708,9 @@
     async hydrateRoutingOutputModes(snapshot) {
       for (const slot of snapshot.slots) {
         const outputModeParameters = (slot.parameters || []).filter(parameter => parameter.ioFlags & 0x08);
+        slot.outputModeMap = {};
+        slot.outputModeErrors = [];
+        slot.outputModeStatus = outputModeParameters.length ? "loading" : "fixed";
         for (const parameter of outputModeParameters) {
           try {
             const cacheKey = `${slot.index}:${slot.guidKey}:${slot.parameters.length}:${parameter.index}:${parameter.name}`;
@@ -708,9 +721,12 @@
             }
             slot.outputModeMap[usage.parameterIndex] = usage.outputParameterIndices;
           } catch (error) {
+            slot.outputModeErrors.push({ parameterIndex: parameter.index, message: error.message });
             this.onEvent({ type: "warning", command: 0x55, message: `Output-mode metadata unavailable for slot ${slot.index + 1}, parameter ${parameter.index}: ${error.message}` });
           }
         }
+        if (slot.outputModeErrors.length) slot.outputModeStatus = "error";
+        else if (outputModeParameters.length) slot.outputModeStatus = "ready";
       }
       return snapshot;
     }

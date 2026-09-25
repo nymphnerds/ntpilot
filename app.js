@@ -848,14 +848,24 @@
         if (port.kind === "aux") bus.style.setProperty("--aux-colour", routingAuxColour(port.bus, state.routingSnapshot));
         if (side === "output") {
           const mode = document.createElement("span");
-          mode.className = `routing-mode-toggle ${port.inPlace ? "in-place" : port.outputMode}${port.modeParameterIndex == null || port.inPlace ? " readonly" : ""}`;
+          const editableMode = port.modeStatus === "editable" && !port.inPlace;
+          mode.className = `routing-mode-toggle ${port.inPlace ? "in-place" : port.outputMode} ${port.modeStatus || "fixed"}${editableMode ? "" : " readonly"}`;
           mode.dataset.slotIndex = String(definition.slotIndex);
           mode.dataset.parameterIndex = port.modeParameterIndex == null ? "" : String(port.modeParameterIndex);
           mode.dataset.mode = port.outputMode;
-          mode.textContent = port.inPlace ? "IN PLACE" : port.outputMode === "replace" ? "REPLACE" : "ADD";
-          mode.title = port.modeParameterIndex == null
-            ? `${port.inPlace ? "In-place Replace" : port.outputMode === "replace" ? "Replace" : "Add"} mode (reported or fixed by the NT)`
-            : `${port.outputMode === "replace" ? "Replace" : "Add"} mode · click to change`;
+          mode.dataset.modeStatus = port.modeStatus || "fixed";
+          if (port.inPlace) mode.textContent = "IN PLACE";
+          else if (port.modeStatus === "unknown") mode.textContent = "MODE ?";
+          else if (port.modeStatus === "loading") mode.textContent = "MODE…";
+          else if (port.modeStatus === "fixed" && !port.outputModeKnown) mode.textContent = "FIXED";
+          else if (port.modeStatus === "fixed") mode.textContent = `FIXED ${port.outputMode === "replace" ? "REPLACE" : "ADD"}`;
+          else mode.textContent = port.outputMode === "replace" ? "REPLACE" : "ADD";
+          if (port.inPlace) mode.title = "This algorithm processes its input bus in place; its Replace behaviour is fixed.";
+          else if (port.modeStatus === "unknown") mode.title = "The NT's Add/Replace metadata could not be read. Refresh Routing to retry.";
+          else if (port.modeStatus === "loading") mode.title = "Reading Add/Replace controls from the NT…";
+          else if (port.modeStatus === "fixed" && !port.outputModeKnown) mode.title = "This algorithm exposes no editable Add/Replace control. Its effective fixed mode is not reported while disconnected.";
+          else if (port.modeStatus === "fixed") mode.title = `Fixed ${port.outputMode === "replace" ? "Replace" : "Add"}: this algorithm exposes no editable mode control.`;
+          else mode.title = `${port.outputMode === "replace" ? "Replace" : "Add"} mode · click to change`;
           row.append(mode, bus, label, dot);
         } else {
           row.append(...(side === "input" ? [dot, label, bus] : [bus, label, dot]));
@@ -942,6 +952,12 @@
     };
   }
 
+  function routingOutputModeStatus(selection) {
+    if (selection?.side !== "output" || selection.slotIndex == null) return null;
+    const slot = state.routingSnapshot?.slots.find(item => item.index === selection.slotIndex);
+    return slot?.outputModeStatus || null;
+  }
+
   async function chooseRoutingOutputMode(details, mode) {
     await state.ntTransport.writeParameter(details.slotIndex, details.parameterIndex, mode === "replace" ? 1 : 0);
   }
@@ -1005,8 +1021,20 @@
           if (modeParameter) {
             port.modeParameterIndex = modeParameterIndex;
             port.outputMode = Number(modeParameter.value) === 1 ? "replace" : "add";
-          } else port.outputMode = bus >= 0 && masks.replaces.includes(bus) ? "replace" : "add";
-          if (["quan", "cali"].includes(slotGuid(slot))) port.outputMode = "replace";
+            port.modeStatus = "editable";
+            port.outputModeKnown = true;
+          } else {
+            port.outputMode = bus >= 0 && masks.replaces.includes(bus) ? "replace" : "add";
+            port.outputModeKnown = bus >= 0;
+            port.modeStatus = slot.outputModeStatus === "error"
+              ? "unknown"
+              : ["pending", "loading"].includes(slot.outputModeStatus) ? "loading" : "fixed";
+          }
+          if (["quan", "cali"].includes(slotGuid(slot))) {
+            port.outputMode = "replace";
+            port.outputModeKnown = true;
+            port.modeStatus = "fixed";
+          }
         }
         return port;
       };
@@ -1019,6 +1047,8 @@
           port.busLabel = routingBusLabel(port.bus, snapshot);
           port.kind = routingBusKind(port.bus, snapshot);
           port.outputMode = "replace";
+          port.outputModeKnown = true;
+          port.modeStatus = "fixed";
           port.inPlace = true;
           port.modeParameterIndex = null;
         });
@@ -1037,6 +1067,8 @@
           maximum: 0,
           implicit: true,
           outputMode: side === "output" ? (masks.replaces.includes(bus) ? "replace" : "add") : null,
+          outputModeKnown: side === "output",
+          modeStatus: side === "output" ? "fixed" : null,
           modeParameterIndex: null
         }));
       };
@@ -1311,6 +1343,9 @@
         );
       } else {
         await finishRoutingConnection(source, selection);
+        if (routingOutputModeStatus(output) === "error") {
+          showToast("Connected and verified, but the NT's Add/Replace metadata failed to load. Refresh Routing to retry it.");
+        }
       }
     } else {
       await finishRoutingConnection(source, selection);
@@ -1512,7 +1547,11 @@
           parameterIndex: Number(row.dataset.parameterIndex)
         });
     if (!details) {
-      showToast("The NT reports this mode, but did not expose an editable controller for this output");
+      const slotStatus = routingOutputModeStatus({ side: "output", slotIndex: Number(row.dataset.slotIndex) });
+      const status = slotStatus === "error" ? "unknown" : control.dataset.modeStatus;
+      if (status === "unknown") showToast("The NT's Add/Replace metadata failed to load. Refresh Routing to retry.");
+      else if (["pending", "loading"].includes(slotStatus) || status === "loading") showToast("Still reading this output's mode controls from the NT.");
+      else showToast("This output's Add/Replace behaviour is fixed by the algorithm; the NT exposes no editable mode control.");
       return true;
     }
     openRoutingModePopover(control, "Choose how this output writes to its assigned bus.", details.currentMode, async mode => {

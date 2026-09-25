@@ -295,9 +295,40 @@ global.navigator = { requestMIDIAccess: async options => {
   assert.deepEqual(moveCommand.slice(6, 9), [0x37, 1, 0]);
   const routing = await transport.readRoutingSnapshot(await transport.readSnapshot());
   assert.equal(routing.slots.length, 2);
+  assert.equal(routing.slots[0].outputModeStatus, "fixed");
   assert.equal(routing.slots[0].routing.inputMask, 1n);
   assert.equal(routing.slots[0].routing.outputMask, 1n << 12n);
   assert.equal(routing.slots[1].routing.mappingInputMask, 1n);
+  const outputModeSnapshot = {
+    slots: [{
+      index: 0,
+      guidKey: "01020304",
+      parameters: [{ index: 1, name: "Output mode", ioFlags: 0x08, value: 0 }],
+      outputModeMap: {},
+      outputModeStatus: "pending",
+      outputModeErrors: []
+    }]
+  };
+  await transport.hydrateRoutingOutputModes(outputModeSnapshot);
+  assert.equal(outputModeSnapshot.slots[0].outputModeStatus, "ready");
+  assert.deepEqual(outputModeSnapshot.slots[0].outputModeMap, { 1: [3, 4] });
+  const failedOutputModeSnapshot = {
+    slots: [{
+      index: 1,
+      guidKey: "failure-case",
+      parameters: [{ index: 2, name: "Output mode", ioFlags: 0x08, value: 0 }],
+      outputModeMap: { 99: [99] },
+      outputModeStatus: "pending",
+      outputModeErrors: []
+    }]
+  };
+  const readOutputModeUsage = transport.readOutputModeUsage;
+  transport.readOutputModeUsage = async () => { throw new Error("mode metadata timeout"); };
+  await transport.hydrateRoutingOutputModes(failedOutputModeSnapshot);
+  transport.readOutputModeUsage = readOutputModeUsage;
+  assert.equal(failedOutputModeSnapshot.slots[0].outputModeStatus, "error");
+  assert.deepEqual(failedOutputModeSnapshot.slots[0].outputModeMap, {});
+  assert.equal(failedOutputModeSnapshot.slots[0].outputModeErrors[0].message, "mode metadata timeout");
   input.onmidimessage({ data: Uint8Array.from([0xB2, 74, 91]), receivedTime: 42 });
   const ccEvent = events.find(event => event.type === "midi-message" && event.message.subtype === "cc");
   assert.equal(ccEvent.message.label, "Ch 3 · CC 74 · value 91");

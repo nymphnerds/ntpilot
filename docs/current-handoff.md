@@ -72,6 +72,7 @@ The central model is the NT bus universe:
 - Physical input/output banks share a top alignment. Optional USB Audio From Host and USB Audio To Host algorithms occupy compact side positions beneath their corresponding physical bank.
 - Side stacks are centred against the total central algorithm list.
 - Add/Replace chips are always visible on output rows. Editable chips are backed by a real NT mode-controller parameter; fixed or unresolved chips are read-only.
+- Output-mode chips explicitly distinguish editable Add/Replace, known fixed mode, disconnected fixed mode, metadata loading and metadata failure. A missing `0x55` association never fabricates an editable Replace option.
 - Assigning a supported algorithm output to an Aux bus opens the anchored Add/Replace choice before writing.
 - The choice is positioned beside the user's latest pointer or touch location for every routing assignment, with viewport-edge clamping.
 - A route can be created in either interaction order: choose the port then Aux, or Aux then port.

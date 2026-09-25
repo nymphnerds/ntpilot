@@ -379,6 +379,10 @@ button.routing-node { padding: 0; text-align: left; }
 .routing-port .routing-mode-toggle.replace { background: #7957c4; }
 .routing-port .routing-mode-toggle.in-place { background: #7957c4; }
 .routing-port .routing-mode-toggle.readonly { opacity: .62; cursor: help; }
+.routing-port .routing-mode-toggle.fixed { color: #566b74; background: #dce5e7; }
+.routing-port .routing-mode-toggle.fixed.replace, .routing-port .routing-mode-toggle.in-place { color: #6546a4; background: #e4dcf5; }
+.routing-port .routing-mode-toggle.unknown { color: #815d12; background: #f6df9c; opacity: 1; }
+.routing-port .routing-mode-toggle.loading { color: #587078; background: #e6edef; }
 .routing-mode-popover { position: fixed; z-index: 80; width: 190px; padding: 11px; border: 1px solid #cddadd; border-radius: 12px; color: #334954; background: rgba(255,255,255,.98); box-shadow: 0 12px 34px rgba(21,40,53,.24); }
 .routing-mode-popover > strong { display: block; font-size: 11px; }.routing-mode-popover > span { display: block; margin-top: 3px; color: #72838c; font-size: 9px; line-height: 1.35; }
 .routing-mode-popover > div { margin-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }.routing-mode-popover button { height: 34px; border: 1px solid #cad8dc; border-radius: 9px; color: #31505a; background: #f5f8f9; font-size: 10px; font-weight: 900; cursor: pointer; }.routing-mode-popover button:hover, .routing-mode-popover button.current { border-color: #168873; color: #0c6f5d; background: #e1f3ee; }.routing-mode-popover button[data-routing-mode="replace"]:hover, .routing-mode-popover button[data-routing-mode="replace"].current { border-color: #7957c4; color: #6744b5; background: #eee9fa; }.routing-mode-popover button:disabled { opacity: .45; cursor: wait; }

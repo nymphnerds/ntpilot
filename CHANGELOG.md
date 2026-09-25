@@ -27,6 +27,7 @@
 - Added direction checks for physical I/O and preserved pending port/Aux selections while output-mode metadata finishes loading.
 - Positioned the Add/Replace choice beside the user's latest pointer or touch location for every routing assignment.
 - Hydrated output-mode relationships from firmware `ioFlags` and SysEx `0x55`, with cached associations and verified parameter writes.
+- Distinguished editable, fixed, loading and failed output-mode metadata so Routing never invents an Add/Replace choice for algorithms that do not expose one.
 - Corrected physical I/O labels to use numbers only; Aux labels retain the `A` prefix.
 - Preserved graph scrolling, panning and responsive fitting while auto-collapsing the navigation sidebar.
 
