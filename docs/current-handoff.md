@@ -110,7 +110,8 @@ Initial routing content renders before output-mode hydration completes. If a use
 - Chrome requests the NT Web MIDI ports automatically.
 - Disconnect flushes routing state, polling, selections and pending UI work.
 - Reconnect cancels any stale SysEx request, discards old port objects, reacquires both endpoints and rereads identity.
-- Failed reconnects retry every 1.2 seconds because NT USB MIDI ports can return after the module itself boots.
+- A disconnect immediately starts fresh endpoint reacquisition; failed reconnects continue every 1.2 seconds because NT USB MIDI ports can return after the module itself boots.
+- Once a rebooted NT answers again, the app records the current view, performs one browser reload to discard Chrome's stale Web MIDI objects, restores that view and automatically reconnects.
 - Transport still permits one outstanding SysEx request. All polling, parameter writes and routing transactions must continue to coordinate through the existing stop/wait/restart pattern.
 
 ## Current asset versions

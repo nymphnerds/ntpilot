@@ -333,6 +333,13 @@ global.navigator = { requestMIDIAccess: async options => {
   const ccEvent = events.find(event => event.type === "midi-message" && event.message.subtype === "cc");
   assert.equal(ccEvent.message.label, "Ch 3 · CC 74 · value 91");
   assert.ok(events.some(event => event.type === "midi-message" && event.message.kind === "sysex"));
+  input.state = "disconnected";
+  access.onstatechange({ port: input });
+  assert.equal(events.at(-1).type, "disconnected");
+  input.state = "connected";
+  access.onstatechange({ port: input });
+  assert.equal(events.at(-1).type, "ports-changed");
+  assert.equal(input.onmidimessage, transport.handleMessage);
   transport.disconnect();
   console.log("web-midi-transport: ok");
 })().catch(error => {

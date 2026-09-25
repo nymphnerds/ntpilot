@@ -69,10 +69,19 @@
   const guideSearch = $("#guide-search");
   const guideResultCount = $("#guide-result-count");
 
+  let rebootRecovery = null;
+  try {
+    rebootRecovery = JSON.parse(sessionStorage.getItem("ntPilotRebootRecovery") || "null");
+    sessionStorage.removeItem("ntPilotRebootRecovery");
+  } catch (_) {
+    rebootRecovery = null;
+  }
+
   const state = {
     ntTransport: null,
     transportOnline: false,
     reconnectTimer: null,
+    reloadAfterReconnect: false,
     liveIdentity: null,
     liveRouting: null,
     routingReadPromise: null,
@@ -2524,6 +2533,7 @@
   }
 
   function markTransportOffline(message = "The disting NT MIDI endpoint disconnected.") {
+    if (state.transportOnline) state.reloadAfterReconnect = true;
     state.transportOnline = false;
     flushDisconnectedSession();
     $("#midi-monitor-status").textContent = "Endpoint disconnected · waiting for the NT to return";
@@ -2582,6 +2592,7 @@
             }
             if (event.type === "disconnected") {
               markTransportOffline();
+              scheduleTransportReconnect(1200);
               showToast("The real NT MIDI endpoint disconnected");
               return;
             }
@@ -2594,6 +2605,15 @@
       }
       await state.ntTransport.connect();
       const identity = await state.ntTransport.readSnapshot();
+      if (state.reloadAfterReconnect) {
+        try {
+          sessionStorage.setItem("ntPilotRebootRecovery", JSON.stringify({ view: state.view, at: Date.now() }));
+        } catch (_) {
+          // The browser reload still provides fresh Web MIDI objects if session storage is unavailable.
+        }
+        window.location.reload();
+        return;
+      }
       clearTimeout(state.reconnectTimer);
       state.reconnectTimer = null;
       state.transportOnline = true;
@@ -2605,8 +2625,9 @@
       startCpuPolling();
       setDeviceState("labConnected");
       connectMIDI.textContent = "Refresh";
-      showToast(`Read ${identity.presetName || "unnamed preset"} from the real NT`);
-      if (state.view === "control") loadPerformancePage();
+      showToast(rebootRecovery ? `NT reconnected · refreshed ${identity.presetName || "unnamed preset"}` : `Read ${identity.presetName || "unnamed preset"} from the real NT`);
+      rebootRecovery = null;
+      if (state.view === "control") await loadPerformancePage();
       if (state.view === "routing") await loadLiveRouting();
     } catch (error) {
       markTransportOffline(error.message);
@@ -3141,5 +3162,9 @@
   populateMapping($(".mapping-item.active"));
   updateMappingSummary();
   resetEditorForConnection();
-  setView("editor");
+  const recoveredView = ["editor", "routing", "mapping", "control", "status", "assistant"].includes(rebootRecovery?.view)
+    ? rebootRecovery.view
+    : "editor";
+  setView(recoveredView);
+  readRealIdentity();
 })();

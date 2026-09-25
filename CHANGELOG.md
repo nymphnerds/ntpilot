@@ -35,6 +35,8 @@
 
 - Added automatic Web MIDI connection on browser startup.
 - Added endpoint cleanup, pending-request cancellation and automatic retry after an NT reboot.
+- Start the fresh-port retry loop as soon as either NT MIDI endpoint disconnects instead of depending on Chrome to emit a later endpoint-return event.
+- After the rebooted NT answers a fresh identity request, reload the browser once to discard Chrome's dead Web MIDI objects, restore the previous view and reconnect automatically.
 - Prevented Fast polling from colliding with routing and output-mode transactions.
 - Fixed parsing of null-terminated parameter names longer than 24 characters, which previously corrupted I/O flags and caused false `0x55` probes.
 - Added transport coverage for output-mode usage responses.
