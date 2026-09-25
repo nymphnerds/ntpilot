@@ -1,9 +1,9 @@
 :root {
-  --bg: #dbe6ef;
+  --bg: #07111f;
   --stage: #0a1627;
   --chrome: #0e1c2e;
   --chrome-2: #12243a;
-  --surface: #f4f7f8;
+  --surface: #e7eef4;
   --surface-2: #ffffff;
   --surface-3: #eaf0f2;
   --ink: #14202a;
@@ -30,8 +30,8 @@ html, body { min-height: 100%; height: 100%; }
 body {
   margin: 0;
   background:
-    radial-gradient(circle at 18% 15%, rgba(89, 143, 179, .16), transparent 30rem),
-    radial-gradient(circle at 88% 75%, rgba(114, 105, 170, .10), transparent 32rem),
+    radial-gradient(circle at 18% 15%, rgba(40, 124, 151, .22), transparent 30rem),
+    radial-gradient(circle at 88% 75%, rgba(85, 68, 137, .18), transparent 32rem),
     var(--bg);
   color: var(--ink);
   overflow-x: hidden;
