@@ -90,7 +90,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .settings-link { margin-top: auto; }
 
 .app-main { min-width: 0; min-height: 0; background: var(--surface); position: relative; display: flex; flex-direction: column; }
-.status-bar { height: 54px; flex: 0 0 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; background: var(--chrome); border-bottom: 1px solid var(--line-dark); z-index: 8; }
+.status-bar { height: 54px; flex: 0 0 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; background: rgba(255,255,255,.92); border-bottom: 1px solid var(--line); z-index: 8; }
 .status-leading { gap: 14px; min-width: 0; }
 .connection-pill { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 11px; border-radius: 16px; background: #dff5ef; color: #14715f; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .055em; white-space: nowrap; }
 .connection-pill .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: #24a98e; box-shadow: 0 0 0 4px rgba(36,169,142,.13); }
@@ -105,15 +105,15 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .connection-pill.labConnected { color: #236b5c; background: #dff5ef; }
 .connection-pill.labConnected .pulse-dot { background: #24a98e; }
 @keyframes pulse { 50% { opacity: .35; transform: scale(.72); } }
-.device-title { min-width: 0; gap: 10px; color: #9db1bf; font-size: 13px; }
-.device-title strong { color: #eef7fa; }
+.device-title { min-width: 0; gap: 10px; color: var(--ink-soft); font-size: 13px; }
+.device-title strong { color: var(--ink); }
 .device-title span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .device-title.disconnected .divider, .device-title.disconnected #preset-title { display: none; }
-.divider { width: 1px; height: 15px; background: rgba(255,255,255,.14); }
+.divider { width: 1px; height: 15px; background: var(--line); }
 .status-actions { gap: 12px; }
 .status-read-action { white-space: nowrap; }
-.status-sync { height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 4px 0 9px; border: 1px solid rgba(255,255,255,.14); border-radius: 10px; color: #91a7b7; background: rgba(255,255,255,.06); font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .05em; }
-.status-sync select { height: 26px; padding: 0 21px 0 5px; border: 0; outline: 0; color: #e4f0f5; background-color: transparent; color-scheme: dark; font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer; }
+.status-sync { height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 4px 0 9px; border: 1px solid var(--line); border-radius: 10px; color: #71818a; background: #f7fafb; font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .05em; }
+.status-sync select { height: 26px; padding: 0 21px 0 5px; border: 0; outline: 0; color: #284550; background-color: #f7fafb; color-scheme: light; font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer; }
 .status-sync select option { color: #284550; background: white; }
 .status-sync:has(select:focus-visible) { border-color: #75b9aa; box-shadow: 0 0 0 2px rgba(58,166,143,.14); }
 
