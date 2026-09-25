@@ -75,17 +75,17 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .sidebar-compact .nav-badge { position: absolute; margin: 0 0 21px 22px; }
 .sidebar-compact .settings-link { position: relative; }
 
-.app-sidebar { padding: 22px 13px 16px; display: flex; flex-direction: column; color: #bfd0da; border-right: 1px solid var(--line-dark); min-width: 0; }
+.app-sidebar { padding: 22px 13px 16px; display: flex; flex-direction: column; color: #53636f; border-right: 1px solid var(--line); min-width: 0; background: var(--surface); }
 .app-mark { display: flex; align-items: center; gap: 10px; padding: 0 9px 24px; }
 .mark-glyph { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #08221f; background: linear-gradient(145deg, #8cead7, #54ccb5); font-weight: 900; font-size: 13px; letter-spacing: -.05em; }
 .mark-copy { display: flex; flex-direction: column; line-height: 1.05; }
-.mark-copy strong { color: white; font-size: 16px; }
-.mark-copy small { color: #758d9e; font-size: 10px; margin-top: 4px; }
+.mark-copy strong { color: var(--ink); font-size: 16px; }
+.mark-copy small { color: #71838e; font-size: 10px; margin-top: 4px; }
 .primary-nav { display: flex; flex-direction: column; gap: 4px; }
-.nav-item { width: 100%; display: flex; align-items: center; gap: 11px; border: 0; border-radius: 12px; padding: 11px 12px; color: #91a7b7; background: transparent; text-align: left; font-weight: 700; font-size: 13px; }
+.nav-item { width: 100%; display: flex; align-items: center; gap: 11px; border: 0; border-radius: 12px; padding: 11px 12px; color: #607480; background: transparent; text-align: left; font-weight: 700; font-size: 13px; }
 .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
-.nav-item:hover { color: #deebf1; background: rgba(255,255,255,.045); }
-.nav-item.active { color: #dbfff7; background: rgba(84,204,181,.12); box-shadow: inset 3px 0 var(--mint); }
+.nav-item:hover { color: var(--ink); background: rgba(255,255,255,.74); }
+.nav-item.active { color: #0b715f; background: #e1f3ee; box-shadow: inset 3px 0 var(--mint), 0 3px 12px rgba(35,60,70,.06); }
 .nav-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 10px; display: grid; place-items: center; background: #d16661; color: white; font-size: 10px; }
 .settings-link { margin-top: auto; }
 
