@@ -8,12 +8,14 @@ NT Pilot is a browser-based editor and routing workspace for the Expert Sleepers
 - Writes parameter changes continuously while sliders move and verifies them by readback.
 - Provides Fast, Slow and Manual synchronization modes; Fast is the default.
 - Shares the selected algorithm between Editor, Routing and MIDI Mapping views.
+- Builds a live four-controls-per-page Performance surface from the selected algorithm's enabled MIDI mappings.
 - Exposes a sticky Editor bus dock with all Aux, physical input and physical output buses.
 - Shows compact bus chips on every firmware-reported bus-assignable parameter.
 - Displays the complete routing graph by default, with independent Input, Output, Aux and Mod cable filters.
 - Supports direct routing edits and explicit Add/Replace selection for algorithm outputs whose controller is reported by NT metadata.
 - Handles NT USB MIDI disconnects and retries connection after a module reboot.
 - Keeps working-memory edits separate from the explicit **Save preset** action.
+- Labels the future AI Assistant honestly as an inactive interface preview until a real provider and approval backend exist.
 
 ## How NT Pilot improves on the NT Helper workflow
 

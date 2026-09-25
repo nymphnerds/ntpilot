@@ -5,6 +5,7 @@
 ### Editor
 
 - Added live parameter writes during slider movement with NT readback.
+- Replaced native-looking parameter rails with touch-friendly NT Pilot sliders and visible mint progress.
 - Added Fast, Slow and Manual synchronization modes, with Fast as the default.
 - Added a sticky two-row bus dock: Aux buses above, numbered physical inputs and outputs below, and a central None action.
 - Added compact bus chips to firmware-reported bus-assignment parameters and a clear armed assignment state.
@@ -39,6 +40,14 @@
 - Renamed the product surface to **NT Pilot**.
 - Refined the Input, Output, Aux and Mod colour language.
 - Improved compact and full-screen layout behaviour.
+- Unified dropdown styling, including a clearer Mapping algorithm selector.
+
+### Performance and Assistant
+
+- Replaced the static Performance mockup with four-per-page live controls generated from the selected algorithm's enabled native MIDI mappings.
+- Routed Performance sliders through the same continuous, verified NT parameter-write path as Editor sliders.
+- Made empty Performance positions link clearly to Mapping instead of pretending assignments exist.
+- Marked Assistant as an unconnected interface preview, disabled its fake actions and removed false provider/context status.
 
 ### Deferred
 

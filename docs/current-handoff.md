@@ -38,6 +38,14 @@ The central model is the NT bus universe:
 - Slider changes stream to the NT while dragging rather than waiting for pointer release.
 - Fast sync is the default. The UI calls the former Smart mode Slow.
 - Algorithm list and bus dock remain fixed while the parameter pane scrolls.
+- Editor and Performance use the same custom NT Pilot slider language and continuous verified write path.
+
+## Performance and Assistant
+
+- Performance is no longer static sample content. It shows enabled native MIDI mappings from the currently selected algorithm, four controls per page.
+- Moving a Performance slider writes the exact same live parameter as its Editor row; polling keeps both representations synchronized.
+- Empty positions link to Mapping so mappings remain the source of control selection.
+- Assistant remains intentionally unimplemented. Its page is visibly marked as an interface preview, all write/chat actions are disabled, and Status no longer claims an AI provider is connected.
 
 ## Current Routing behaviour
 
@@ -78,9 +86,9 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260925-62`
+- `styles.css?v=20260925-63`
 - `web-midi-transport.js?v=20260925-40`
-- `app.js?v=20260925-88`
+- `app.js?v=20260925-89`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

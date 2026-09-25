@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260925-62">
+  <link rel="stylesheet" href="styles.css?v=20260925-63">
 </head>
 <body>
   <main class="stage">
@@ -244,22 +244,13 @@
           <section class="view control-view" data-panel="control" aria-labelledby="control-heading">
             <h1 class="sr-only" id="control-heading">Performance</h1>
             <div class="performance-toolbar">
-              <div><strong id="performance-page-title">Page 1</strong><span>Four controls match the NT front-panel page</span></div>
+              <div><strong id="performance-page-title">Mapped controls · Page 1</strong><span>Live controls from the selected algorithm's enabled MIDI mappings</span></div>
               <div class="page-picker" aria-label="Performance page">
                 <button class="active" data-performance-page="1">1</button><button data-performance-page="2">2</button><button data-performance-page="3">3</button><button data-performance-page="4">4</button><button data-performance-page="5">5</button><button data-performance-page="6">6</button><button data-performance-page="7">7</button><button data-performance-page="8">8</button>
               </div>
             </div>
-            <div class="control-grid performance-grid">
-              <article class="control-card accent-mint assigned-performance">
-                <div class="control-card-head"><span>LoopyDial</span><button>•••</button></div>
-                <div class="performance-value"><strong>Profile 3</strong><span>Current value</span></div>
-                <h2>Profile</h2><p>Slot 9 · Parameter 1</p>
-              </article>
-              <article class="control-card empty-performance"><span>2</span><strong>Unassigned</strong><button>Assign parameter</button></article>
-              <article class="control-card empty-performance"><span>3</span><strong>Unassigned</strong><button>Assign parameter</button></article>
-              <article class="control-card empty-performance"><span>4</span><strong>Unassigned</strong><button>Assign parameter</button></article>
-            </div>
-            <div class="control-footnote"><span class="info-icon">i</span> The preset can hold 30 Performance Page items. The NT displays them in pages of four; the iPad is not limited to four total.</div>
+            <div class="control-grid performance-grid" id="performance-grid"></div>
+            <div class="control-footnote"><span class="info-icon">i</span> This surface uses confirmed native MIDI mappings from the selected algorithm. Add or edit mappings in Mapping, then control the same live NT parameters here.</div>
           </section>
 
           <section class="view mapping-view" data-panel="mapping" aria-labelledby="mapping-heading">
@@ -331,10 +322,10 @@
             <div class="assistant-layout">
               <div class="conversation">
                 <div class="assistant-header">
-                  <div><p class="eyebrow">Preset-aware help</p><h1 id="assistant-heading">Assistant</h1></div>
-                  <button class="model-button"><span class="model-dot"></span> OpenRouter · Claude Sonnet <svg viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></svg></button>
+                  <div><p class="eyebrow">Preview · not connected</p><h1 id="assistant-heading">Assistant</h1></div>
+                  <button class="model-button" disabled><span class="model-dot"></span> AI integration pending</button>
                 </div>
-                <div class="context-strip"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 0v8m8-4-8 4-8-4"/></svg><span>Live context: <strong>Demo preset</strong> · 10 slots · refreshed now</span><button>Inspect</button></div>
+                <div class="context-strip demo"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 0v8m8-4-8 4-8-4"/></svg><span><strong>Interface preview only.</strong> No model, preset context or write tools are connected.</span></div>
                 <div class="messages" id="messages">
                   <article class="message user-message"><p>Make the Witchboard master filter movement a little gentler.</p></article>
                   <article class="message assistant-message">
@@ -348,18 +339,18 @@
                       <div><span><strong>Filter Q</strong><small>Slot 7 · WitchboardX</small></span><span class="value-change"><del>10</del><b>→</b><ins>8</ins></span></div>
                     </div>
                     <div class="change-safety"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg><span>Validated against the current snapshot · read-back and undo available</span></div>
-                    <div class="change-actions"><button class="secondary-button" id="reject-change">Reject</button><button class="secondary-button">Edit proposal</button><button class="primary-button" id="approve-change">Approve & apply</button></div>
+                    <div class="change-actions"><button class="secondary-button" id="reject-change" disabled>Reject</button><button class="secondary-button" disabled>Edit proposal</button><button class="primary-button" id="approve-change" disabled>Demo only</button></div>
                   </article>
                 </div>
                 <form class="composer" id="chat-form">
-                  <textarea id="chat-input" rows="1" placeholder="Ask about this preset…" aria-label="Message Assistant"></textarea>
-                  <button type="submit" aria-label="Send message"><svg viewBox="0 0 24 24"><path d="m4 12 16-8-6 16-2-6-8-2Zm8 2 3-3"/></svg></button>
+                  <textarea id="chat-input" rows="1" placeholder="Assistant integration is not connected yet" aria-label="Assistant unavailable" disabled></textarea>
+                  <button type="submit" aria-label="Assistant unavailable" disabled><svg viewBox="0 0 24 24"><path d="m4 12 16-8-6 16-2-6-8-2Zm8 2 3-3"/></svg></button>
                 </form>
               </div>
               <aside class="assistant-context">
-                <div class="context-card"><span class="context-label">Current target</span><h3>Demo preset</h3><p>disting NT · saved from firmware 1.18.0</p><div class="context-facts"><span><b>10</b> slots</span><span><b>48%</b> CPU</span><span><b>Fast</b> sync</span></div></div>
-                <div class="context-card"><span class="context-label">Available knowledge</span><ul><li><i class="ok"></i> Live preset state</li><li><i class="ok"></i> Algorithm documentation</li><li><i class="ok"></i> NT API and mapping guide</li><li><i class="ok"></i> Routing reference</li></ul></div>
-                <p class="privacy-note"><svg viewBox="0 0 24 24"><path d="M6 10V7a6 6 0 0 1 12 0v3m-14 0h16v11H4V10Z"/></svg>Only the disclosed context is sent to the selected provider.</p>
+                <div class="context-card"><span class="context-label">Status</span><h3>Not connected</h3><p>This page demonstrates the intended approval workflow only.</p></div>
+                <div class="context-card"><span class="context-label">Planned context</span><ul><li>Live preset state</li><li>Algorithm documentation</li><li>NT API and mapping guide</li><li>Routing reference</li></ul></div>
+                <p class="privacy-note"><svg viewBox="0 0 24 24"><path d="M6 10V7a6 6 0 0 1 12 0v3m-14 0h16v11H4V10Z"/></svg>No preset data is currently sent to an AI provider.</p>
               </aside>
             </div>
           </section>
@@ -370,7 +361,7 @@
               <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 8h6m-6 4h6m-6 4h3"/></svg></div><div><span>Hardware</span><h2 id="hardware-title">disting NT</h2><p id="hardware-detail">Waiting for MIDI connection</p></div><span class="settings-status" id="hardware-status">Not connected</span></article>
               <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 8h14M5 16h14"/></svg></div><div><span>Advanced connection</span><h2>SysEx device ID</h2><p>Leave at 0 unless your NT uses another ID.</p></div><label class="settings-select"><select id="sysex-id" aria-label="SysEx device ID"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option></select></label></article>
               <article class="settings-card"><div class="settings-icon sync"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18 9a7 7 0 0 0-12-2l-2 4m16 2-2 4a7 7 0 0 1-12-2"/></svg></div><div><span>Synchronization</span><h2 id="sync-mode-label">Fast</h2><p id="sync-mode-detail">Immediate MIDI feedback · 100 ms polling</p></div></article>
-              <article class="settings-card"><div class="settings-icon ai"><svg viewBox="0 0 24 24"><path d="M5 6h14v11H9l-4 3V6Zm4 4h6m-6 3h4"/></svg></div><div><span>AI provider</span><h2>OpenRouter</h2><p>Connected · credential protected by Keychain</p></div><button class="secondary-button">Manage</button></article>
+              <article class="settings-card"><div class="settings-icon ai"><svg viewBox="0 0 24 24"><path d="M5 6h14v11H9l-4 3V6Zm4 4h6m-6 3h4"/></svg></div><div><span>AI provider</span><h2>Not configured</h2><p>Assistant is currently an interface preview.</p></div><button class="secondary-button" disabled>Unavailable</button></article>
               <article class="settings-card"><div class="settings-icon knowledge"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zm9 0h7v14h-7M7 9h1m8 0h1"/></svg></div><div><span>Knowledge</span><h2>NT reference library</h2><p>API, algorithms, mappings, routing · versioned</p></div><button class="secondary-button">Details</button></article>
             </div>
             <article class="midi-monitor real-midi-control hidden" aria-labelledby="midi-monitor-title">
@@ -417,6 +408,6 @@
   </main>
 
   <script src="web-midi-transport.js?v=20260925-40"></script>
-  <script src="app.js?v=20260925-88"></script>
+  <script src="app.js?v=20260925-89"></script>
 </body>
 </html>

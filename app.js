@@ -100,6 +100,7 @@
     lastPollError: null,
     smartFeedbackTimer: null,
     smartFeedbackValues: new Map(),
+    performancePage: 1,
     midiEvents: [],
     midiRenderPending: false,
     midiCounts: { all: 0, channel: 0, sysex: 0 },
@@ -271,7 +272,9 @@
     entry.parameter.value = value;
     entry.confirmedValue = value;
     entry.slider.value = String(value);
+    updateRangeProgress(entry.slider);
     entry.output.textContent = formatParameterValue(entry.parameter);
+    updatePerformanceEntry(entry);
     updateParameterBusChip(entry);
     if (state.armedBusEntry === entry) refreshEditorBusDockState();
     entry.row.classList.remove("midi-feedback", "poll-feedback");
@@ -335,6 +338,7 @@
   function previewLiveParameterEntry(entry, value) {
     const previewValue = Math.min(entry.parameter.max, Math.max(entry.parameter.min, Number(value)));
     entry.slider.value = String(previewValue);
+    updateRangeProgress(entry.slider);
     entry.output.textContent = formatParameterValue(entry.parameter, previewValue);
   }
 
@@ -1432,6 +1436,7 @@
       const selectedSlot = $(".slot.active", slotList);
       if (state.ntTransport && selectedSlot) queueLiveParameterRead(selectedSlot);
     }
+    if (view === "control") renderPerformanceControls();
   }
 
   function canMutate() {
@@ -1630,6 +1635,13 @@
     return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
   }
 
+  function updateRangeProgress(slider) {
+    const minimum = Number(slider.min);
+    const maximum = Number(slider.max);
+    const progress = maximum === minimum ? 0 : ((Number(slider.value) - minimum) / (maximum - minimum)) * 100;
+    slider.style.setProperty("--range-progress", `${Math.max(0, Math.min(100, progress))}%`);
+  }
+
   function mappingKey(slotIndex, parameterIndex) {
     return `live:${slotIndex}:${parameterIndex}`;
   }
@@ -1676,6 +1688,86 @@
     state.selectedMapping = liveItems[0] || null;
     if (state.selectedMapping) populateMapping(state.selectedMapping);
     updateMappingSummary();
+    renderPerformanceControls();
+  }
+
+  function updatePerformanceEntry(entry) {
+    const card = $(`.performance-control[data-key="${mappingKey(entry.slotInfo.index, entry.parameter.index)}"]`);
+    if (!card) return;
+    const slider = $("input[type=range]", card);
+    const value = $("output", card);
+    if (slider && document.activeElement !== slider) {
+      slider.value = String(entry.parameter.value);
+      updateRangeProgress(slider);
+    }
+    if (value) value.textContent = formatParameterValue(entry.parameter);
+  }
+
+  function renderPerformanceControls() {
+    const grid = $("#performance-grid");
+    if (!grid) return;
+    const mappedEntries = [...state.liveParameters.values()]
+      .filter(entry => entry.parameter.mapping?.midi?.enabled);
+    const start = (state.performancePage - 1) * 4;
+    const pageEntries = mappedEntries.slice(start, start + 4);
+    grid.replaceChildren();
+    for (let index = 0; index < 4; index += 1) {
+      const entry = pageEntries[index];
+      const itemNumber = start + index + 1;
+      if (!entry) {
+        const empty = document.createElement("article");
+        empty.className = "control-card empty-performance";
+        const number = document.createElement("span");
+        number.textContent = String(itemNumber);
+        const label = document.createElement("strong");
+        label.textContent = mappedEntries.length ? "No mapped control" : "No MIDI mappings";
+        const assign = document.createElement("button");
+        assign.type = "button";
+        assign.textContent = "Open Mapping";
+        assign.addEventListener("click", () => setView("mapping"));
+        empty.append(number, label, assign);
+        grid.appendChild(empty);
+        continue;
+      }
+      const card = document.createElement("article");
+      card.className = `control-card performance-control ${["accent-mint", "accent-yellow", "accent-lilac", "accent-blue"][index]}`;
+      card.dataset.key = mappingKey(entry.slotInfo.index, entry.parameter.index);
+      const head = document.createElement("div");
+      head.className = "control-card-head";
+      const slot = document.createElement("span");
+      slot.textContent = `Slot ${entry.slotInfo.index + 1} · ${entry.slotInfo.name}`;
+      const midi = document.createElement("span");
+      const mapping = entry.parameter.mapping.midi;
+      midi.textContent = mapping.type === "CC" ? `Ch ${mapping.channel} · CC ${mapping.cc}` : `Ch ${mapping.channel} · ${mapping.type}`;
+      head.append(slot, midi);
+      const value = document.createElement("output");
+      value.className = "performance-live-value";
+      value.textContent = formatParameterValue(entry.parameter);
+      const title = document.createElement("h2");
+      title.textContent = entry.parameter.name;
+      const detail = document.createElement("p");
+      detail.textContent = `${entry.parameter.pageName || entry.slotInfo.algorithmName} · Parameter ${entry.parameter.index + 1}`;
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = String(entry.parameter.min);
+      slider.max = String(entry.parameter.max);
+      slider.value = String(entry.parameter.value);
+      slider.setAttribute("aria-label", `${entry.parameter.name}, performance control`);
+      updateRangeProgress(slider);
+      slider.addEventListener("input", () => {
+        updateRangeProgress(slider);
+        value.textContent = formatParameterValue(entry.parameter, Number(slider.value));
+        entry.sliderInteracting = true;
+        queueLiveSliderWrite(entry, slider.value);
+      });
+      slider.addEventListener("change", () => {
+        entry.sliderInteracting = false;
+        queueLiveSliderWrite(entry, slider.value, { commit: true });
+      });
+      card.append(head, value, title, detail, slider);
+      grid.appendChild(card);
+    }
+    $("#performance-page-title").textContent = `Mapped controls · Page ${state.performancePage}`;
   }
 
 
@@ -1743,6 +1835,7 @@
       slider.max = String(parameter.max);
       slider.value = String(Math.min(parameter.max, Math.max(parameter.min, parameter.value)));
       slider.setAttribute("aria-label", `${parameter.name}, live NT value`);
+      updateRangeProgress(slider);
 
       const output = document.createElement("output");
       output.textContent = formatParameterValue(parameter);
@@ -1783,6 +1876,7 @@
         const entry = state.liveParameters.get(pendingMapping.dataset.mappingKey);
         if (!entry) return;
         entry.sliderInteracting = true;
+        updateRangeProgress(slider);
         queueLiveSliderWrite(entry, slider.value);
       });
       slider.addEventListener("change", () => {
@@ -2310,26 +2404,10 @@
     }, 1300);
   });
 
-  const performanceAssignedCard = `
-    <div class="control-card-head"><span>LoopyDial</span><button>•••</button></div>
-    <div class="performance-value"><strong>Profile 3</strong><span>Current value</span></div>
-    <h2>Profile</h2><p>Slot 9 · Parameter 1</p>`;
-
   $$("[data-performance-page]").forEach(button => button.addEventListener("click", () => {
-    const page = Number(button.dataset.performancePage);
+    state.performancePage = Number(button.dataset.performancePage);
     $$("[data-performance-page]").forEach(item => item.classList.toggle("active", item === button));
-    $("#performance-page-title").textContent = `Page ${page}`;
-    const cards = $$(".performance-grid .control-card");
-    cards.forEach((card, index) => {
-      const itemNumber = (page - 1) * 4 + index + 1;
-      card.className = "control-card empty-performance";
-      card.classList.toggle("hidden", itemNumber > 30);
-      card.innerHTML = `<span>${itemNumber}</span><strong>Unassigned</strong><button>Assign parameter</button>`;
-    });
-    if (page === 1) {
-      cards[0].className = "control-card accent-mint assigned-performance";
-      cards[0].innerHTML = performanceAssignedCard;
-    }
+    renderPerformanceControls();
   }));
 
   resetMapping.addEventListener("click", () => {
