@@ -22,12 +22,14 @@
 - Added curved cable breakpoints, consistent endpoint stubs and thinner cable rendering.
 - Added compact physical I/O banks and conditional USB Audio From/To Host side nodes.
 - Added direct bus assignment without confirmation dialogs.
-- Added visible Add/Replace chips and an anchored Add/Replace choice before supported algorithm-output assignments.
+- Added visible Add/Replace chips and a compact pointer-positioned choice popup before supported algorithm-output assignments.
 - Fixed physical-output assignment so outputs with fixed or unavailable mode metadata still connect; editable Add/Replace continues to work on physical and Aux destination busses.
 - Added direction checks for physical I/O and preserved pending port/Aux selections while output-mode metadata finishes loading.
-- Positioned the Add/Replace choice beside the user's latest pointer or touch location for every routing assignment.
+- Kept routing decisions visible in the popup until the user explicitly connects or cancels.
 - Hydrated output-mode relationships from firmware `ioFlags` and SysEx `0x55`, with cached associations and verified parameter writes.
 - Distinguished editable, fixed, loading and failed output-mode metadata so Routing never invents an Add/Replace choice for algorithms that do not expose one.
+- Added a compact connection popup showing the exact source and destination, native Add/Replace mode, existing-route handling, plain-language explanations and explicit Cancel/Connect actions for physical and Aux destinations.
+- Added signal-order visualization for Replace: earlier routes that remain configured but are overwritten by a later Replace are faded and dashed, while the effective Replace cable is emphasized and explains the state on hover.
 - Corrected physical I/O labels to use numbers only; Aux labels retain the `A` prefix.
 - Preserved graph scrolling, panning and responsive fitting while auto-collapsing the navigation sidebar.
 

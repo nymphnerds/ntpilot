@@ -313,6 +313,8 @@ input[type="range"]:disabled { opacity: .48; cursor: wait; }
 .routing-wires { z-index: 1; pointer-events: none; }.routing-nodes { z-index: 2; }
 .routing-wire { fill: none; stroke: #438ee8; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: .86; vector-effect: non-scaling-stroke; pointer-events: stroke; transition: opacity .15s, stroke-width .15s; }
 .routing-wire.input { stroke: #438ee8; }.routing-wire.output { stroke: #df4b4b; }.routing-wire.signal.aux { stroke: var(--aux-colour); }.routing-wire.modulation { stroke: #c69300; stroke-dasharray: 5 5; opacity: .74; }
+.routing-wire.masked-by-replace { stroke-dasharray: 4 5; opacity: .28; }
+.routing-wire.replaces-bus { opacity: 1; stroke-width: 2.7; }
 .routing-wire.dimmed { opacity: .08; }.routing-wire.highlighted { opacity: 1; stroke-width: 2.6; }
 .routing-canvas.hide-signals .routing-wire.signal, .routing-canvas.hide-signals .routing-wire.modulation { display: none; }
 .routing-canvas.hide-input .routing-wire.signal.input { display: none; }
@@ -383,9 +385,6 @@ button.routing-node { padding: 0; text-align: left; }
 .routing-port .routing-mode-toggle.fixed.replace, .routing-port .routing-mode-toggle.in-place { color: #6546a4; background: #e4dcf5; }
 .routing-port .routing-mode-toggle.unknown { color: #815d12; background: #f6df9c; opacity: 1; }
 .routing-port .routing-mode-toggle.loading { color: #587078; background: #e6edef; }
-.routing-mode-popover { position: fixed; z-index: 80; width: 190px; padding: 11px; border: 1px solid #cddadd; border-radius: 12px; color: #334954; background: rgba(255,255,255,.98); box-shadow: 0 12px 34px rgba(21,40,53,.24); }
-.routing-mode-popover > strong { display: block; font-size: 11px; }.routing-mode-popover > span { display: block; margin-top: 3px; color: #72838c; font-size: 9px; line-height: 1.35; }
-.routing-mode-popover > div { margin-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }.routing-mode-popover button { height: 34px; border: 1px solid #cad8dc; border-radius: 9px; color: #31505a; background: #f5f8f9; font-size: 10px; font-weight: 900; cursor: pointer; }.routing-mode-popover button:hover, .routing-mode-popover button.current { border-color: #168873; color: #0c6f5d; background: #e1f3ee; }.routing-mode-popover button[data-routing-mode="replace"]:hover, .routing-mode-popover button[data-routing-mode="replace"].current { border-color: #7957c4; color: #6744b5; background: #eee9fa; }.routing-mode-popover button:disabled { opacity: .45; cursor: wait; }
 .routing-port b { flex: 0 0 auto; padding: 1px 4px; border-radius: 5px; font-size: 7px; }
 .routing-port.input { color: #2269b3; }.routing-port.input b { color: #18558f; background: #cfe3fa; }
 .routing-port.output { color: #168573; }.routing-port.output b { color: #0e6d5e; background: #ccece5; }
@@ -395,8 +394,15 @@ button.routing-node { padding: 0; text-align: left; }
 .routing-bus-group { min-width: 0; }.routing-bus-group > span { display: block; margin-bottom: 4px; color: #7486a2; font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
 .routing-bus-tags { display: flex; flex-wrap: wrap; gap: 3px; }.routing-bus-tag { min-width: 22px; padding: 2px 4px; border-radius: 5px; font-size: 7px; font-weight: 850; text-align: center; }.routing-bus-tag.input { color: #285f9d; background: #e1edfb; }.routing-bus-tag.output { color: #674fa8; background: #ebe6fb; }.routing-bus-tag.aux { color: #805f16; background: #f7edcf; }.routing-bus-tag.mapping { outline: 1px dashed currentColor; outline-offset: -1px; }
 .routing-empty-tag { color: #66758d; font-size: 8px; }
-.routing-inspector { min-height: 61px; padding: 11px 14px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border-top: 1px solid #dbe4e7; background: #f8fafb; }
-.routing-inspector > div { display: flex; flex-direction: column; }.routing-inspector span { color: var(--pilot-deep); font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }.routing-inspector strong { margin-top: 3px; color: #354a54; font-size: 11px; }.routing-inspector p { max-width: 430px; margin: 0; color: #7c8d95; font-size: 9px; line-height: 1.4; text-align: right; }
+.routing-inspector { min-height: 61px; padding: 11px 14px; border-top: 1px solid #dbe4e7; background: #f8fafb; }
+.routing-inspector-default { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 18px; }.routing-inspector-default > div { display: flex; flex-direction: column; }.routing-inspector span, .routing-connection-panel legend { color: var(--pilot-deep); font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }.routing-inspector strong { margin-top: 3px; color: #354a54; font-size: 11px; }.routing-inspector p { max-width: 520px; margin: 0; color: #7c8d95; font-size: 9px; line-height: 1.4; text-align: right; }
+.routing-connection-panel { position: fixed; z-index: 80; width: 230px; max-width: calc(100vw - 20px); padding: 9px; display: grid; gap: 6px; border: 1px solid #cddadd; border-radius: 10px; background: rgba(255,255,255,.985); box-shadow: 0 10px 26px rgba(21,40,53,.22); }
+.routing-connection-heading { min-width: 0; display: flex; flex-direction: column; }.routing-connection-heading span { color: var(--pilot-deep); font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }.routing-connection-heading strong { margin-top: 2px; color: #354a54; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.routing-connection-decisions { min-width: 0; display: grid; grid-template-columns: 1fr; gap: 5px; }
+.routing-connection-panel fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }.routing-connection-panel fieldset > div { margin-top: 3px; display: flex; gap: 4px; }
+.routing-connection-panel label { position: relative; cursor: pointer; }.routing-connection-panel label input { position: absolute; opacity: 0; pointer-events: none; }.routing-connection-panel label span { min-height: 24px; padding: 0 7px; display: inline-flex; align-items: center; border: 1px solid #ccd9dd; border-radius: 6px; color: #536872; background: white; font-size: 8px; font-weight: 900; text-transform: none; letter-spacing: 0; }.routing-connection-panel label input:checked + span { border-color: var(--pilot); color: var(--pilot-deep); background: color-mix(in srgb, var(--pilot) 13%, white); box-shadow: 0 0 0 1px color-mix(in srgb, var(--pilot) 16%, transparent); }.routing-connection-panel label input:disabled + span { opacity: .45; cursor: default; }
+.routing-connection-panel small { margin-top: 3px; display: block; color: #657983; font-size: 8px; line-height: 1.25; }.routing-connection-panel fieldset.fixed small { color: #786b50; }.routing-connection-panel fieldset.empty { opacity: .65; }
+.routing-connection-actions { display: flex; justify-content: flex-end; gap: 5px; }.routing-connection-actions button { min-height: 27px; padding: 0 9px; border: 1px solid #cad7db; border-radius: 7px; color: #536872; background: white; font-size: 8px; font-weight: 900; cursor: pointer; }.routing-connection-actions button[type="submit"] { border-color: var(--pilot); color: white; background: var(--pilot); }.routing-connection-actions button:disabled { opacity: .45; cursor: wait; }
 .routing-loading { position: sticky; z-index: 6; left: 50%; top: 50%; width: max-content; max-width: calc(100% - 40px); padding: 12px 15px; display: flex; align-items: center; gap: 9px; transform: translate(-50%, -50%); border: 1px solid rgba(108,174,255,.3); border-radius: 11px; color: #dce9fb; background: rgba(13,26,47,.96); box-shadow: 0 10px 30px rgba(0,0,0,.34); font-size: 10px; }
 .routing-loading span { width: 14px; height: 14px; border: 2px solid rgba(108,174,255,.25); border-top-color: #6caeff; border-radius: 50%; animation: routing-spin .7s linear infinite; }@keyframes routing-spin { to { transform: rotate(360deg); } }
 
@@ -541,6 +547,7 @@ button.routing-node { padding: 0; text-align: left; }
   .mapping-layout { grid-template-columns: 210px minmax(370px, 1fr); }
   .form-grid { grid-template-columns: repeat(2, 1fr); }
   .assistant-layout { grid-template-columns: 1fr; }.assistant-context { display: none; }
+  .routing-connection-panel { grid-template-columns: 1fr; gap: 10px; }.routing-connection-actions { justify-content: flex-end; }
 }
 
 @media (max-width: 650px) {
@@ -549,7 +556,7 @@ button.routing-node { padding: 0; text-align: left; }
   .status-bar { padding: 0 11px; }.status-actions { gap: 7px; }.status-sync { padding-left: 7px; }.status-sync > span { display: none; }.device-title .divider { display: none; }.device-title { gap: 6px; }.device-title #preset-title { max-width: 110px; }.view { padding: 16px; }
   .editor-columns { grid-template-columns: 1fr; }.slot-list { display: none; }.parameter-panel { padding: 13px; }.parameter-row { grid-template-columns: 80px minmax(75px,1fr) 45px 44px; gap: 7px; }
   .mapping-layout { grid-template-columns: 1fr; }.mapping-browser { display: none; }.toggle-row { grid-template-columns: 1fr; }
-  .routing-heading { align-items: flex-start; }.routing-toolbar { flex-wrap: wrap; }.routing-legend { order: 3; width: 100%; margin-left: 0; }.routing-inspector { align-items: flex-start; flex-direction: column; }.routing-inspector p { text-align: left; }
+  .routing-heading { align-items: flex-start; }.routing-toolbar { flex-wrap: wrap; }.routing-legend { order: 3; width: 100%; margin-left: 0; }.routing-inspector-default { align-items: flex-start; flex-direction: column; }.routing-inspector p { text-align: left; }.routing-connection-decisions { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; }.control-grid { grid-template-columns: repeat(2,1fr); }
   .guide-wiki { grid-template-columns: 125px minmax(0, 1fr); }.guide-wiki > nav { padding-inline: 8px; }.guide-articles { padding-inline: 18px; }.reference-guide > footer { align-items: flex-start; flex-direction: column; }.reference-guide > footer div { justify-content: flex-start; }
   .midi-monitor-heading { align-items: flex-start; flex-direction: column; }.midi-monitor-actions { width: 100%; }.midi-monitor-actions label { flex: 1; }.midi-monitor-actions select { width: 100%; }.midi-monitor-log li:not(.midi-monitor-empty) { grid-template-columns: 62px 42px minmax(150px, 1fr); }.midi-monitor-log code { display: none; }

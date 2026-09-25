@@ -22,5 +22,20 @@
     return null;
   }
 
-  return { selectionAcceptsBus, endpointCompatibilityError };
+  function writableOutputRoutesForBus(slots, bus, incomingOutput = null) {
+    return (slots || []).flatMap(slot => (slot.ioParameters || [])
+      .filter(parameter => (parameter.ioFlags & 0x02)
+        && Number(parameter.value) - 1 === bus
+        && !(slot.index === incomingOutput?.slotIndex && parameter.index === incomingOutput?.parameterIndex))
+      .map(parameter => ({
+        side: "output",
+        bus,
+        slotIndex: slot.index,
+        parameterIndex: parameter.index,
+        minimum: Number(parameter.min),
+        maximum: Number(parameter.max)
+      })));
+  }
+
+  return { selectionAcceptsBus, endpointCompatibilityError, writableOutputRoutesForBus };
 });

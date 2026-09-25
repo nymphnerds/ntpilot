@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260925-175">
+  <link rel="stylesheet" href="styles.css?v=20260925-183">
 </head>
 <body>
   <main class="stage">
@@ -236,8 +236,26 @@
                 <div class="routing-loading hidden" id="routing-loading"><span></span><strong>Reading the complete NT routing summary…</strong></div>
               </div>
               <div class="routing-inspector" id="routing-inspector">
-                <div><span>Routing graph</span><strong>Choose a port and an aux colour, or connect physical I/O directly.</strong></div>
-                <p>Matching rainbow badges share an internal bus. Choose None to disconnect. Live changes use NT readback.</p>
+                <div class="routing-inspector-default" id="routing-inspector-default">
+                  <div><span>Routing graph</span><strong>Choose a port and an aux colour, or connect physical I/O directly.</strong></div>
+                  <p>A cable is a bus assignment. Add/Replace controls how an algorithm writes audio; it does not remove cables.</p>
+                </div>
+                <form class="routing-connection-panel hidden" id="routing-connection-panel">
+                  <div class="routing-connection-heading"><span id="routing-connection-title">New connection</span><strong id="routing-connection-path">Source → destination</strong></div>
+                  <div class="routing-connection-decisions">
+                    <fieldset id="routing-output-mode-field">
+                      <legend>Output mode</legend>
+                      <div><label><input type="radio" name="routing-output-mode" value="add"><span>Add</span></label><label><input type="radio" name="routing-output-mode" value="replace"><span>Replace</span></label></div>
+                      <small id="routing-output-mode-help">Add combines this output with the bus. Replace replaces the bus at this algorithm's position.</small>
+                    </fieldset>
+                    <fieldset id="routing-existing-routes-field">
+                      <legend>Existing connections</legend>
+                      <div><label><input type="radio" name="routing-existing-routes" value="keep" checked><span>Keep existing</span></label><label><input type="radio" name="routing-existing-routes" value="disconnect"><span>Disconnect other routes</span></label></div>
+                      <small id="routing-existing-routes-help">No other editable routes use this destination.</small>
+                    </fieldset>
+                  </div>
+                  <div class="routing-connection-actions"><button type="button" id="routing-connection-cancel">Cancel</button><button type="submit" id="routing-connection-apply">Connect</button></div>
+                </form>
               </div>
             </div>
           </section>
@@ -396,14 +414,6 @@
         </div>
 
         <div class="toast" id="toast" role="status" aria-live="polite"><span></span></div>
-        <div class="routing-mode-popover hidden" id="routing-mode-popover" role="dialog" aria-modal="false" aria-labelledby="routing-mode-popover-title">
-          <strong id="routing-mode-popover-title">Output mode</strong>
-          <span id="routing-mode-popover-copy">How should this output write?</span>
-          <div>
-            <button type="button" data-routing-mode="add">Add</button>
-            <button type="button" data-routing-mode="replace">Replace</button>
-          </div>
-        </div>
       </div>
     </section>
   </main>
@@ -452,7 +462,7 @@
   </dialog>
 
   <script src="web-midi-transport.js?v=20260925-44"></script>
-  <script src="routing-logic.js?v=20260925-1"></script>
-  <script src="app.js?v=20260925-108"></script>
+  <script src="routing-logic.js?v=20260925-2"></script>
+  <script src="app.js?v=20260925-118"></script>
 </body>
 </html>

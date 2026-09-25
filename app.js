@@ -57,8 +57,15 @@
   const routingShowOutput = $("#routing-show-output");
   const routingShowAux = $("#routing-show-aux");
   const routingShowMod = $("#routing-show-mod");
-  const routingModePopover = $("#routing-mode-popover");
-  const routingModePopoverCopy = $("#routing-mode-popover-copy");
+  const routingInspectorDefault = $("#routing-inspector-default");
+  const routingConnectionPanel = $("#routing-connection-panel");
+  const routingConnectionTitle = $("#routing-connection-title");
+  const routingConnectionPath = $("#routing-connection-path");
+  const routingOutputModeField = $("#routing-output-mode-field");
+  const routingOutputModeHelp = $("#routing-output-mode-help");
+  const routingExistingRoutesField = $("#routing-existing-routes-field");
+  const routingExistingRoutesHelp = $("#routing-existing-routes-help");
+  document.body.appendChild(routingConnectionPanel);
   const editorBusDock = $("#editor-bus-dock");
   const editorAuxBusRow = $("#editor-aux-bus-row");
   const editorInputBusRow = $("#editor-input-bus-row");
@@ -127,7 +134,6 @@
     midiEvents: [],
     midiRenderPending: false,
     midiCounts: { all: 0, channel: 0, sysex: 0 },
-    lastPointerPosition: null
   };
 
   function updateHistoryControls() {
@@ -894,36 +900,6 @@
     return node;
   }
 
-  let routingModePopoverAction = null;
-
-  function closeRoutingModePopover() {
-    routingModePopover.classList.add("hidden");
-    routingModePopoverAction = null;
-    $$(`button[data-routing-mode]`, routingModePopover).forEach(button => {
-      button.disabled = false;
-      button.classList.remove("current");
-    });
-  }
-
-  function openRoutingModePopover(anchor, copy, currentMode, action) {
-    closeRoutingModePopover();
-    routingModePopoverCopy.textContent = copy;
-    routingModePopoverAction = action;
-    $$(`button[data-routing-mode]`, routingModePopover).forEach(button => {
-      button.classList.toggle("current", button.dataset.routingMode === currentMode);
-    });
-    routingModePopover.classList.remove("hidden");
-    const popoverRect = routingModePopover.getBoundingClientRect();
-    const pointer = state.lastPointerPosition;
-    const anchorRect = anchor.getBoundingClientRect();
-    const preferredLeft = pointer ? pointer.x + 14 : anchorRect.right + 8;
-    const preferredTop = pointer ? pointer.y + 14 : anchorRect.top + (anchorRect.height - popoverRect.height) / 2;
-    const left = Math.min(window.innerWidth - popoverRect.width - 10, Math.max(10, preferredLeft));
-    const top = Math.min(window.innerHeight - popoverRect.height - 10, Math.max(10, preferredTop));
-    routingModePopover.style.left = `${left}px`;
-    routingModePopover.style.top = `${top}px`;
-  }
-
   function routingModeDetails(selection) {
     if (selection?.side !== "output") return null;
     const control = selection.element.querySelector(".routing-mode-toggle");
@@ -971,6 +947,70 @@
     await state.ntTransport.writeParameter(details.slotIndex, details.parameterIndex, mode === "replace" ? 1 : 0);
   }
 
+  let routingConnectionAction = null;
+
+  function closeRoutingConnectionPanel() {
+    routingConnectionAction = null;
+    routingConnectionPanel.classList.add("hidden");
+  }
+
+  function routingSelectionLabel(selection) {
+    if (selection.parameterIndex == null) return routingBusLabel(selection.bus, state.routingSnapshot);
+    const slot = state.routingSnapshot?.slots.find(item => item.index === selection.slotIndex);
+    const parameter = slot?.parameters?.find(item => item.index === selection.parameterIndex);
+    return `${slot?.name || `Slot ${selection.slotIndex + 1}`} · ${parameter?.name || `Parameter ${selection.parameterIndex + 1}`}`;
+  }
+
+  async function openRoutingConnectionPanel({ source, destination, output, destinationBus, onApply, title = "New connection", submitLabel = "Connect", allowRouteChanges = true }) {
+    const details = output?.parameterIndex != null ? await resolveRoutingModeDetails(output) : null;
+    const existing = allowRouteChanges && output?.parameterIndex != null && destinationBus >= 0
+      ? existingWritableOutputRoutes(destinationBus, output)
+      : [];
+    routingConnectionTitle.textContent = title;
+    routingConnectionPath.textContent = `${routingSelectionLabel(source)} → ${routingSelectionLabel(destination)}`;
+    $("#routing-connection-apply").textContent = submitLabel;
+    const modeControls = $$('input[name="routing-output-mode"]', routingConnectionPanel);
+    const renderedMode = output?.element?.querySelector(".routing-mode-toggle")?.dataset.mode || "add";
+    const currentMode = details?.currentMode || renderedMode;
+    const modeStatus = routingOutputModeStatus(output);
+    modeControls.forEach(control => {
+      control.checked = control.value === currentMode;
+      control.disabled = !details;
+    });
+    routingOutputModeField.classList.toggle("fixed", !details);
+    routingOutputModeHelp.textContent = details
+      ? "Add combines this output with the bus. Replace replaces the bus at this algorithm's position; algorithms below can still write afterward."
+      : modeStatus === "error"
+        ? "The NT's Add/Replace metadata could not be read. The connection can still be made, but its mode cannot be changed here."
+        : `This algorithm reports a fixed ${currentMode === "replace" ? "Replace" : "Add"} mode, so NT Pilot cannot change it.`;
+    const routeControls = $$('input[name="routing-existing-routes"]', routingConnectionPanel);
+    routeControls.forEach(control => {
+      control.checked = control.value === "keep";
+      control.disabled = existing.length === 0;
+    });
+    routingExistingRoutesField.classList.toggle("hidden", !allowRouteChanges);
+    routingExistingRoutesField.classList.toggle("empty", existing.length === 0);
+    routingExistingRoutesHelp.textContent = existing.length
+      ? `${routingBusLabel(destinationBus, state.routingSnapshot)} has ${existing.length} other editable connection${existing.length === 1 ? "" : "s"}. Disconnecting them sets those output assignments to None.`
+      : "No other editable routes use this destination.";
+    routingConnectionAction = () => {
+      const selectedMode = $('input[name="routing-output-mode"]:checked', routingConnectionPanel)?.value || currentMode;
+      const routeChoice = $('input[name="routing-existing-routes"]:checked', routingConnectionPanel)?.value || "keep";
+      return onApply(details ? { details, mode: selectedMode } : null, routeChoice === "disconnect" ? existing : []);
+    };
+    routingConnectionPanel.classList.remove("hidden");
+    const panelRect = routingConnectionPanel.getBoundingClientRect();
+    const pointer = state.lastRoutingPointer;
+    const preferredLeft = pointer
+      ? (pointer.x + panelRect.width + 22 <= window.innerWidth ? pointer.x + 12 : pointer.x - panelRect.width - 12)
+      : (window.innerWidth - panelRect.width) / 2;
+    const preferredTop = pointer
+      ? (pointer.y + panelRect.height + 22 <= window.innerHeight ? pointer.y + 12 : pointer.y - panelRect.height - 12)
+      : (window.innerHeight - panelRect.height) / 2;
+    routingConnectionPanel.style.left = `${Math.min(window.innerWidth - panelRect.width - 10, Math.max(10, preferredLeft))}px`;
+    routingConnectionPanel.style.top = `${Math.min(window.innerHeight - panelRect.height - 10, Math.max(10, preferredTop))}px`;
+  }
+
   function routingPath(edge, nodes) {
     const from = nodes.get(edge.from);
     const to = nodes.get(edge.to);
@@ -997,7 +1037,6 @@
   }
 
   function renderRoutingGraph(snapshot, { live = false, preserveView = false } = {}) {
-    closeRoutingModePopover();
     const previousView = preserveView
       ? { left: routingViewport.scrollLeft, top: routingViewport.scrollTop, zoom: state.routingZoom }
       : null;
@@ -1112,18 +1151,27 @@
     const connectRead = (slot, bus, type, toPort = null) => {
       const busKind = routingBusKind(bus, snapshot);
       const previous = (writersByBus.get(bus) || []).filter(writer => writer.layout.slot.index < slot.index);
-      let activeWriters = previous;
-      let includeBase = true;
+      let lastReplaceIndex = -1;
       for (let index = previous.length - 1; index >= 0; index -= 1) {
         if (previous[index].replaces) {
-          activeWriters = previous.slice(index);
-          includeBase = false;
+          lastReplaceIndex = index;
           break;
         }
       }
       if (busKind === "aux") {
-        activeWriters.forEach(writer => {
-          edges.push({ from: `slot:${writer.layout.slot.index}`, to: `slot:${slot.index}`, bus, type, fromPort: writer.port, toPort, fromSlot: writer.layout.slot.index, toSlot: slot.index });
+        previous.forEach((writer, writerIndex) => {
+          edges.push({
+            from: `slot:${writer.layout.slot.index}`,
+            to: `slot:${slot.index}`,
+            bus,
+            type,
+            fromPort: writer.port,
+            toPort,
+            fromSlot: writer.layout.slot.index,
+            toSlot: slot.index,
+            maskedByReplace: lastReplaceIndex >= 0 && writerIndex < lastReplaceIndex,
+            replacesBus: writer.replaces && writerIndex === lastReplaceIndex
+          });
         });
       }
       if (busKind === "input") {
@@ -1138,7 +1186,20 @@
         const bus = port.bus;
         if (bus < 0) return;
         const kind = routingBusKind(bus, snapshot);
-        if (kind === "output") edges.push({ from: `slot:${slot.index}`, to: `sink:${bus}`, bus, type: "signal", fromPort: port, fromSlot: slot.index });
+        if (kind === "output") {
+          const writers = writersByBus.get(bus) || [];
+          const lastReplacingWriter = [...writers].reverse().find(writer => writer.replaces);
+          edges.push({
+            from: `slot:${slot.index}`,
+            to: `sink:${bus}`,
+            bus,
+            type: "signal",
+            fromPort: port,
+            fromSlot: slot.index,
+            maskedByReplace: Boolean(lastReplacingWriter && slot.index < lastReplacingWriter.layout.slot.index),
+            replacesBus: Boolean(port.outputMode === "replace" && lastReplacingWriter?.layout.slot.index === slot.index)
+          });
+        }
       });
     });
 
@@ -1255,7 +1316,16 @@
       path.setAttribute("class", `routing-wire ${edge.type} ${busKind}`);
       if (edge.type === "signal" && edge.toSlot != null) path.classList.add("input-flow");
       if (edge.type === "signal" && edge.fromSlot != null) path.classList.add("output-flow");
+      if (edge.maskedByReplace) path.classList.add("masked-by-replace");
+      if (edge.replacesBus) path.classList.add("replaces-bus");
       if (busKind === "aux" && edge.type === "signal") path.style.setProperty("--aux-colour", routingAuxColour(edge.bus, snapshot));
+      if (edge.maskedByReplace || edge.replacesBus) {
+        const title = document.createElementNS(svgNS, "title");
+        title.textContent = edge.maskedByReplace
+          ? `Still connected, but overwritten by a later Replace on ${routingBusLabel(edge.bus, snapshot)}.`
+          : `Replace: overwrites earlier audio on ${routingBusLabel(edge.bus, snapshot)} at this slot.`;
+        path.appendChild(title);
+      }
       path.dataset.edgeIndex = String(index);
       if (edge.fromSlot != null) path.dataset.fromSlot = String(edge.fromSlot);
       if (edge.toSlot != null) path.dataset.toSlot = String(edge.toSlot);
@@ -1285,6 +1355,7 @@
   async function handleRoutingConnectionClick(target) {
     const port = target.closest(".routing-port, .routing-node.endpoint");
     if (!port) return false;
+    if (routingConnectionAction) closeRoutingConnectionPanel();
     const side = port.dataset.routingSide;
     const selection = {
       element: port,
@@ -1341,39 +1412,70 @@
       }
     }
     const output = [source, selection].find(item => item.side === "output");
-    if (output?.parameterIndex != null) {
-      const details = await resolveRoutingModeDetails(output);
-      if (details) {
-        openRoutingModePopover(
-          details.control,
-          "How should this output write to the selected bus?",
-          details.currentMode,
-          mode => finishRoutingConnection(source, selection, { details, mode })
-        );
-      } else {
-        await finishRoutingConnection(source, selection);
-        if (routingOutputModeStatus(output) === "error") {
-          showToast("Connected and verified, but the NT's Add/Replace metadata failed to load. Refresh Routing to retry it.");
-        }
-      }
+    const destinationBus = directEndpoint?.bus ?? -1;
+    if (output?.parameterIndex != null && directEndpoint) {
+      await openRoutingConnectionPanel({
+        source: output,
+        destination: directEndpoint,
+        output,
+        destinationBus,
+        onApply: (modeChoice, routesToRemove) => finishRoutingConnection(source, selection, modeChoice, routesToRemove)
+      });
     } else {
-      await finishRoutingConnection(source, selection);
+      await continueRoutingConnection(source, selection, output, []);
     }
     return true;
   }
 
-  async function finishRoutingConnection(first, second, modeChoice = null) {
+  function existingWritableOutputRoutes(bus, incomingOutput) {
+    return routingLogic.writableOutputRoutesForBus(state.routingSnapshot?.slots, bus, incomingOutput);
+  }
+
+  async function continueRoutingConnection(source, selection, output, routesToRemove) {
+    if (output?.parameterIndex != null) {
+      const destination = source === output ? selection : source;
+      await openRoutingConnectionPanel({
+        source: output,
+        destination,
+        output,
+        destinationBus: output.bus,
+        onApply: (modeChoice, nextRoutesToRemove) => finishRoutingConnection(source, selection, modeChoice, nextRoutesToRemove)
+      });
+    } else {
+      await finishRoutingConnection(source, selection, null, routesToRemove);
+    }
+  }
+
+  async function finishRoutingConnection(first, second, modeChoice = null, routesToRemove = []) {
     const pendingPoll = stopLivePolling();
     if (pendingPoll) await pendingPoll.catch(() => {});
     const originalMode = modeChoice?.details.currentMode;
     const modeChanged = Boolean(modeChoice && modeChoice.mode !== originalMode);
+    const connectingOutput = [first, second].find(item => item.side === "output" && item.parameterIndex != null);
+    const originalConnectingBus = connectingOutput?.bus ?? -1;
+    const removedRoutes = [];
     try {
       if (modeChanged) await chooseRoutingOutputMode(modeChoice.details, modeChoice.mode);
+      for (const route of routesToRemove) {
+        await writeRoutingSelection(route, -1);
+        removedRoutes.push(route);
+      }
       await connectRoutingSelections(first, second);
       await loadLiveRouting({ preserveView: true });
       markWorkingEdit();
-      showToast(`Routing changed${modeChoice ? ` in ${modeChoice.mode === "replace" ? "Replace" : "Add"} mode` : ""} and verified from the NT`);
+      const routeCopy = routesToRemove.length ? ` · removed ${routesToRemove.length} previous route${routesToRemove.length === 1 ? "" : "s"}` : "";
+      const modeCopy = modeChoice ? ` · ${modeChoice.mode === "replace" ? "Replace" : "Add"} mode` : "";
+      showToast(`Routing changed${routeCopy}${modeCopy} and verified from the NT`);
     } catch (error) {
+      if (removedRoutes.length) {
+        try {
+          if (connectingOutput) await writeRoutingSelection(connectingOutput, originalConnectingBus);
+          for (const route of removedRoutes) await writeRoutingSelection(route, route.bus);
+        } catch (rollbackError) {
+          showToast(`${error.message} Route rollback also failed; refresh routing.`);
+          return;
+        }
+      }
       if (modeChanged) {
         try {
           await chooseRoutingOutputMode(modeChoice.details, originalMode);
@@ -1466,41 +1568,50 @@
     }
   }
 
-  async function assignRoutingPort(selection, bus, modeChoice = null) {
+  async function assignRoutingPort(selection, bus, modeChoice = null, routesToRemove = [], confirmed = false) {
     if (selection.parameterIndex == null || selection.slotIndex == null) {
       showToast("Select an algorithm input or output first");
       return true;
     }
     const assigningOutputToAux = selection.side === "output" && bus >= 0 && routingBusKind(bus, state.routingSnapshot) === "aux";
-    if (!modeChoice && assigningOutputToAux) {
-      const control = selection.element.querySelector(".routing-mode-toggle");
+    if (!confirmed && assigningOutputToAux) {
       const busChip = $(`.routing-aux-chip[data-bus="${bus}"]`, routingAuxPalette);
-      openRoutingModePopover(
-        busChip || control || selection.element,
-        `How should this output write to ${routingBusLabel(bus, state.routingSnapshot)}?`,
-        control?.dataset.mode || "add",
-        async mode => {
-          const details = await resolveRoutingModeDetails(selection);
-          if (!details) {
-            showToast("The NT did not report an Add/Replace controller for this output");
-            return;
-          }
-          await assignRoutingPort(selection, bus, { details, mode });
-        }
-      );
+      const destination = { element: busChip || selection.element, side: "both", bus, slotIndex: null, parameterIndex: null };
+      await openRoutingConnectionPanel({
+        source: selection,
+        destination,
+        output: selection,
+        destinationBus: bus,
+        onApply: (nextModeChoice, nextRoutesToRemove) => assignRoutingPort(selection, bus, nextModeChoice, nextRoutesToRemove, true)
+      });
       return true;
     }
     const pendingPoll = stopLivePolling();
     if (pendingPoll) await pendingPoll.catch(() => {});
     const originalMode = modeChoice?.details.currentMode;
     const modeChanged = Boolean(modeChoice && modeChoice.mode !== originalMode);
+    const originalBus = selection.bus;
+    const removedRoutes = [];
     try {
       if (modeChanged) await chooseRoutingOutputMode(modeChoice.details, modeChoice.mode);
+      for (const route of routesToRemove) {
+        await writeRoutingSelection(route, -1);
+        removedRoutes.push(route);
+      }
       await writeRoutingSelection(selection, bus);
       await loadLiveRouting({ preserveView: true });
       markWorkingEdit();
       showToast(`${bus < 0 ? "Disconnected" : `Assigned ${routingBusLabel(bus, state.routingSnapshot)}`} and verified from the NT`);
     } catch (error) {
+      if (removedRoutes.length) {
+        try {
+          await writeRoutingSelection(selection, originalBus);
+          for (const route of removedRoutes) await writeRoutingSelection(route, route.bus);
+        } catch (rollbackError) {
+          showToast(`${error.message} Route rollback also failed; refresh routing.`);
+          return true;
+        }
+      }
       if (modeChanged) {
         try {
           await chooseRoutingOutputMode(modeChoice.details, originalMode);
@@ -1563,14 +1674,44 @@
       else showToast("This output's Add/Replace behaviour is fixed by the algorithm; the NT exposes no editable mode control.");
       return true;
     }
-    openRoutingModePopover(control, "Choose how this output writes to its assigned bus.", details.currentMode, async mode => {
-      try {
-        if (mode !== details.currentMode) await chooseRoutingOutputMode(details, mode);
-        await loadLiveRouting({ preserveView: true });
-        if (mode !== details.currentMode) markWorkingEdit();
-        showToast(`Output mode is ${mode === "replace" ? "Replace" : "Add"}`);
-      } catch (error) {
-        showToast(error.message);
+    const selection = {
+      element: row,
+      side: "output",
+      bus: Number(row.dataset.bus),
+      slotIndex: Number(row.dataset.slotIndex),
+      parameterIndex: Number(row.dataset.parameterIndex)
+    };
+    const destination = { element: row, side: "both", bus: selection.bus, slotIndex: null, parameterIndex: null };
+    await openRoutingConnectionPanel({
+      source: selection,
+      destination,
+      output: selection,
+      destinationBus: selection.bus,
+      title: "Output mode",
+      submitLabel: "Apply",
+      onApply: async (modeChoice, routesToRemove) => {
+        const originalMode = details.currentMode;
+        const removedRoutes = [];
+        try {
+          if (modeChoice?.mode !== originalMode) await chooseRoutingOutputMode(details, modeChoice.mode);
+          for (const route of routesToRemove) {
+            await writeRoutingSelection(route, -1);
+            removedRoutes.push(route);
+          }
+          await loadLiveRouting({ preserveView: true });
+          if (modeChoice?.mode !== originalMode || removedRoutes.length) markWorkingEdit();
+          const removedCopy = removedRoutes.length ? ` · removed ${removedRoutes.length} other route${removedRoutes.length === 1 ? "" : "s"}` : "";
+          showToast(`Output mode is ${modeChoice?.mode === "replace" ? "Replace" : "Add"}${removedCopy}`);
+        } catch (error) {
+          try {
+            if (modeChoice?.mode !== originalMode) await chooseRoutingOutputMode(details, originalMode);
+            for (const route of removedRoutes) await writeRoutingSelection(route, route.bus);
+          } catch (rollbackError) {
+            showToast(`${error.message} Rollback also failed; refresh routing.`);
+            return;
+          }
+          showToast(error.message);
+        }
       }
     });
     return true;
@@ -2495,6 +2636,7 @@
   }
 
   function flushDisconnectedSession() {
+    closeRoutingConnectionPanel();
     stopLivePolling();
     stopCpuPolling();
     clearSmartFeedback();
@@ -2744,27 +2886,24 @@
     if (!event.target.closest(".routing-node, .routing-port, button, input, label")) selectRoutingSlot(null);
   });
   routingAuxPalette.addEventListener("click", event => handleAuxPaletteClick(event.target));
-  routingModePopover.addEventListener("click", async event => {
-    const button = event.target.closest("button[data-routing-mode]");
-    if (!button || !routingModePopoverAction) return;
-    const action = routingModePopoverAction;
-    $$(`button[data-routing-mode]`, routingModePopover).forEach(item => { item.disabled = true; });
+  $("#routing-connection-cancel").addEventListener("click", closeRoutingConnectionPanel);
+  routingConnectionPanel.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!routingConnectionAction) return;
+    const action = routingConnectionAction;
+    const apply = $("#routing-connection-apply");
+    apply.disabled = true;
+    apply.textContent = "Connecting…";
     try {
-      await action(button.dataset.routingMode);
+      await action();
+      closeRoutingConnectionPanel();
     } finally {
-      closeRoutingModePopover();
+      apply.disabled = false;
+      apply.textContent = "Connect";
     }
   });
-  document.addEventListener("pointerdown", event => {
-    state.lastPointerPosition = { x: event.clientX, y: event.clientY };
-    if (routingModePopover.classList.contains("hidden")) return;
-    if (routingModePopover.contains(event.target) || event.target.closest(".routing-mode-toggle")) return;
-    closeRoutingModePopover();
-  });
-  routingViewport.addEventListener("scroll", closeRoutingModePopover, { passive: true });
   let routingResizeFrame = null;
   window.addEventListener("resize", () => {
-    closeRoutingModePopover();
     if (state.view !== "routing" || !state.routingSnapshot) return;
     cancelAnimationFrame(routingResizeFrame);
     routingResizeFrame = requestAnimationFrame(() => {
@@ -2809,6 +2948,9 @@
   }, { passive: false });
 
   let routingDrag = null;
+  document.addEventListener("pointerdown", event => {
+    state.lastRoutingPointer = { x: event.clientX, y: event.clientY };
+  }, true);
   routingViewport.addEventListener("pointerdown", event => {
     if (event.button !== 0 || event.target.closest("button, input, label, .routing-node.endpoint, .routing-port")) return;
     routingDrag = {

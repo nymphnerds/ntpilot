@@ -73,8 +73,11 @@ The central model is the NT bus universe:
 - Side stacks are centred against the total central algorithm list.
 - Add/Replace chips are always visible on output rows. Editable chips are backed by a real NT mode-controller parameter; fixed or unresolved chips are read-only.
 - Output-mode chips explicitly distinguish editable Add/Replace, known fixed mode, disconnected fixed mode, metadata loading and metadata failure. A missing `0x55` association never fabricates an editable Replace option.
-- Assigning a supported algorithm output to an Aux bus opens the anchored Add/Replace choice before writing.
-- The choice is positioned beside the user's latest pointer or touch location for every routing assignment, with viewport-edge clamping.
+- New physical-output and Aux assignments are confirmed in a compact popup positioned beside the pointer. It keeps NT Add/Replace mode visibly separate from “Keep existing”/“Disconnect other routes”; all four choices and their explanations remain visible until Connect or Cancel.
+- Replace has repeatedly confused users because it sounds like a routing replacement. It is not: no parameter assignment is disconnected. Replace overwrites the signal accumulated on that bus at the algorithm's ordered slot position. Writes from earlier slots remain configured but are inaudible downstream of that Replace; writes from later slots still contribute.
+- The graph makes that signal-order result explicit. A route whose contribution is masked by a later Replace remains present as a faded dashed cable, the effective Replace writer is emphasized, and its native SVG hover text explains the state. A truly disconnected route has no cable. Apply this consistently to physical-output and Aux-bus paths.
+- Assigning a supported algorithm output to a physical or Aux bus opens the persistent bottom-inspector decision panel before writing.
+- Direct output-mode edits also use the bottom inspector rather than a transient popup.
 - A route can be created in either interaction order: choose the port then Aux, or Aux then port.
 - Physical outputs accept algorithm outputs in both click orders. Add/Replace applies to the algorithm's bus write regardless of whether the destination bus feeds a physical output or is an Aux bus; fixed-mode outputs connect without requiring a mode controller.
 - Physical input/output direction is validated before writes, and routing selections survive the background `0x55` mode-metadata hydration redraw.
@@ -116,10 +119,10 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260925-174`
-- `web-midi-transport.js?v=20260925-43`
-- `routing-logic.js?v=20260925-1`
-- `app.js?v=20260925-105`
+- `styles.css?v=20260925-183`
+- `web-midi-transport.js?v=20260925-44`
+- `routing-logic.js?v=20260925-2`
+- `app.js?v=20260925-118`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
@@ -145,7 +148,7 @@ Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
 ## Known boundaries and risks
 
-- The screenshot proves popup presentation, not yet successful hardware persistence for both choices.
+- The compact pointer-positioned popup replaces the oversized bottom-inspector form. Hardware still needs to confirm Add/Replace persistence and the multi-write “Disconnect other routes” transaction on both physical and Aux destinations.
 - Output-mode metadata is optional on older firmware. An output without an authoritative `0x55` association must remain fixed/read-only rather than guessed.
 - The routing graph uses the aggregate `0x61` masks for overview cables and individual parameter metadata/values for editable ports. Keep those concepts separate.
 - Routing hydration is intentionally non-blocking, but the single-request transport remains a performance constraint.
