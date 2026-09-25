@@ -101,6 +101,9 @@
     smartFeedbackTimer: null,
     smartFeedbackValues: new Map(),
     performancePage: 1,
+    performanceItems: [],
+    performanceEntries: new Map(),
+    performanceReadPromise: null,
     midiEvents: [],
     midiRenderPending: false,
     midiCounts: { all: 0, channel: 0, sysex: 0 },
@@ -1436,7 +1439,10 @@
       const selectedSlot = $(".slot.active", slotList);
       if (state.ntTransport && selectedSlot) queueLiveParameterRead(selectedSlot);
     }
-    if (view === "control") renderPerformanceControls();
+    if (view === "control") {
+      renderPerformanceControls();
+      if (state.ntTransport && state.transportOnline && !state.performanceItems.length) loadPerformancePage();
+    }
   }
 
   function canMutate() {
@@ -1703,35 +1709,74 @@
     if (value) value.textContent = formatParameterValue(entry.parameter);
   }
 
+  async function loadPerformancePage() {
+    if (!state.ntTransport || !state.liveIdentity) return;
+    if (state.performanceReadPromise) return state.performanceReadPromise;
+    state.performanceReadPromise = (async () => {
+      const items = await state.ntTransport.readPerformancePage();
+      const enabledSlots = [...new Set(items.filter(item => item.enabled).map(item => item.slotIndex))];
+      const parametersBySlot = new Map();
+      for (const slotIndex of enabledSlots) {
+        parametersBySlot.set(slotIndex, await state.ntTransport.readSlotParameters(slotIndex));
+      }
+      state.performanceItems = items;
+      state.performanceEntries.clear();
+      items.filter(item => item.enabled).forEach(item => {
+        const slotInfo = state.liveIdentity.slots.find(slot => slot.index === item.slotIndex);
+        const parameter = parametersBySlot.get(item.slotIndex)?.find(candidate => candidate.index === item.parameterNumber);
+        if (slotInfo && parameter) state.performanceEntries.set(item.itemIndex, { item, slotInfo, parameter });
+      });
+      renderPerformanceControls();
+    })().catch(error => {
+      showToast(`Performance Page unavailable · ${error.message}`);
+    }).finally(() => {
+      state.performanceReadPromise = null;
+    });
+    return state.performanceReadPromise;
+  }
+
+  async function writePerformanceValue(entry, value, control) {
+    if (!state.ntTransport || !state.transportOnline) return;
+    const requestedValue = Math.min(entry.parameter.max, Math.max(entry.parameter.min, Number(value)));
+    control.disabled = true;
+    const operation = state.parameterWriteQueue.catch(() => {}).then(async () => {
+      await state.ntTransport.writeParameter(entry.slotInfo.index, entry.parameter.index, requestedValue);
+      entry.parameter.value = requestedValue;
+      markWorkingEdit();
+      renderPerformanceControls();
+      return true;
+    }).catch(error => {
+      showToast(error.message);
+      return false;
+    }).finally(() => {
+      control.disabled = false;
+    });
+    state.parameterWriteQueue = operation;
+    return operation;
+  }
+
   function renderPerformanceControls() {
     const grid = $("#performance-grid");
     if (!grid) return;
-    const mappedEntries = [...state.liveParameters.values()]
-      .filter(entry => entry.parameter.mapping?.midi?.enabled);
-    const start = (state.performancePage - 1) * 4;
-    const pageEntries = mappedEntries.slice(start, start + 4);
+    const start = (state.performancePage - 1) * 3;
     grid.replaceChildren();
-    for (let index = 0; index < 4; index += 1) {
-      const entry = pageEntries[index];
+    for (let index = 0; index < 3; index += 1) {
       const itemNumber = start + index + 1;
+      const entry = state.performanceEntries.get(start + index);
       if (!entry) {
         const empty = document.createElement("article");
         empty.className = "control-card empty-performance";
         const number = document.createElement("span");
         number.textContent = String(itemNumber);
         const label = document.createElement("strong");
-        label.textContent = mappedEntries.length ? "No mapped control" : "No MIDI mappings";
-        const assign = document.createElement("button");
-        assign.type = "button";
-        assign.textContent = "Open Mapping";
-        assign.addEventListener("click", () => setView("mapping"));
-        empty.append(number, label, assign);
+        label.textContent = state.performanceReadPromise ? "Reading from NT…" : "Unassigned";
+        empty.append(number, label);
         grid.appendChild(empty);
         continue;
       }
       const card = document.createElement("article");
       card.className = `control-card performance-control ${["accent-mint", "accent-yellow", "accent-lilac", "accent-blue"][index]}`;
-      card.dataset.key = mappingKey(entry.slotInfo.index, entry.parameter.index);
+      card.dataset.performanceItem = String(entry.item.itemIndex);
       const performanceHue = (entry.parameter.index * 47 + entry.slotInfo.index * 23 + 188) % 360;
       card.style.setProperty("--slider-start", `hsla(${performanceHue}, 68%, 48%, .12)`);
       card.style.setProperty("--slider-colour", `hsl(${performanceHue}, 68%, 48%)`);
@@ -1739,38 +1784,39 @@
       head.className = "control-card-head";
       const slot = document.createElement("span");
       slot.textContent = `Slot ${entry.slotInfo.index + 1} · ${entry.slotInfo.name}`;
-      const midi = document.createElement("span");
-      const mapping = entry.parameter.mapping.midi;
-      midi.textContent = mapping.type === "CC" ? `Ch ${mapping.channel} · CC ${mapping.cc}` : `Ch ${mapping.channel} · ${mapping.type}`;
-      head.append(slot, midi);
+      const position = document.createElement("span");
+      position.textContent = `Control ${itemNumber}`;
+      head.append(slot, position);
       const value = document.createElement("output");
       value.className = "performance-live-value";
       value.textContent = formatParameterValue(entry.parameter);
       const title = document.createElement("h2");
-      title.textContent = entry.parameter.name;
+      title.textContent = entry.item.upperLabel || entry.parameter.name;
       const detail = document.createElement("p");
-      detail.textContent = `${entry.parameter.pageName || entry.slotInfo.algorithmName} · Parameter ${entry.parameter.index + 1}`;
+      detail.textContent = entry.item.lowerLabel || `${entry.parameter.name} · Parameter ${entry.parameter.index + 1}`;
       const slider = document.createElement("input");
       slider.type = "range";
-      slider.min = String(entry.parameter.min);
-      slider.max = String(entry.parameter.max);
+      slider.min = String(entry.item.min);
+      slider.max = String(entry.item.max);
       slider.value = String(entry.parameter.value);
       slider.setAttribute("aria-label", `${entry.parameter.name}, performance control`);
       updateRangeProgress(slider);
       slider.addEventListener("input", () => {
         updateRangeProgress(slider);
         value.textContent = formatParameterValue(entry.parameter, Number(slider.value));
-        entry.sliderInteracting = true;
-        queueLiveSliderWrite(entry, slider.value);
+        entry.parameter.value = Number(slider.value);
       });
-      slider.addEventListener("change", () => {
-        entry.sliderInteracting = false;
-        queueLiveSliderWrite(entry, slider.value, { commit: true });
-      });
-      card.append(head, value, title, detail, slider);
+      slider.addEventListener("change", () => writePerformanceValue(entry, slider.value, slider));
+      const reset = document.createElement("button");
+      reset.type = "button";
+      reset.className = "performance-reset";
+      reset.textContent = "Reset to default";
+      reset.title = `Reset ${entry.parameter.name} to ${formatParameterValue(entry.parameter, entry.parameter.defaultValue)}`;
+      reset.addEventListener("click", () => writePerformanceValue(entry, entry.parameter.defaultValue, reset));
+      card.append(head, value, title, detail, slider, reset);
       grid.appendChild(card);
     }
-    $("#performance-page-title").textContent = `Mapped controls · Page ${state.performancePage}`;
+    $("#performance-page-title").textContent = `Performance Page · ${state.performancePage}`;
   }
 
 
@@ -2023,6 +2069,9 @@
       previewLiveParameterEntry(entry, entry.confirmedValue);
     });
     state.liveParameters.clear();
+    state.performanceItems = [];
+    state.performanceEntries.clear();
+    state.performanceReadPromise = null;
     routingNodes.replaceChildren();
     routingWires.replaceChildren();
     routingAuxPalette.replaceChildren();
@@ -2106,10 +2155,13 @@
       state.reconnectTimer = null;
       state.transportOnline = true;
       state.liveIdentity = identity;
+      state.performanceItems = [];
+      state.performanceEntries.clear();
       showLiveIdentity(identity);
       setDeviceState("labConnected");
       connectMIDI.textContent = "Refresh";
       showToast(`Read ${identity.presetName || "unnamed preset"} from the real NT`);
+      if (state.view === "control") loadPerformancePage();
       if (state.view === "routing") await loadLiveRouting();
     } catch (error) {
       markTransportOffline(error.message);

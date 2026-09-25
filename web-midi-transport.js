@@ -500,6 +500,39 @@
       return values;
     }
 
+    async readPerformancePageItem(itemIndex) {
+      const payload = await this.request(0x57, 0x57, [itemIndex], bytes => bytes[8] === itemIndex);
+      const version = payload[0] ?? 0;
+      const responseIndex = payload[1] ?? itemIndex;
+      const flags = payload[2] ?? 0;
+      if (!(flags & 1)) return { version, itemIndex: responseIndex, enabled: false };
+      let cursor = 13;
+      const upperEnd = payload.indexOf(0, cursor);
+      const upperLabel = decodeText(payload.slice(cursor, upperEnd < 0 ? payload.length : upperEnd));
+      cursor = upperEnd < 0 ? payload.length : upperEnd + 1;
+      const lowerEnd = payload.indexOf(0, cursor);
+      const lowerLabel = decodeText(payload.slice(cursor, lowerEnd < 0 ? payload.length : lowerEnd));
+      return {
+        version,
+        itemIndex: responseIndex,
+        enabled: true,
+        slotIndex: payload[3],
+        parameterNumber: decodeUnsigned21(payload.slice(4, 7)),
+        min: decodeSignedShort(payload.slice(7, 10)),
+        max: decodeSignedShort(payload.slice(10, 13)),
+        upperLabel,
+        lowerLabel
+      };
+    }
+
+    async readPerformancePage() {
+      const items = [];
+      for (let itemIndex = 0; itemIndex < 30; itemIndex += 1) {
+        items.push(await this.readPerformancePageItem(itemIndex));
+      }
+      return items;
+    }
+
     async writeParameter(slot, parameter, value) {
       const encodedParameter = encodeUnsigned21(parameter);
       const encodedValue = encodeUnsigned21(value);

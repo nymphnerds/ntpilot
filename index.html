@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260925-128">
+  <link rel="stylesheet" href="styles.css?v=20260925-129">
 </head>
 <body>
   <main class="stage">
@@ -244,13 +244,13 @@
           <section class="view control-view" data-panel="control" aria-labelledby="control-heading">
             <h1 class="sr-only" id="control-heading">Performance</h1>
             <div class="performance-toolbar">
-              <div><strong id="performance-page-title">Mapped controls · Page 1</strong><span>Live controls from the selected algorithm's enabled MIDI mappings</span></div>
+              <div><strong id="performance-page-title">Performance Page · 1</strong><span>Preset-global controls stored by the disting NT</span></div>
               <div class="page-picker" aria-label="Performance page">
-                <button class="active" data-performance-page="1">1</button><button data-performance-page="2">2</button><button data-performance-page="3">3</button><button data-performance-page="4">4</button><button data-performance-page="5">5</button><button data-performance-page="6">6</button><button data-performance-page="7">7</button><button data-performance-page="8">8</button>
+                <button class="active" data-performance-page="1">1</button><button data-performance-page="2">2</button><button data-performance-page="3">3</button><button data-performance-page="4">4</button><button data-performance-page="5">5</button><button data-performance-page="6">6</button><button data-performance-page="7">7</button><button data-performance-page="8">8</button><button data-performance-page="9">9</button><button data-performance-page="10">10</button>
               </div>
             </div>
             <div class="control-grid performance-grid" id="performance-grid"></div>
-            <div class="control-footnote"><span class="info-icon">i</span> This surface uses confirmed native MIDI mappings from the selected algorithm. Add or edit mappings in Mapping, then control the same live NT parameters here.</div>
+            <div class="control-footnote"><span class="info-icon">i</span> These are the preset's 30 global Performance Page assignments. Custom names and ranges are preserved; Reset to default matches firmware 1.18's knob-press action.</div>
           </section>
 
           <section class="view mapping-view" data-panel="mapping" aria-labelledby="mapping-heading">
@@ -407,7 +407,7 @@
     </section>
   </main>
 
-  <script src="web-midi-transport.js?v=20260925-40"></script>
-  <script src="app.js?v=20260925-95"></script>
+  <script src="web-midi-transport.js?v=20260925-41"></script>
+  <script src="app.js?v=20260925-96"></script>
 </body>
 </html>

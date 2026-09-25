@@ -97,6 +97,12 @@ const output = {
       const modeParameter = bytes[10];
       reply = [...header, 0x55, slot, ...encodeShort(modeParameter), 2, ...encodeShort(3), ...encodeShort(4), 0xF7];
     }
+    if (bytes[6] === 0x57) {
+      const item = bytes[7];
+      reply = item === 0
+        ? [...header, 0x57, 1, item, 1, 1, ...encodeShort(1), ...encodeShort(-2), ...encodeShort(12), ...Buffer.from("Macro"), 0, ...Buffer.from("Division"), 0, 0xF7]
+        : [...header, 0x57, 1, item, 0, 0xF7];
+    }
     if (bytes[6] === 0x4B) {
       const slot = bytes[7];
       const index = bytes[10];
@@ -231,6 +237,20 @@ global.navigator = { requestMIDIAccess: async options => {
     parameterIndex: 1,
     outputParameterIndices: [3, 4]
   });
+  const performancePage = await transport.readPerformancePage();
+  assert.equal(performancePage.length, 30);
+  assert.deepEqual(performancePage[0], {
+    version: 1,
+    itemIndex: 0,
+    enabled: true,
+    slotIndex: 1,
+    parameterNumber: 1,
+    min: -2,
+    max: 12,
+    upperLabel: "Macro",
+    lowerLabel: "Division"
+  });
+  assert.deepEqual(performancePage[29], { version: 1, itemIndex: 29, enabled: false });
   transport.savePreset();
   assert.equal(saveCommand[6], 0x36);
   assert.equal(saveCommand[7], 2);
