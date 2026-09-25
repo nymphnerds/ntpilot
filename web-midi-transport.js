@@ -207,10 +207,15 @@
   }
 
   function isRoutingBusParameter(parameter, totalBusCount) {
-    const minimumBusRange = Math.min(totalBusCount, 28);
     return Boolean(parameter.ioFlags & 0x03)
-      && parameter.min >= 0
-      && parameter.max >= minimumBusRange;
+      && parameter.min <= parameter.max
+      && parameter.max >= 0;
+  }
+
+  function isHardcodedRoutingInput(slot, parameter) {
+    if (slot.guidKey === "6c6f6769") return /^\d+:Input [XY]$/.test(parameter.name);
+    if (slot.guidKey === "6d757377") return /^\d+:(In control source|Out control source|Reset source)$/.test(parameter.name);
+    return false;
   }
 
   class NTWebMIDITransport {
@@ -222,12 +227,17 @@
       this.input = null;
       this.output = null;
       this.pending = null;
+      this.outputModeUsageCache = new Map();
       this.handleMessage = this.handleMessage.bind(this);
       this.handleStateChange = this.handleStateChange.bind(this);
     }
 
     static isSupported() {
       return typeof navigator !== "undefined" && typeof navigator.requestMIDIAccess === "function";
+    }
+
+    static isRoutingBusParameter(parameter, totalBusCount) {
+      return isRoutingBusParameter(parameter, totalBusCount);
     }
 
     static choosePort(ports, direction) {
@@ -244,14 +254,15 @@
       } else if (ports && typeof ports === "object") {
         Object.keys(ports).forEach(key => candidates.push(ports[key]));
       }
+      const available = candidates.filter(port => port && port.state !== "disconnected");
       const preferredSuffix = direction === "input" ? "midi in" : "midi out";
-      return candidates.find(port => port.name?.toLowerCase() === `disting nt ${preferredSuffix}`) ||
-        candidates.find(port => {
+      return available.find(port => port.name?.toLowerCase() === `disting nt ${preferredSuffix}`) ||
+        available.find(port => {
           const name = port.name?.toLowerCase() || "";
           return name.includes("disting nt") && name.includes(preferredSuffix);
         }) ||
-        candidates.find(port => port.name?.toLowerCase().includes("disting nt")) ||
-        (candidates.length === 1 ? candidates[0] : null) ||
+        available.find(port => port.name?.toLowerCase().includes("disting nt")) ||
+        (available.length === 1 ? available[0] : null) ||
         null;
     }
 
@@ -259,6 +270,14 @@
       if (!NTWebMIDITransport.isSupported()) {
         throw new Error("This browser does not expose Web MIDI. Use desktop Chrome or Edge.");
       }
+      // A reboot can leave the browser's previous port objects and an in-flight
+      // SysEx request behind. Never reuse either when reconnecting.
+      this.rejectPending(new Error("Reconnecting to the disting NT."));
+      if (this.input) this.input.onmidimessage = null;
+      if (this.access) this.access.onstatechange = null;
+      this.input = null;
+      this.output = null;
+      this.outputModeUsageCache.clear();
       this.access = await navigator.requestMIDIAccess({ sysex: true });
       this.access.onstatechange = this.handleStateChange;
       this.selectPorts();
@@ -443,9 +462,9 @@
         );
         const info = payload.slice(1);
         let nameLength = 0;
-        while (nameLength < 24 && info[13 + nameLength] !== 0) nameLength += 1;
+        while (13 + nameLength < info.length && info[13 + nameLength] !== 0) nameLength += 1;
         const name = decodeText(info.slice(13, 13 + nameLength));
-        const metadataOffset = 13 + Math.min(nameLength + 1, 24);
+        const metadataOffset = 13 + nameLength + 1;
         const metadata = info[metadataOffset] ?? 0;
         parameters.push({
           index: decodeUnsigned21(info.slice(0, 3)),
@@ -494,8 +513,17 @@
       );
       const readParameter = decodeUnsigned21(payload.slice(1, 4));
       const readValue = decodeSignedShort(payload.slice(4, 7));
-      if (readParameter !== parameter || readValue !== value) throw new Error(`NT routing readback did not match (expected bus ${value}, received ${readValue}).`);
+      if (readParameter !== parameter || readValue !== value) throw new Error(`NT parameter readback did not match (expected ${value}, received ${readValue}).`);
       return value;
+    }
+
+    savePreset(option = 2) {
+      if (!Number.isInteger(option) || option < 0 || option > 2) {
+        throw new Error("Invalid NT preset-save option.");
+      }
+      // 0 asks on the module, 1 generates a new file, 2 overwrites the loaded file.
+      // The NT protocol provides no acknowledgement for this command.
+      this.send(0x36, [option]);
     }
 
     async readParameterPages(slot) {
@@ -521,7 +549,7 @@
         0x55,
         [slot, ...encodedParameter],
         bytes => bytes[7] === slot && decodeUnsigned21(bytes.slice(8, 11)) === parameter,
-        450
+        350
       );
       const modeParameter = decodeUnsigned21(payload.slice(1, 4));
       const count = payload[4] ?? 0;
@@ -555,24 +583,16 @@
     async readRoutingSnapshot(identity) {
       if (!identity?.slots) throw new Error("Read the NT preset identity before routing.");
       const slots = [];
-      let outputModeDiscoveryAvailable = true;
       const totalBusCount = identity.inputBusCount + identity.outputBusCount + identity.auxBusCount;
       for (const slot of identity.slots) {
         const routing = await this.readSlotRouting(slot.index);
         const parameters = await this.readSlotParameters(slot.index);
-        const ioParameters = parameters.filter(parameter => isRoutingBusParameter(parameter, totalBusCount));
+        const ioParameters = parameters
+          .filter(parameter => isRoutingBusParameter(parameter, totalBusCount) || isHardcodedRoutingInput(slot, parameter))
+          .map(parameter => isHardcodedRoutingInput(slot, parameter)
+            ? { ...parameter, ioFlags: parameter.ioFlags | 0x01 }
+            : parameter);
         const outputModeMap = {};
-        const outputModeParameters = parameters.filter(parameter => parameter.ioFlags & 0x08);
-        for (const parameter of outputModeDiscoveryAvailable ? outputModeParameters : []) {
-          try {
-            const usage = await this.readOutputModeUsage(slot.index, parameter.index);
-            outputModeMap[usage.parameterIndex] = usage.outputParameterIndices;
-          } catch (error) {
-            outputModeDiscoveryAvailable = false;
-            this.onEvent({ type: "warning", command: 0x55, message: `Output-mode discovery unavailable for slot ${slot.index + 1}: ${error.message}` });
-            break;
-          }
-        }
         slots.push({ ...slot, routing, parameters, ioParameters, outputModeMap });
       }
       return {
@@ -582,6 +602,26 @@
         auxBusCount: identity.auxBusCount,
         slots
       };
+    }
+
+    async hydrateRoutingOutputModes(snapshot) {
+      for (const slot of snapshot.slots) {
+        const outputModeParameters = (slot.parameters || []).filter(parameter => parameter.ioFlags & 0x08);
+        for (const parameter of outputModeParameters) {
+          try {
+            const cacheKey = `${slot.index}:${slot.guidKey}:${slot.parameters.length}:${parameter.index}:${parameter.name}`;
+            let usage = this.outputModeUsageCache.get(cacheKey);
+            if (!usage) {
+              usage = await this.readOutputModeUsage(slot.index, parameter.index);
+              this.outputModeUsageCache.set(cacheKey, usage);
+            }
+            slot.outputModeMap[usage.parameterIndex] = usage.outputParameterIndices;
+          } catch (error) {
+            this.onEvent({ type: "warning", command: 0x55, message: `Output-mode metadata unavailable for slot ${slot.index + 1}, parameter ${parameter.index}: ${error.message}` });
+          }
+        }
+      }
+      return snapshot;
     }
 
     async readSnapshot() {

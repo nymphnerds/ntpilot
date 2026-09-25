@@ -40,10 +40,15 @@ function encodeRoutingMask(value) {
 }
 
 const input = { id: "in", name: "disting NT MIDI IN", onmidimessage: null };
+let saveCommand = null;
 const output = {
   id: "out",
   name: "disting NT MIDI OUT",
   send(bytes) {
+    if (bytes[6] === 0x36) {
+      saveCommand = [...bytes];
+      return;
+    }
     let reply = replies.get(bytes[6]);
     if (bytes[6] === 0x31) {
       const index = bytes[9];
@@ -87,6 +92,11 @@ const output = {
         0xF7
       ];
     }
+    if (bytes[6] === 0x55) {
+      const slot = bytes[7];
+      const modeParameter = bytes[10];
+      reply = [...header, 0x55, slot, ...encodeShort(modeParameter), 2, ...encodeShort(3), ...encodeShort(4), 0xF7];
+    }
     if (bytes[6] === 0x4B) {
       const slot = bytes[7];
       const index = bytes[10];
@@ -128,6 +138,10 @@ global.navigator = { requestMIDIAccess: async options => {
     }
   };
   assert.equal(NTWebMIDITransport.choosePort(legacyPorts, "input"), input);
+  assert.equal(NTWebMIDITransport.choosePort([
+    { id: "stale-in", name: "disting NT MIDI IN", state: "disconnected" },
+    input
+  ], "input"), input);
   assert.deepEqual(parseMIDIMessage([0xBE, 9, 100]), {
     kind: "channel",
     subtype: "cc",
@@ -151,8 +165,9 @@ global.navigator = { requestMIDIAccess: async options => {
   });
   assert.equal(isRoutingBusParameter({ name: "Audio input", min: 0, max: 64, ioFlags: 1 }, 64), true);
   assert.equal(isRoutingBusParameter({ name: "Main output", min: 0, max: 64, ioFlags: 2 }, 64), true);
-  assert.equal(isRoutingBusParameter({ name: "Radio Station:Output path", min: 0, max: 1, ioFlags: 2 }, 64), false);
+  assert.equal(isRoutingBusParameter({ name: "Radio Station:Output path", min: 0, max: 1, ioFlags: 2 }, 64), true);
   assert.equal(isRoutingBusParameter({ name: "Ordinary enum", min: 0, max: 64, ioFlags: 0 }, 64), false);
+  assert.equal(NTWebMIDITransport.isRoutingBusParameter({ name: "Gate input", min: 0, max: 64, ioFlags: 1 }, 64), true);
 
   const events = [];
   const transport = new NTWebMIDITransport({ sysexId: 0, timeoutMs: 100, onEvent: event => events.push(event) });
@@ -212,6 +227,13 @@ global.navigator = { requestMIDIAccess: async options => {
   assert.equal(editorState.parameters[0].mapping.midi.cc, 74);
   assert.equal(editorState.parameters[0].mapping.midi.type, "CC");
   assert.equal(editorState.parameters[1].mapping.midi.enabled, false);
+  assert.deepEqual(await transport.readOutputModeUsage(0, 1), {
+    parameterIndex: 1,
+    outputParameterIndices: [3, 4]
+  });
+  transport.savePreset();
+  assert.equal(saveCommand[6], 0x36);
+  assert.equal(saveCommand[7], 2);
   const routing = await transport.readRoutingSnapshot(await transport.readSnapshot());
   assert.equal(routing.slots.length, 2);
   assert.equal(routing.slots[0].routing.inputMask, 1n);

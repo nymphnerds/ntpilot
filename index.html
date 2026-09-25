@@ -4,50 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
-  <title>NT Editor — Experience Harness</title>
-  <link rel="stylesheet" href="styles.css?v=20260922-43">
+  <title>NT Pilot</title>
+  <link rel="stylesheet" href="styles.css?v=20260925-62">
 </head>
 <body>
-  <div class="prototype-bar" aria-label="Prototype controls">
-    <div class="prototype-brand">
-      <span class="prototype-dot"></span>
-      <span>Experience harness</span>
-      <span class="prototype-note">Real NT · read only</span>
-    </div>
-    <div class="prototype-controls">
-      <label class="select-label">Transport
-        <select id="transport-mode">
-          <option value="readonly">Real NT · READ ONLY</option>
-          <option value="real">Real NT · READ + WRITE</option>
-        </select>
-      </label>
-      <label class="select-label real-midi-control">SysEx ID
-        <select id="sysex-id"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option></select>
-      </label>
-      <button class="prototype-action real-midi-control" id="connect-midi" type="button">Connect</button>
-      <div class="segmented compact" aria-label="Surface">
-        <button class="segment active" data-surface="app">iPad app</button>
-        <button class="segment" data-surface="auv3">AUv3</button>
-      </div>
-      <label class="select-label host-size-control hidden">Size
-        <select id="host-size">
-          <option value="expanded">Expanded</option>
-          <option value="standard">Standard</option>
-          <option value="compact">Compact</option>
-        </select>
-      </label>
-      <button class="icon-button" id="theme-toggle" title="Toggle appearance" aria-label="Toggle appearance">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.6 5.6 7 7m10 10 1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg>
-      </button>
-    </div>
-  </div>
-
   <main class="stage">
-    <section class="device-frame surface-app" id="device-frame" aria-label="NT Editor prototype">
+    <section class="device-frame" id="device-frame" aria-label="NT Pilot">
       <aside class="app-sidebar">
-        <div class="app-mark" aria-label="NT Editor">
+        <div class="app-mark" aria-label="NT Pilot">
           <span class="mark-glyph">NT</span>
-          <span class="mark-copy"><strong>Editor</strong><small>for disting NT</small></span>
+          <span class="mark-copy"><strong>NT Pilot</strong><small>for disting NT</small></span>
         </div>
 
         <nav class="primary-nav" aria-label="Primary">
@@ -87,23 +53,24 @@
               <span class="pulse-dot"></span>
               <span id="connection-label">Ready</span>
             </span>
-            <div class="device-title">
-              <strong>disting NT</strong>
+            <div class="device-title disconnected" id="device-title">
+              <span id="preset-title">No preset loaded</span>
               <span class="divider"></span>
-              <span id="preset-title">Demo preset</span>
+              <span id="current-view-title">Editor</span>
             </div>
           </div>
           <div class="status-actions">
-            <div class="sync-picker" aria-label="Synchronization mode">
+            <label class="status-sync" for="sync-mode">
               <span>Sync</span>
-              <button class="sync-option">Manual</button>
-              <button class="sync-option active">Smart</button>
-              <button class="sync-option">Fast</button>
-            </div>
-            <button class="status-icon" aria-label="Pending activity" title="One pending conversation">
-              <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></svg>
-              <span class="activity-dot"></span>
-            </button>
+              <select id="sync-mode" aria-label="Live synchronization mode">
+                <option value="manual">Manual</option>
+                <option value="smart">Slow</option>
+                <option value="fast" selected>Fast</option>
+              </select>
+            </label>
+            <span class="working-state hidden" id="working-state">Unsaved changes</span>
+            <button class="primary-button hidden" id="save-preset" type="button" disabled>Save preset</button>
+            <button class="secondary-button status-read-action" id="connect-midi" type="button">Connect NT</button>
           </div>
         </header>
 
@@ -115,31 +82,30 @@
           <button class="secondary-button" id="state-action">View progress</button>
         </div>
 
-        <div class="host-tabs" aria-label="AUv3 tabs">
-          <button class="host-tab active" data-view="control">Performance</button>
-          <button class="host-tab" data-view="editor">Editor</button>
-          <button class="host-tab" data-view="routing">Routing</button>
-          <button class="host-tab" data-view="mapping">Mapping</button>
-          <button class="host-tab" data-view="assistant">Assistant <span>1</span></button>
+        <div class="editor-bus-dock hidden" id="editor-bus-dock" aria-label="Bus assignment">
+          <div class="editor-bus-dock-row editor-aux-bus-row" id="editor-aux-bus-row" aria-label="Aux buses"></div>
+          <div class="editor-physical-bus-row" aria-label="Physical inputs and outputs">
+            <div class="editor-physical-bus-strip">
+              <div class="editor-bus-group" id="editor-input-bus-row" aria-label="NT inputs"></div>
+              <span class="editor-bus-group-label input">Inputs</span>
+              <button class="editor-bus-chip none editor-bus-none" id="editor-bus-none" type="button" data-value="0">None</button>
+              <span class="editor-bus-group-label output">Outputs</span>
+              <div class="editor-bus-group editor-output-bus-group" id="editor-output-bus-row" aria-label="NT outputs"></div>
+            </div>
+          </div>
         </div>
 
         <div class="view-stack">
           <section class="view editor-view active" data-panel="editor" aria-labelledby="editor-heading">
-            <div class="view-heading">
-              <div>
-                <p class="eyebrow">Preset workspace</p>
-                <h1 id="editor-heading">Demo preset</h1>
-              </div>
-              <div class="heading-actions">
-                <button class="secondary-button refresh-button">
-                  <svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18.5 9a7 7 0 0 0-12-2L4 11m16 2-2.5 4a7 7 0 0 1-12-2"/></svg>
-                  Refresh
-                </button>
-                <button class="primary-button">Save preset</button>
-              </div>
-            </div>
+            <h1 class="sr-only" id="editor-heading">No preset loaded</h1>
 
-            <div class="editor-shell">
+            <section class="editor-empty-state" id="editor-empty-state" aria-labelledby="editor-empty-title">
+              <span class="editor-empty-icon"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 9h8m-8 4h5m-8 7h14"/></svg></span>
+              <h2 id="editor-empty-title">Connect your disting NT</h2>
+              <p>Read the current working preset from the module to begin.</p>
+            </section>
+
+            <div class="editor-shell hidden" id="editor-shell">
               <div class="editor-toolbar">
                 <div class="editor-tabs">
                   <button class="active">Parameters</button>
@@ -239,25 +205,17 @@
           </section>
 
           <section class="view routing-view" data-panel="routing" aria-labelledby="routing-heading">
-            <div class="view-heading routing-heading">
-              <div><p class="eyebrow">Complete NT signal topology</p><h1 id="routing-heading">Routing</h1></div>
-              <div class="routing-heading-actions">
-                <span class="verified-source"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg> <span id="routing-source-copy">Not connected</span></span>
-                <button class="primary-button" id="routing-connect-button" type="button">Connect NT</button>
-                <button class="secondary-button refresh-button" id="routing-read-button" type="button">
-                  <svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18.5 9a7 7 0 0 0-12-2L4 11m16 2-2.5 4a7 7 0 0 1-12-2"/></svg>
-                  Read routing
-                </button>
-              </div>
-            </div>
+            <h1 class="sr-only" id="routing-heading">Routing</h1>
             <div class="routing-shell">
               <div class="routing-toolbar">
                 <div class="routing-filters" aria-label="Routing layers">
                   <label><input id="routing-show-signals" type="checkbox" checked><span></span>Signals</label>
-                  <label class="hidden" aria-hidden="true"><input id="routing-show-mappings" type="checkbox"><span></span>Parameter modulation <b id="routing-mapping-count">0</b></label>
                 </div>
-                <div class="routing-legend" aria-label="Bus legend">
-                  <span><i class="input"></i>Input</span><span><i class="output"></i>Output</span>
+                <div class="routing-legend" aria-label="Signal filters">
+                  <button class="routing-layer-toggle input active" id="routing-show-input" type="button" aria-pressed="true"><i></i>Input</button>
+                  <button class="routing-layer-toggle output active" id="routing-show-output" type="button" aria-pressed="true"><i></i>Output</button>
+                  <button class="routing-layer-toggle aux" id="routing-show-aux" type="button" aria-pressed="false"><i></i>Aux</button>
+                  <button class="routing-layer-toggle modulation active" id="routing-show-mod" type="button" aria-pressed="true"><i></i>Mod</button>
                 </div>
                 <div class="routing-zoom" aria-label="Graph zoom">
                   <button id="routing-zoom-out" type="button" aria-label="Zoom out">−</button>
@@ -284,10 +242,7 @@
           </section>
 
           <section class="view control-view" data-panel="control" aria-labelledby="control-heading">
-            <div class="view-heading">
-              <div><p class="eyebrow">Native NT controls</p><h1 id="control-heading">Performance Page</h1></div>
-              <span class="verified-source"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg> 1 of 30 assigned</span>
-            </div>
+            <h1 class="sr-only" id="control-heading">Performance</h1>
             <div class="performance-toolbar">
               <div><strong id="performance-page-title">Page 1</strong><span>Four controls match the NT front-panel page</span></div>
               <div class="page-picker" aria-label="Performance page">
@@ -308,19 +263,18 @@
           </section>
 
           <section class="view mapping-view" data-panel="mapping" aria-labelledby="mapping-heading">
-            <div class="view-heading mapping-heading">
-              <div><p class="eyebrow">Native NT assignments</p><h1 id="mapping-heading">MIDI mapping</h1></div>
-              <div class="mapping-heading-actions">
-                <span class="verified-source"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg> <span id="mapping-source-copy">Read from NT</span></span>
-              </div>
-            </div>
+            <h1 class="sr-only" id="mapping-heading">MIDI mapping</h1>
             <div class="mapping-layout">
               <div class="mapping-browser">
+                <label class="mapping-slot-picker">
+                  <span>Algorithm</span>
+                  <select id="mapping-slot-select" aria-label="Algorithm slot" disabled><option>Connect to choose an algorithm</option></select>
+                </label>
                 <div class="search-box">
                   <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
                   <input id="mapping-search" type="search" placeholder="Find a parameter" aria-label="Find a parameter">
                 </div>
-                <div class="mapping-section-label"><span id="mapping-slot-label">Slot 7 · WitchboardX</span><span id="mapping-count">4 mappings</span></div>
+                <div class="mapping-section-label"><span>Native MIDI mappings</span><span id="mapping-count">0 mappings</span></div>
                 <div class="mapping-items" id="mapping-items">
                   <button class="mapping-item active" data-name="Sidechain" data-category="Master" data-cc="80" data-channel="15" data-min="0" data-max="1">
                     <span><strong>Sidechain</strong><small>Master</small></span><em class="mapped-label">Ch 15 · CC 80</em>
@@ -403,7 +357,7 @@
                 </form>
               </div>
               <aside class="assistant-context">
-                <div class="context-card"><span class="context-label">Current target</span><h3>Demo preset</h3><p>disting NT · saved from firmware 1.18.0</p><div class="context-facts"><span><b>10</b> slots</span><span><b>48%</b> CPU</span><span><b>Smart</b> sync</span></div></div>
+                <div class="context-card"><span class="context-label">Current target</span><h3>Demo preset</h3><p>disting NT · saved from firmware 1.18.0</p><div class="context-facts"><span><b>10</b> slots</span><span><b>48%</b> CPU</span><span><b>Fast</b> sync</span></div></div>
                 <div class="context-card"><span class="context-label">Available knowledge</span><ul><li><i class="ok"></i> Live preset state</li><li><i class="ok"></i> Algorithm documentation</li><li><i class="ok"></i> NT API and mapping guide</li><li><i class="ok"></i> Routing reference</li></ul></div>
                 <p class="privacy-note"><svg viewBox="0 0 24 24"><path d="M6 10V7a6 6 0 0 1 12 0v3m-14 0h16v11H4V10Z"/></svg>Only the disclosed context is sent to the selected provider.</p>
               </aside>
@@ -411,10 +365,11 @@
           </section>
 
           <section class="view status-view" data-panel="status" aria-labelledby="status-heading">
-            <div class="view-heading"><div><p class="eyebrow">Device and accounts</p><h1 id="status-heading">Status & setup</h1></div></div>
+            <h1 class="sr-only" id="status-heading">Status &amp; setup</h1>
             <div class="settings-grid">
               <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 8h6m-6 4h6m-6 4h3"/></svg></div><div><span>Hardware</span><h2 id="hardware-title">disting NT</h2><p id="hardware-detail">Waiting for MIDI connection</p></div><span class="settings-status" id="hardware-status">Not connected</span></article>
-              <article class="settings-card"><div class="settings-icon sync"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18 9a7 7 0 0 0-12-2l-2 4m16 2-2 4a7 7 0 0 1-12-2"/></svg></div><div><span>Synchronization</span><h2>Smart</h2><p>Visible and mapped parameters · refreshed now</p></div><button class="secondary-button">Change</button></article>
+              <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 8h14M5 16h14"/></svg></div><div><span>Advanced connection</span><h2>SysEx device ID</h2><p>Leave at 0 unless your NT uses another ID.</p></div><label class="settings-select"><select id="sysex-id" aria-label="SysEx device ID"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option></select></label></article>
+              <article class="settings-card"><div class="settings-icon sync"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18 9a7 7 0 0 0-12-2l-2 4m16 2-2 4a7 7 0 0 1-12-2"/></svg></div><div><span>Synchronization</span><h2 id="sync-mode-label">Fast</h2><p id="sync-mode-detail">Immediate MIDI feedback · 100 ms polling</p></div></article>
               <article class="settings-card"><div class="settings-icon ai"><svg viewBox="0 0 24 24"><path d="M5 6h14v11H9l-4 3V6Zm4 4h6m-6 3h4"/></svg></div><div><span>AI provider</span><h2>OpenRouter</h2><p>Connected · credential protected by Keychain</p></div><button class="secondary-button">Manage</button></article>
               <article class="settings-card"><div class="settings-icon knowledge"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zm9 0h7v14h-7M7 9h1m8 0h1"/></svg></div><div><span>Knowledge</span><h2>NT reference library</h2><p>API, algorithms, mappings, routing · versioned</p></div><button class="secondary-button">Details</button></article>
             </div>
@@ -449,11 +404,19 @@
         </div>
 
         <div class="toast" id="toast" role="status" aria-live="polite"><span></span></div>
+        <div class="routing-mode-popover hidden" id="routing-mode-popover" role="dialog" aria-modal="false" aria-labelledby="routing-mode-popover-title">
+          <strong id="routing-mode-popover-title">Output mode</strong>
+          <span id="routing-mode-popover-copy">How should this output write?</span>
+          <div>
+            <button type="button" data-routing-mode="add">Add</button>
+            <button type="button" data-routing-mode="replace">Replace</button>
+          </div>
+        </div>
       </div>
     </section>
   </main>
 
-  <script src="web-midi-transport.js?v=20260922-28"></script>
-  <script src="app.js?v=20260922-47"></script>
+  <script src="web-midi-transport.js?v=20260925-40"></script>
+  <script src="app.js?v=20260925-87"></script>
 </body>
 </html>
