@@ -3,6 +3,7 @@
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const routingLogic = window.NTPilotRoutingLogic;
 
   const connectionPill = $("#connection-pill");
   const connectionLabel = $("#connection-label");
@@ -931,8 +932,10 @@
     if (!match) return null;
     const parameterIndex = Number(match[0]);
     const modeParameter = (slot.parameters || []).find(parameter => parameter.index === parameterIndex);
+    const livePort = $$(".routing-port.output", routingNodes).find(element => Number(element.dataset.slotIndex) === selection.slotIndex
+      && Number(element.dataset.parameterIndex) === selection.parameterIndex);
     return {
-      control: selection.element.querySelector(".routing-mode-toggle") || selection.element,
+      control: livePort?.querySelector(".routing-mode-toggle") || livePort || selection.element,
       slotIndex: slot.index,
       parameterIndex,
       currentMode: Number(modeParameter?.value) === 1 ? "replace" : "add"
@@ -973,6 +976,17 @@
     const previousView = preserveView
       ? { left: routingViewport.scrollLeft, top: routingViewport.scrollTop, zoom: state.routingZoom }
       : null;
+    const previousSelection = preserveView && state.routingSelection
+      ? {
+          side: state.routingSelection.side,
+          bus: state.routingSelection.bus,
+          slotIndex: state.routingSelection.slotIndex,
+          parameterIndex: state.routingSelection.parameterIndex,
+          minimum: state.routingSelection.minimum,
+          maximum: state.routingSelection.maximum
+        }
+      : null;
+    const previousBusSelection = preserveView ? state.routingBusSelection : null;
     state.routingSnapshot = snapshot;
     state.routingSelection = null;
     state.routingBusSelection = null;
@@ -1171,6 +1185,25 @@
     routingWires.setAttribute("viewBox", `0 0 ${width} ${height}`);
     routingNodes.replaceChildren();
     nodeDefinitions.forEach(definition => routingNodes.appendChild(makeRoutingNode(definition)));
+    if (previousSelection) {
+      const selectedElement = $$(".routing-port, .routing-node.endpoint", routingNodes).find(element => {
+        const slotIndex = element.dataset.slotIndex === undefined ? null : Number(element.dataset.slotIndex);
+        const parameterIndex = element.dataset.parameterIndex === undefined || element.dataset.parameterIndex === "" ? null : Number(element.dataset.parameterIndex);
+        return element.dataset.routingSide === previousSelection.side
+          && Number(element.dataset.bus) === previousSelection.bus
+          && slotIndex === previousSelection.slotIndex
+          && parameterIndex === previousSelection.parameterIndex;
+      });
+      if (selectedElement) {
+        state.routingSelection = { ...previousSelection, element: selectedElement };
+        selectedElement.classList.add("routing-selected-source");
+        refreshRoutingPaletteAvailability(state.routingSelection);
+      }
+    } else if (previousBusSelection != null) {
+      state.routingBusSelection = previousBusSelection;
+      $$(".routing-aux-chip", routingAuxPalette).forEach(chip => chip.classList.toggle("selected", Number(chip.dataset.bus) === previousBusSelection));
+      $$(".routing-port", routingNodes).forEach(port => port.classList.toggle("bus-match", Number(port.dataset.bus) === previousBusSelection));
+    }
     routingWires.replaceChildren();
     const svgNS = "http://www.w3.org/2000/svg";
     edges.forEach((edge, index) => {
@@ -1221,6 +1254,13 @@
       minimum: Number(port.dataset.minimum ?? 0),
       maximum: Number(port.dataset.maximum ?? 0)
     };
+    if (state.routingBusSelection != null && selection.parameterIndex == null) {
+      state.routingBusSelection = null;
+      $$(".routing-aux-chip", routingAuxPalette).forEach(chip => chip.classList.remove("selected"));
+      $$(".routing-port", routingNodes).forEach(candidate => candidate.classList.remove("bus-match"));
+      showToast("An Aux bus cannot connect directly to a physical socket; choose a writable algorithm port.");
+      return true;
+    }
     if (state.routingBusSelection != null && selection.parameterIndex != null) {
       const bus = state.routingBusSelection;
       state.routingBusSelection = null;
@@ -1250,22 +1290,28 @@
       }
       return true;
     }
+    const directParameter = [source, selection].find(item => item.parameterIndex != null);
+    const directEndpoint = [source, selection].find(item => item.parameterIndex == null && item.bus >= 0);
+    if (directParameter && directEndpoint) {
+      const compatibilityError = routingLogic.endpointCompatibilityError(directParameter, directEndpoint);
+      if (compatibilityError) {
+        showToast(compatibilityError);
+        return true;
+      }
+    }
     const output = [source, selection].find(item => item.side === "output");
     if (output?.parameterIndex != null) {
-      const control = output.element.querySelector(".routing-mode-toggle");
-      openRoutingModePopover(
-        control || output.element,
-        "How should this output write for the new connection?",
-        control?.dataset.mode || "add",
-        async mode => {
-          const details = await resolveRoutingModeDetails(output);
-          if (!details) {
-            showToast("The NT did not report an Add/Replace controller for this output");
-            return;
-          }
-          await finishRoutingConnection(source, selection, { details, mode });
-        }
-      );
+      const details = await resolveRoutingModeDetails(output);
+      if (details) {
+        openRoutingModePopover(
+          details.control,
+          "How should this output write to the selected bus?",
+          details.currentMode,
+          mode => finishRoutingConnection(source, selection, { details, mode })
+        );
+      } else {
+        await finishRoutingConnection(source, selection);
+      }
     } else {
       await finishRoutingConnection(source, selection);
     }
@@ -1299,9 +1345,7 @@
   }
 
   function routingSelectionAcceptsBus(selection, bus) {
-    if (selection?.parameterIndex == null) return true;
-    const value = bus + 1;
-    return value >= selection.minimum && value <= selection.maximum;
+    return routingLogic.selectionAcceptsBus(selection, bus);
   }
 
   function refreshRoutingPaletteAvailability(selection) {
@@ -1339,6 +1383,8 @@
 
     if (endpoints.length) {
       if (parameters.length !== 1) throw new Error("Choose one algorithm port and one physical bus.");
+      const compatibilityError = routingLogic.endpointCompatibilityError(parameters[0], endpoints[0]);
+      if (compatibilityError) throw new Error(compatibilityError);
       await writeRoutingSelection(parameters[0], endpoints[0].bus);
       return;
     }

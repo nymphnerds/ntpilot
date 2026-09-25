@@ -23,6 +23,8 @@
 - Added compact physical I/O banks and conditional USB Audio From/To Host side nodes.
 - Added direct bus assignment without confirmation dialogs.
 - Added visible Add/Replace chips and an anchored Add/Replace choice before supported algorithm-output assignments.
+- Fixed physical-output assignment so outputs with fixed or unavailable mode metadata still connect; editable Add/Replace continues to work on physical and Aux destination busses.
+- Added direction checks for physical I/O and preserved pending port/Aux selections while output-mode metadata finishes loading.
 - Positioned the Add/Replace choice beside the user's latest pointer or touch location for every routing assignment.
 - Hydrated output-mode relationships from firmware `ioFlags` and SysEx `0x55`, with cached associations and verified parameter writes.
 - Corrected physical I/O labels to use numbers only; Aux labels retain the `A` prefix.

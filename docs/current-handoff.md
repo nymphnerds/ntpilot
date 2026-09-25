@@ -75,6 +75,8 @@ The central model is the NT bus universe:
 - Assigning a supported algorithm output to an Aux bus opens the anchored Add/Replace choice before writing.
 - The choice is positioned beside the user's latest pointer or touch location for every routing assignment, with viewport-edge clamping.
 - A route can be created in either interaction order: choose the port then Aux, or Aux then port.
+- Physical outputs accept algorithm outputs in both click orders. Add/Replace applies to the algorithm's bus write regardless of whether the destination bus feeds a physical output or is an Aux bus; fixed-mode outputs connect without requiring a mode controller.
+- Physical input/output direction is validated before writes, and routing selections survive the background `0x55` mode-metadata hydration redraw.
 - Bypass is directly available on routing algorithm blocks and uses an intentionally subtle sleeping treatment.
 
 ## Bus dock and expansion
@@ -114,7 +116,8 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 - `styles.css?v=20260925-174`
 - `web-midi-transport.js?v=20260925-43`
-- `app.js?v=20260925-104`
+- `routing-logic.js?v=20260925-1`
+- `app.js?v=20260925-105`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

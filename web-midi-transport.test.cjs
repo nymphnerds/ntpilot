@@ -2,6 +2,7 @@
 
 const assert = require("node:assert/strict");
 const { NTWebMIDITransport, parseMIDIMessage, parseRoutingPayload, isRoutingBusParameter } = require("./web-midi-transport.js");
+const { selectionAcceptsBus, endpointCompatibilityError } = require("./routing-logic.js");
 
 const header = [0xF0, 0x00, 0x21, 0x27, 0x6D, 0];
 const replies = new Map([
@@ -195,6 +196,14 @@ global.navigator = { requestMIDIAccess: async options => {
   assert.equal(isRoutingBusParameter({ name: "Radio Station:Output path", min: 0, max: 1, ioFlags: 2 }, 64), true);
   assert.equal(isRoutingBusParameter({ name: "Ordinary enum", min: 0, max: 64, ioFlags: 0 }, 64), false);
   assert.equal(NTWebMIDITransport.isRoutingBusParameter({ name: "Gate input", min: 0, max: 64, ioFlags: 1 }, 64), true);
+  const physicalOutput6Bus = 12 + 5;
+  const writableOutput = { side: "output", parameterIndex: 4, minimum: 0, maximum: 64 };
+  const writableInput = { side: "input", parameterIndex: 3, minimum: 0, maximum: 64 };
+  assert.equal(physicalOutput6Bus + 1, 18);
+  assert.equal(selectionAcceptsBus(writableOutput, physicalOutput6Bus), true);
+  assert.equal(endpointCompatibilityError(writableOutput, { side: "sink", bus: physicalOutput6Bus }), null);
+  assert.match(endpointCompatibilityError(writableInput, { side: "sink", bus: physicalOutput6Bus }), /algorithm output/);
+  assert.match(endpointCompatibilityError(writableOutput, { side: "source", bus: 5 }), /algorithm input/);
 
   const events = [];
   const transport = new NTWebMIDITransport({ sysexId: 0, timeoutMs: 100, onEvent: event => events.push(event) });
