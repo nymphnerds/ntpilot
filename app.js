@@ -102,7 +102,8 @@
     smartFeedbackValues: new Map(),
     midiEvents: [],
     midiRenderPending: false,
-    midiCounts: { all: 0, channel: 0, sysex: 0 }
+    midiCounts: { all: 0, channel: 0, sysex: 0 },
+    lastPointerPosition: null
   };
 
   const deviceStates = {
@@ -731,10 +732,13 @@
       button.classList.toggle("current", button.dataset.routingMode === currentMode);
     });
     routingModePopover.classList.remove("hidden");
-    const anchorRect = anchor.getBoundingClientRect();
     const popoverRect = routingModePopover.getBoundingClientRect();
-    const left = Math.min(window.innerWidth - popoverRect.width - 10, Math.max(10, anchorRect.right + 8));
-    const top = Math.min(window.innerHeight - popoverRect.height - 10, Math.max(10, anchorRect.top + (anchorRect.height - popoverRect.height) / 2));
+    const pointer = state.lastPointerPosition;
+    const anchorRect = anchor.getBoundingClientRect();
+    const preferredLeft = pointer ? pointer.x + 14 : anchorRect.right + 8;
+    const preferredTop = pointer ? pointer.y + 14 : anchorRect.top + (anchorRect.height - popoverRect.height) / 2;
+    const left = Math.min(window.innerWidth - popoverRect.width - 10, Math.max(10, preferredLeft));
+    const top = Math.min(window.innerHeight - popoverRect.height - 10, Math.max(10, preferredTop));
     routingModePopover.style.left = `${left}px`;
     routingModePopover.style.top = `${top}px`;
   }
@@ -1216,8 +1220,9 @@
     const assigningOutputToAux = selection.side === "output" && bus >= 0 && routingBusKind(bus, state.routingSnapshot) === "aux";
     if (!modeChoice && assigningOutputToAux) {
       const control = selection.element.querySelector(".routing-mode-toggle");
+      const busChip = $(`.routing-aux-chip[data-bus="${bus}"]`, routingAuxPalette);
       openRoutingModePopover(
-        control || selection.element,
+        busChip || control || selection.element,
         `How should this output write to ${routingBusLabel(bus, state.routingSnapshot)}?`,
         control?.dataset.mode || "add",
         async mode => {
@@ -2101,6 +2106,7 @@
     }
   });
   document.addEventListener("pointerdown", event => {
+    state.lastPointerPosition = { x: event.clientX, y: event.clientY };
     if (routingModePopover.classList.contains("hidden")) return;
     if (routingModePopover.contains(event.target) || event.target.closest(".routing-mode-toggle")) return;
     closeRoutingModePopover();

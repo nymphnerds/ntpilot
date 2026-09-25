@@ -50,6 +50,7 @@ The central model is the NT bus universe:
 - Side stacks are centred against the total central algorithm list.
 - Add/Replace chips are always visible on output rows. Editable chips are backed by a real NT mode-controller parameter; fixed or unresolved chips are read-only.
 - Assigning a supported algorithm output to an Aux bus opens the anchored Add/Replace choice before writing.
+- The choice is positioned beside the user's latest pointer or touch location for every routing assignment, with viewport-edge clamping.
 
 ## Add/Replace architecture
 
@@ -79,7 +80,7 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 - `styles.css?v=20260925-62`
 - `web-midi-transport.js?v=20260925-40`
-- `app.js?v=20260925-87`
+- `app.js?v=20260925-88`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
