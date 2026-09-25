@@ -1,0 +1,627 @@
+(() => {
+  "use strict";
+
+  const PRODUCT_HEADER = [0xF0, 0x00, 0x21, 0x27, 0x6D];
+
+  function bytesMatch(bytes, expected, offset = 0) {
+    return expected.every((value, index) => bytes[offset + index] === value);
+  }
+
+  function decodeText(bytes) {
+    const zero = bytes.indexOf(0);
+    const end = zero >= 0 ? zero : bytes.length;
+    return String.fromCharCode(...bytes.slice(0, end));
+  }
+
+  function decodeUnsigned21(bytes) {
+    return (bytes[0] << 14) | (bytes[1] << 7) | bytes[2];
+  }
+
+  function decodeSignedShort(bytes) {
+    const value = decodeUnsigned21(bytes);
+    return (value << 16) >> 16;
+  }
+
+  function encodeUnsigned21(value) {
+    return [(value >> 14) & 0x7F, (value >> 7) & 0x7F, value & 0x7F];
+  }
+
+  function guidKey(bytes) {
+    return bytes.map(value => value.toString(16).padStart(2, "0")).join("");
+  }
+
+  function decodeRoutingMask(bytes) {
+    return bytes.reduce(
+      (value, byte, index) => value | (BigInt(byte & 0x7F) << BigInt(index * 7)),
+      0n
+    );
+  }
+
+  function parseRoutingPayload(payload) {
+    const slot = payload[0];
+    const wide = payload.length > 31;
+    const bytesPerMask = wide ? 10 : 5;
+    const expectedLength = 1 + (6 * bytesPerMask);
+    if (payload.length < expectedLength) throw new Error("NT returned incomplete routing information.");
+    const masks = [];
+    let offset = 1;
+    for (let index = 0; index < 6; index += 1) {
+      let mask = decodeRoutingMask(payload.slice(offset, offset + bytesPerMask));
+      if (!wide) mask >>= 1n;
+      masks.push(mask);
+      offset += bytesPerMask;
+    }
+    return {
+      slot,
+      format: wide ? "wide" : "legacy",
+      inputMask: masks[0],
+      outputMask: masks[1],
+      replaceMask: masks[2],
+      mappingInputMask: masks[5],
+      masks
+    };
+  }
+
+  const MIDI_MAPPING_TYPES = [
+    "CC",
+    "Note — momentary",
+    "Note — toggle",
+    "14-bit CC — low",
+    "14-bit CC — high",
+    "Pitch bend",
+    "Channel pressure"
+  ];
+
+  function parseParameterPages(payload) {
+    const data = payload.slice(1);
+    const pageCount = data[0] ?? 0;
+    const pages = [];
+    let offset = 1;
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+      const nameEnd = data.indexOf(0, offset);
+      if (nameEnd < 0 || nameEnd - offset > 32) throw new Error("NT returned malformed parameter pages.");
+      const name = decodeText(data.slice(offset, nameEnd));
+      offset = nameEnd + 1;
+      const parameterCount = data[offset++] ?? 0;
+      const parameterIndices = [];
+      for (let index = 0; index < parameterCount; index += 1) {
+        if (offset + 1 >= data.length) throw new Error("NT returned incomplete parameter pages.");
+        parameterIndices.push((data[offset] << 7) | data[offset + 1]);
+        offset += 2;
+      }
+      pages.push({ index: pageIndex, name: name || `Page ${pageIndex + 1}`, parameterIndices });
+    }
+    return pages;
+  }
+
+  function parseMappingPayload(payload) {
+    const data = payload.slice(1);
+    if (data.length < 4) throw new Error("NT returned an incomplete mapping.");
+    const parameterIndex = decodeUnsigned21(data.slice(0, 3));
+    const version = data[3];
+    if (version < 1 || version > 7) throw new Error(`NT returned unsupported mapping version ${version}.`);
+    let offset = 4;
+    const cvSource = version >= 4 ? data[offset++] : null;
+    const cvInput = data[offset++] ?? 0;
+    const cvFlags = data[offset++] ?? 0;
+    const cvVolts = data[offset++] ?? 0;
+    const cvDelta = decodeSignedShort(data.slice(offset, offset + 3));
+    offset += 3;
+
+    const cc = data[offset++] ?? 0;
+    const midiFlags = data[offset++] ?? 0;
+    const midiFlags2 = version >= 2 ? (data[offset++] ?? 0) : 0;
+    const min = decodeSignedShort(data.slice(offset, offset + 3));
+    offset += 3;
+    const max = decodeSignedShort(data.slice(offset, offset + 3));
+    const typeCode = midiFlags2 >> 2;
+    return {
+      parameterIndex,
+      version,
+      cv: {
+        source: cvSource,
+        input: cvInput,
+        enabled: Boolean(cvFlags & 1),
+        symmetric: Boolean(cvFlags & 2),
+        volts: cvVolts,
+        delta: cvDelta
+      },
+      midi: {
+        cc,
+        channel: ((midiFlags >> 3) & 0x0F) + 1,
+        typeCode,
+        type: MIDI_MAPPING_TYPES[typeCode] || `Type ${typeCode}`,
+        enabled: Boolean(midiFlags & 1),
+        symmetric: Boolean(midiFlags & 2),
+        relative: Boolean(midiFlags2 & 1),
+        viewChange: Boolean(midiFlags2 & 2),
+        min,
+        max
+      },
+      raw: data
+    };
+  }
+
+  function parseMIDIMessage(bytes) {
+    const status = bytes[0] ?? 0;
+    const hex = bytes.map(value => value.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+    if (status === 0xF0) {
+      const isNT = bytesMatch(bytes, PRODUCT_HEADER);
+      const command = isNT && bytes.length > 6 ? bytes[6] : null;
+      return {
+        kind: "sysex",
+        subtype: isNT ? "nt-sysex" : "sysex",
+        label: command == null
+          ? `SysEx · ${bytes.length} bytes`
+          : `NT SysEx 0x${command.toString(16).padStart(2, "0").toUpperCase()} · ${bytes.length} bytes`,
+        channel: null,
+        hex
+      };
+    }
+
+    if (status >= 0x80 && status <= 0xEF) {
+      const channel = (status & 0x0F) + 1;
+      const type = status & 0xF0;
+      const data1 = bytes[1] ?? 0;
+      const data2 = bytes[2] ?? 0;
+      if (type === 0xB0) {
+        return { kind: "channel", subtype: "cc", label: `Ch ${channel} · CC ${data1} · value ${data2}`, channel, controller: data1, value: data2, hex };
+      }
+      if (type === 0x90 && data2 > 0) {
+        return { kind: "channel", subtype: "note-on", label: `Ch ${channel} · Note on ${data1} · velocity ${data2}`, channel, note: data1, value: data2, hex };
+      }
+      if (type === 0x80 || (type === 0x90 && data2 === 0)) {
+        return { kind: "channel", subtype: "note-off", label: `Ch ${channel} · Note off ${data1} · velocity ${data2}`, channel, note: data1, value: data2, hex };
+      }
+      if (type === 0xE0) {
+        const value = data1 | (data2 << 7);
+        return { kind: "channel", subtype: "pitch-bend", label: `Ch ${channel} · Pitch bend ${value - 8192}`, channel, value, hex };
+      }
+      if (type === 0xD0) {
+        return { kind: "channel", subtype: "channel-pressure", label: `Ch ${channel} · Channel pressure ${data1}`, channel, value: data1, hex };
+      }
+      if (type === 0xA0) {
+        return { kind: "channel", subtype: "poly-pressure", label: `Ch ${channel} · Poly pressure ${data1} · value ${data2}`, channel, note: data1, value: data2, hex };
+      }
+      if (type === 0xC0) {
+        return { kind: "channel", subtype: "program-change", label: `Ch ${channel} · Program ${data1}`, channel, value: data1, hex };
+      }
+      return { kind: "channel", subtype: "other-channel", label: `Ch ${channel} · MIDI 0x${type.toString(16).toUpperCase()}`, channel, hex };
+    }
+
+    const realtimeNames = {
+      0xF8: "Timing clock",
+      0xFA: "Start",
+      0xFB: "Continue",
+      0xFC: "Stop",
+      0xFE: "Active sensing",
+      0xFF: "System reset"
+    };
+    return {
+      kind: "system",
+      subtype: "system",
+      label: realtimeNames[status] || `System MIDI 0x${status.toString(16).padStart(2, "0").toUpperCase()}`,
+      channel: null,
+      hex
+    };
+  }
+
+  function isRoutingBusParameter(parameter, totalBusCount) {
+    const minimumBusRange = Math.min(totalBusCount, 28);
+    return Boolean(parameter.ioFlags & 0x03)
+      && parameter.min >= 0
+      && parameter.max >= minimumBusRange;
+  }
+
+  class NTWebMIDITransport {
+    constructor({ sysexId = 0, timeoutMs = 1800, onEvent = () => {} } = {}) {
+      this.sysexId = Number(sysexId);
+      this.timeoutMs = timeoutMs;
+      this.onEvent = onEvent;
+      this.access = null;
+      this.input = null;
+      this.output = null;
+      this.pending = null;
+      this.handleMessage = this.handleMessage.bind(this);
+      this.handleStateChange = this.handleStateChange.bind(this);
+    }
+
+    static isSupported() {
+      return typeof navigator !== "undefined" && typeof navigator.requestMIDIAccess === "function";
+    }
+
+    static choosePort(ports, direction) {
+      const candidates = [];
+      if (ports && typeof ports.forEach === "function") {
+        ports.forEach(port => candidates.push(port));
+      } else if (ports && typeof ports.values === "function") {
+        const iterator = ports.values();
+        let next = iterator.next();
+        while (!next.done) {
+          candidates.push(next.value);
+          next = iterator.next();
+        }
+      } else if (ports && typeof ports === "object") {
+        Object.keys(ports).forEach(key => candidates.push(ports[key]));
+      }
+      const preferredSuffix = direction === "input" ? "midi in" : "midi out";
+      return candidates.find(port => port.name?.toLowerCase() === `disting nt ${preferredSuffix}`) ||
+        candidates.find(port => {
+          const name = port.name?.toLowerCase() || "";
+          return name.includes("disting nt") && name.includes(preferredSuffix);
+        }) ||
+        candidates.find(port => port.name?.toLowerCase().includes("disting nt")) ||
+        (candidates.length === 1 ? candidates[0] : null) ||
+        null;
+    }
+
+    async connect() {
+      if (!NTWebMIDITransport.isSupported()) {
+        throw new Error("This browser does not expose Web MIDI. Use desktop Chrome or Edge.");
+      }
+      this.access = await navigator.requestMIDIAccess({ sysex: true });
+      this.access.onstatechange = this.handleStateChange;
+      this.selectPorts();
+      if (!this.input || !this.output) {
+        throw new Error("The disting NT MIDI input/output pair was not found.");
+      }
+      this.input.onmidimessage = this.handleMessage;
+      this.onEvent({ type: "connected", input: this.input.name, output: this.output.name });
+      return { input: this.input.name, output: this.output.name };
+    }
+
+    selectPorts() {
+      if (!this.access) return;
+      if (this.input) this.input.onmidimessage = null;
+      this.input = NTWebMIDITransport.choosePort(this.access.inputs, "input");
+      this.output = NTWebMIDITransport.choosePort(this.access.outputs, "output");
+      if (this.input) this.input.onmidimessage = this.handleMessage;
+    }
+
+    handleStateChange() {
+      const previousInput = this.input?.id;
+      const previousOutput = this.output?.id;
+      this.selectPorts();
+      if (!this.input || !this.output) {
+        this.rejectPending(new Error("The disting NT MIDI endpoint disconnected."));
+        this.onEvent({ type: "disconnected" });
+      } else if (this.input.id !== previousInput || this.output.id !== previousOutput) {
+        this.onEvent({ type: "ports-changed", input: this.input.name, output: this.output.name });
+      }
+    }
+
+    handleMessage(message) {
+      const bytes = [...message.data];
+      this.onEvent({
+        type: "midi-message",
+        message: parseMIDIMessage(bytes),
+        bytes,
+        receivedTime: message.receivedTime ?? null,
+        wallTime: Date.now()
+      });
+      const header = [...PRODUCT_HEADER, this.sysexId];
+      if (bytes.length < 8 || !bytesMatch(bytes, header) || bytes[bytes.length - 1] !== 0xF7) return;
+      this.onEvent({ type: "received", command: bytes[6], byteLength: bytes.length });
+      if (!this.pending || bytes[6] !== this.pending.responseCommand) return;
+      if (this.pending.match && !this.pending.match(bytes)) return;
+      const pending = this.pending;
+      this.pending = null;
+      clearTimeout(pending.timer);
+      pending.resolve(bytes.slice(7, -1));
+    }
+
+    request(requestCommand, responseCommand, payload = [], match = null, timeoutMs = this.timeoutMs) {
+      if (!this.output) return Promise.reject(new Error("No disting NT MIDI output is selected."));
+      if (this.pending) return Promise.reject(new Error("A read request is already active."));
+      const bytes = [...PRODUCT_HEADER, this.sysexId, requestCommand, ...payload, 0xF7];
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          this.pending = null;
+          reject(new Error(`Timed out waiting for NT response 0x${responseCommand.toString(16)}.`));
+        }, timeoutMs);
+        this.pending = { responseCommand, match, resolve, reject, timer };
+        this.output.send(bytes);
+        this.onEvent({ type: "sent", command: requestCommand, byteLength: bytes.length });
+      });
+    }
+
+    send(command, payload = []) {
+      if (!this.output) throw new Error("No disting NT MIDI output is selected.");
+      if (this.pending) throw new Error("A read request is already active.");
+      const bytes = [...PRODUCT_HEADER, this.sysexId, command, ...payload, 0xF7];
+      this.output.send(bytes);
+      this.onEvent({ type: "sent", command, byteLength: bytes.length });
+    }
+
+    async readIdentity() {
+      const versionBytes = await this.request(0x22, 0x32);
+      const presetBytes = await this.request(0x41, 0x41);
+      const slotBytes = await this.request(0x60, 0x60);
+      return {
+        version: decodeText(versionBytes),
+        presetName: decodeText(presetBytes.slice(0, 21)),
+        slotCount: slotBytes[0],
+        inputBusCount: slotBytes[1] ?? 12,
+        outputBusCount: slotBytes[2] ?? 8,
+        auxBusCount: slotBytes[3] ?? 44,
+        inputName: this.input.name,
+        outputName: this.output.name,
+        sysexId: this.sysexId
+      };
+    }
+
+    async readAlgorithmCatalog() {
+      const countBytes = await this.request(0x30, 0x30);
+      const count = decodeUnsigned21(countBytes.slice(0, 3));
+      if (count < 1 || count > 512) throw new Error(`NT returned an invalid algorithm count (${count}).`);
+      const algorithms = [];
+      for (let index = 0; index < count; index += 1) {
+        const encodedIndex = encodeUnsigned21(index);
+        const payload = await this.request(
+          0x31,
+          0x31,
+          encodedIndex,
+          bytes => decodeUnsigned21(bytes.slice(7, 10)) === index
+        );
+        const responseIndex = decodeUnsigned21(payload.slice(0, 3));
+        const guid = payload.slice(3, 7);
+        const numSpecs = payload[7];
+        let cursor = 8 + (numSpecs * 10);
+        const names = [];
+        for (let nameIndex = 0; nameIndex < 1 + numSpecs; nameIndex += 1) {
+          const start = cursor;
+          let length = 0;
+          while (cursor < payload.length && length < 32 && payload[cursor] !== 0) {
+            cursor += 1;
+            length += 1;
+          }
+          names.push(decodeText(payload.slice(start, cursor)));
+          if (payload[cursor] === 0) cursor += 1;
+        }
+        const isPlugin = Boolean(payload[cursor++] ?? 0);
+        const isLoaded = Boolean(payload[cursor++] ?? 0);
+        const filename = decodeText(payload.slice(cursor, cursor + 256));
+        const filenameLeaf = filename.split(/[\\/]/).pop() || "";
+        const pluginName = filenameLeaf.replace(/\.(lua|3pot|o)$/i, "");
+        const factoryName = names[0] || "Unknown algorithm";
+        algorithms.push({
+          index: responseIndex,
+          guid,
+          guidKey: guidKey(guid),
+          name: isPlugin && pluginName ? pluginName : factoryName,
+          factoryName,
+          isPlugin,
+          isLoaded,
+          filename
+        });
+      }
+      return algorithms;
+    }
+
+    async readSlots(slotCount, algorithms) {
+      if (slotCount < 0 || slotCount > 32) throw new Error(`NT returned an invalid slot count (${slotCount}).`);
+      const algorithmsByGuid = new Map(algorithms.map(algorithm => [algorithm.guidKey, algorithm]));
+      const slots = [];
+      for (let slot = 0; slot < slotCount; slot += 1) {
+        const payload = await this.request(0x40, 0x40, [slot], bytes => bytes[7] === slot);
+        const guid = payload.slice(1, 5);
+        const algorithm = algorithmsByGuid.get(guidKey(guid));
+        slots.push({
+          index: slot,
+          guid,
+          guidKey: guidKey(guid),
+          name: decodeText(payload.slice(5, 29)) || `Slot ${slot + 1}`,
+          algorithmName: algorithm?.name || `Unknown · ${guidKey(guid)}`,
+          algorithmFactoryName: algorithm?.factoryName || null,
+          isPlugin: Boolean(algorithm?.isPlugin),
+          pluginFilename: algorithm?.filename || null
+        });
+      }
+      return slots;
+    }
+
+    async readSlotParameters(slot) {
+      const countPayload = await this.request(
+        0x42,
+        0x42,
+        [slot],
+        bytes => bytes[7] === slot
+      );
+      const count = decodeSignedShort(countPayload.slice(1, 4));
+      if (count < 0 || count >= 256) {
+        throw new Error(`NT returned an invalid parameter count (${count}) for slot ${slot + 1}.`);
+      }
+
+      const parameters = [];
+      for (let parameter = 0; parameter < count; parameter += 1) {
+        const encodedParameter = encodeUnsigned21(parameter);
+        const payload = await this.request(
+          0x43,
+          0x43,
+          [slot, ...encodedParameter],
+          bytes => bytes[7] === slot && decodeUnsigned21(bytes.slice(8, 11)) === parameter
+        );
+        const info = payload.slice(1);
+        let nameLength = 0;
+        while (nameLength < 24 && info[13 + nameLength] !== 0) nameLength += 1;
+        const name = decodeText(info.slice(13, 13 + nameLength));
+        const metadataOffset = 13 + Math.min(nameLength + 1, 24);
+        const metadata = info[metadataOffset] ?? 0;
+        parameters.push({
+          index: decodeUnsigned21(info.slice(0, 3)),
+          name,
+          min: decodeSignedShort(info.slice(3, 6)),
+          max: decodeSignedShort(info.slice(6, 9)),
+          defaultValue: decodeSignedShort(info.slice(9, 12)),
+          unit: info[12],
+          scaling: 10 ** (metadata & 0x03),
+          ioFlags: (metadata >> 2) & 0x0F
+        });
+      }
+
+      const values = await this.readSlotParameterValues(slot);
+      parameters.forEach((parameter, index) => {
+        parameter.value = values[index] ?? parameter.defaultValue;
+      });
+      return parameters;
+    }
+
+    async readSlotParameterValues(slot) {
+      const valuesPayload = await this.request(
+        0x44,
+        0x44,
+        [slot],
+        bytes => bytes[7] === slot
+      );
+      const valueBytes = valuesPayload.slice(1);
+      const values = [];
+      for (let offset = 0; offset + 3 <= valueBytes.length; offset += 3) {
+        values.push(decodeSignedShort(valueBytes.slice(offset, offset + 3)));
+      }
+      return values;
+    }
+
+    async writeParameter(slot, parameter, value) {
+      const encodedParameter = encodeUnsigned21(parameter);
+      const encodedValue = encodeUnsigned21(value);
+      this.send(0x46, [slot, ...encodedParameter, ...encodedValue]);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      const payload = await this.request(
+        0x45,
+        0x45,
+        [slot, ...encodedParameter],
+        bytes => bytes[7] === slot && decodeUnsigned21(bytes.slice(8, 11)) === parameter
+      );
+      const readParameter = decodeUnsigned21(payload.slice(1, 4));
+      const readValue = decodeSignedShort(payload.slice(4, 7));
+      if (readParameter !== parameter || readValue !== value) throw new Error(`NT routing readback did not match (expected bus ${value}, received ${readValue}).`);
+      return value;
+    }
+
+    async readParameterPages(slot) {
+      const payload = await this.request(0x52, 0x52, [slot], bytes => bytes[7] === slot);
+      return parseParameterPages(payload);
+    }
+
+    async readParameterMapping(slot, parameter) {
+      const encodedParameter = encodeUnsigned21(parameter);
+      const payload = await this.request(
+        0x4B,
+        0x4B,
+        [slot, ...encodedParameter],
+        bytes => bytes[7] === slot && decodeUnsigned21(bytes.slice(8, 11)) === parameter
+      );
+      return parseMappingPayload(payload);
+    }
+
+    async readOutputModeUsage(slot, parameter) {
+      const encodedParameter = encodeUnsigned21(parameter);
+      const payload = await this.request(
+        0x55,
+        0x55,
+        [slot, ...encodedParameter],
+        bytes => bytes[7] === slot && decodeUnsigned21(bytes.slice(8, 11)) === parameter,
+        450
+      );
+      const modeParameter = decodeUnsigned21(payload.slice(1, 4));
+      const count = payload[4] ?? 0;
+      const outputs = [];
+      for (let index = 0; index < count; index += 1) {
+        const offset = 5 + index * 3;
+        outputs.push(decodeUnsigned21(payload.slice(offset, offset + 3)));
+      }
+      return { parameterIndex: modeParameter, outputParameterIndices: outputs };
+    }
+
+    async readSlotEditorState(slot) {
+      const parameters = await this.readSlotParameters(slot);
+      const pages = await this.readParameterPages(slot);
+      const mappings = [];
+      for (const parameter of parameters) {
+        mappings.push(await this.readParameterMapping(slot, parameter.index));
+      }
+      const mappingsByParameter = new Map(mappings.map(mapping => [mapping.parameterIndex, mapping]));
+      parameters.forEach(parameter => {
+        parameter.mapping = mappingsByParameter.get(parameter.index) || null;
+      });
+      return { parameters, pages, mappings };
+    }
+
+    async readSlotRouting(slot) {
+      const payload = await this.request(0x61, 0x61, [slot], bytes => bytes[7] === slot);
+      return parseRoutingPayload(payload);
+    }
+
+    async readRoutingSnapshot(identity) {
+      if (!identity?.slots) throw new Error("Read the NT preset identity before routing.");
+      const slots = [];
+      let outputModeDiscoveryAvailable = true;
+      const totalBusCount = identity.inputBusCount + identity.outputBusCount + identity.auxBusCount;
+      for (const slot of identity.slots) {
+        const routing = await this.readSlotRouting(slot.index);
+        const parameters = await this.readSlotParameters(slot.index);
+        const ioParameters = parameters.filter(parameter => isRoutingBusParameter(parameter, totalBusCount));
+        const outputModeMap = {};
+        const outputModeParameters = parameters.filter(parameter => parameter.ioFlags & 0x08);
+        for (const parameter of outputModeDiscoveryAvailable ? outputModeParameters : []) {
+          try {
+            const usage = await this.readOutputModeUsage(slot.index, parameter.index);
+            outputModeMap[usage.parameterIndex] = usage.outputParameterIndices;
+          } catch (error) {
+            outputModeDiscoveryAvailable = false;
+            this.onEvent({ type: "warning", command: 0x55, message: `Output-mode discovery unavailable for slot ${slot.index + 1}: ${error.message}` });
+            break;
+          }
+        }
+        slots.push({ ...slot, routing, parameters, ioParameters, outputModeMap });
+      }
+      return {
+        presetName: identity.presetName,
+        inputBusCount: identity.inputBusCount,
+        outputBusCount: identity.outputBusCount,
+        auxBusCount: identity.auxBusCount,
+        slots
+      };
+    }
+
+    async readSnapshot() {
+      const identity = await this.readIdentity();
+      const algorithms = await this.readAlgorithmCatalog();
+      const slots = await this.readSlots(identity.slotCount, algorithms);
+      return { ...identity, algorithms, slots };
+    }
+
+    rejectPending(error) {
+      if (!this.pending) return;
+      clearTimeout(this.pending.timer);
+      this.pending.reject(error);
+      this.pending = null;
+    }
+
+    disconnect() {
+      this.rejectPending(new Error("Transport closed."));
+      if (this.input) this.input.onmidimessage = null;
+      if (this.access) this.access.onstatechange = null;
+      this.input = null;
+      this.output = null;
+      this.access = null;
+    }
+  }
+
+  if (typeof window !== "undefined") window.NTWebMIDITransport = NTWebMIDITransport;
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      NTWebMIDITransport,
+      decodeText,
+      decodeUnsigned21,
+      decodeSignedShort,
+      encodeUnsigned21,
+      guidKey,
+      parseRoutingPayload,
+      parseParameterPages,
+      parseMappingPayload,
+      parseMIDIMessage,
+      isRoutingBusParameter
+    };
+  }
+})();

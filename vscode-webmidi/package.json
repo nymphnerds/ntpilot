@@ -1,0 +1,17 @@
+{
+  "name": "ntpilot-vscode-webmidi",
+  "displayName": "NTPilot",
+  "publisher": "nymphnerds",
+  "description": "NTPilot with a local Windows Web MIDI bridge.",
+  "version": "0.1.2",
+  "private": true,
+  "engines": { "vscode": "^1.105.0" },
+  "extensionKind": ["ui"],
+  "main": "extension.js",
+  "scripts": { "sync-ui": "node scripts/sync-ui.js" },
+  "activationEvents": ["onCommand:ntpilot.open"],
+  "contributes": {
+    "commands": [{ "command": "ntpilot.open", "title": "NTPilot: Open" }]
+  },
+  "dependencies": { "jazz-midi-vscode": "1.0.7" }
+}
