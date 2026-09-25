@@ -1733,7 +1733,7 @@
       card.className = `control-card performance-control ${["accent-mint", "accent-yellow", "accent-lilac", "accent-blue"][index]}`;
       card.dataset.key = mappingKey(entry.slotInfo.index, entry.parameter.index);
       const performanceHue = (entry.parameter.index * 47 + entry.slotInfo.index * 23 + 188) % 360;
-      card.style.setProperty("--slider-start", `hsl(${performanceHue}, 76%, 72%)`);
+      card.style.setProperty("--slider-start", `hsla(${performanceHue}, 68%, 48%, .12)`);
       card.style.setProperty("--slider-colour", `hsl(${performanceHue}, 68%, 48%)`);
       const head = document.createElement("div");
       head.className = "control-card-head";
@@ -1808,7 +1808,7 @@
       row.style.setProperty("--parameter-tint", `hsla(${parameterHue}, 72%, 58%, .018)`);
       row.style.setProperty("--parameter-tint-hover", `hsla(${parameterHue}, 72%, 58%, .05)`);
       row.style.setProperty("--parameter-accent", `hsla(${parameterHue}, 68%, 48%, .46)`);
-      row.style.setProperty("--slider-start", `hsl(${parameterHue}, 76%, 72%)`);
+      row.style.setProperty("--slider-start", `hsla(${parameterHue}, 68%, 48%, .12)`);
       row.style.setProperty("--slider-colour", `hsl(${parameterHue}, 68%, 48%)`);
 
       const name = document.createElement("div");
