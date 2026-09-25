@@ -34,6 +34,8 @@
   const mappingEmptyCard = $("#mapping-empty-card");
   const connectMIDI = $("#connect-midi");
   const savePreset = $("#save-preset");
+  const undoEdit = $("#undo-edit");
+  const redoEdit = $("#redo-edit");
   const workingState = $("#working-state");
   const syncModeControl = $("#sync-mode");
   const syncModeLabel = $("#sync-mode-label");
@@ -60,7 +62,11 @@
   const editorAuxBusRow = $("#editor-aux-bus-row");
   const editorInputBusRow = $("#editor-input-bus-row");
   const editorOutputBusRow = $("#editor-output-bus-row");
+  const editorExpanderRows = $("#editor-expander-rows");
   const viewStack = $(".view-stack");
+  const referenceGuide = $("#reference-guide");
+  const guideSearch = $("#guide-search");
+  const guideResultCount = $("#guide-result-count");
 
   const state = {
     ntTransport: null,
@@ -104,11 +110,29 @@
     performanceItems: [],
     performanceEntries: new Map(),
     performanceReadPromise: null,
+    undoHistory: [],
+    redoHistory: [],
+    historyBusy: false,
+    cpuTimer: null,
     midiEvents: [],
     midiRenderPending: false,
     midiCounts: { all: 0, channel: 0, sysex: 0 },
     lastPointerPosition: null
   };
+
+  function updateHistoryControls() {
+    undoEdit.disabled = state.historyBusy || !state.transportOnline || state.undoHistory.length === 0;
+    redoEdit.disabled = state.historyBusy || !state.transportOnline || state.redoHistory.length === 0;
+    undoEdit.title = state.undoHistory.length ? `Undo ${state.undoHistory.at(-1).label} (Ctrl/Cmd+Z)` : "Nothing to undo";
+    redoEdit.title = state.redoHistory.length ? `Redo ${state.redoHistory.at(-1).label} (Ctrl/Cmd+Shift+Z)` : "Nothing to redo";
+  }
+
+  function recordHistory(action) {
+    state.undoHistory.push(action);
+    if (state.undoHistory.length > 50) state.undoHistory.shift();
+    state.redoHistory.length = 0;
+    updateHistoryControls();
+  }
 
   const deviceStates = {
     ready: {
@@ -393,6 +417,34 @@
     return state.pollInFlight;
   }
 
+  function stopCpuPolling() {
+    clearTimeout(state.cpuTimer);
+    state.cpuTimer = null;
+  }
+
+  function startCpuPolling() {
+    stopCpuPolling();
+    const cpuLabel = $("#editor-cpu-usage");
+    const poll = async () => {
+      if (!state.ntTransport || !state.transportOnline || document.hidden) return;
+      if (state.pollInFlight || state.routingReadPromise || state.performanceReadPromise) {
+        state.cpuTimer = setTimeout(poll, 2000);
+        return;
+      }
+      try {
+        const usage = await state.ntTransport.readCpuUsage();
+        cpuLabel.textContent = `Audio ${usage.audioThread}% · Overall ${usage.overall}%`;
+        cpuLabel.title = `Audio thread ${usage.audioThread}% · Overall CPU ${usage.overall}%`;
+        cpuLabel.classList.toggle("high", usage.audioThread >= 85 || usage.overall >= 85);
+      } catch (_) {
+        // Other live reads have priority on the NT's single-request transport.
+      } finally {
+        if (state.ntTransport && state.transportOnline) state.cpuTimer = setTimeout(poll, 1000);
+      }
+    };
+    state.cpuTimer = setTimeout(poll, 500);
+  }
+
   function pollingDelay() {
     if (state.syncMode === "fast") return 100;
     if (state.syncMode === "smart") return 250;
@@ -467,6 +519,17 @@
   function routingAuxColour(bus, snapshot) {
     const auxIndex = bus - snapshot.inputBusCount - snapshot.outputBusCount;
     return `hsl(${Math.round((auxIndex * 360) / snapshot.auxBusCount)} 78% 48%)`;
+  }
+
+  function applyPilotAccentFromAux(bus, identity = state.routingSnapshot || state.liveIdentity) {
+    if (!identity || routingBusKind(bus, identity) !== "aux") return;
+    const auxIndex = bus - identity.inputBusCount - identity.outputBusCount;
+    const hue = Math.round((auxIndex * 360) / identity.auxBusCount);
+    const root = document.documentElement.style;
+    root.setProperty("--pilot", `hsl(${hue} 78% 48%)`);
+    root.setProperty("--pilot-deep", `hsl(${hue} 65% 31%)`);
+    root.setProperty("--pilot-soft", `hsl(${hue} 48% 92%)`);
+    root.setProperty("--mint-deep", `hsl(${hue} 65% 31%)`);
   }
 
   function editorBusDescriptor(value, identity = state.liveIdentity) {
@@ -561,8 +624,77 @@
       return createEditorDockBusChip(bus + 1, `A${index + 1}`, "aux", bus);
     });
     editorInputBusRow.replaceChildren(...inputs);
-    editorOutputBusRow.replaceChildren(...outputs);
+    const nativeOutputs = outputs.slice(0, 8);
+    const expansionOutputs = outputs.slice(8);
+    const actualBankCount = Math.ceil(expansionOutputs.length / 8);
+    const totalBankCount = Math.max(1, actualBankCount + (expansionOutputs.length > 0 && expansionOutputs.length % 8 === 0 ? 1 : 0));
+    const makeExpanderBank = bankIndex => {
+      const actual = expansionOutputs.slice(bankIndex * 8, (bankIndex + 1) * 8);
+      const chips = [...actual];
+      actual.forEach((chip, index) => {
+        chip.classList.add("ntx-output");
+        chip.removeAttribute("title");
+        chip.dataset.expanderHelp = `NTX-8CV ${bankIndex + 1}, output ${index + 1}. Each module adds 8 outputs: NTX 1 is 9–16, NTX 2 is 17–24, and so on. Banks stay on the current row until full, then wrap. Maximum: 8 modules, 64 extra outputs.`;
+      });
+      for (let index = actual.length; index < 8; index += 1) {
+        const outputNumber = 9 + bankIndex * 8 + index;
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "editor-bus-chip output ntx-placeholder";
+        chip.textContent = String(outputNumber);
+        chip.dataset.expanderHelp = `NTX-8CV ${bankIndex + 1} preview, output ${index + 1}. Each module adds 8 outputs: NTX 1 is 9–16, NTX 2 is 17–24, and so on. Banks stay on the current row until full, then wrap. Maximum: 8 modules, 64 extra outputs.`;
+        chip.setAttribute("aria-label", `NTX-8CV placeholder · Output ${outputNumber}`);
+        chip.setAttribute("aria-disabled", "true");
+        chip.tabIndex = -1;
+        chips.push(chip);
+      }
+      return chips;
+    };
+    const firstExpanderBank = makeExpanderBank(0);
+    editorOutputBusRow.replaceChildren(...nativeOutputs, ...firstExpanderBank);
     editorAuxBusRow.replaceChildren(...auxes);
+    const firstRowOutputs = [...nativeOutputs, ...firstExpanderBank];
+    const gridColumns = Math.max(1, identity.auxBusCount, identity.inputBusCount + firstRowOutputs.length + 11);
+    editorAuxBusRow.style.setProperty("--bus-grid-columns", String(gridColumns));
+    const physicalStrip = $(".editor-physical-bus-strip");
+    physicalStrip.style.setProperty("--bus-grid-columns", String(gridColumns));
+    const inputLabel = $(".editor-bus-group-label.input", physicalStrip);
+    const outputLabel = $(".editor-bus-group-label.output", physicalStrip);
+    const none = $(".editor-bus-none", physicalStrip);
+    inputLabel.style.gridColumn = `${identity.inputBusCount + 1} / span 3`;
+    const outputStart = identity.inputBusCount + 4;
+    inputs.forEach((chip, index) => {
+      chip.style.gridColumn = String(index + 1);
+      chip.style.gridRow = "1";
+    });
+    firstRowOutputs.forEach((chip, index) => {
+      chip.style.gridColumn = String(outputStart + index);
+      chip.style.gridRow = "1";
+    });
+    inputLabel.style.gridRow = "1";
+    outputLabel.style.gridRow = "1";
+    none.style.gridRow = "1";
+    outputLabel.style.gridColumn = `${outputStart + firstRowOutputs.length} / span 3`;
+    none.style.gridColumn = `${outputStart + firstRowOutputs.length + 3} / span 5`;
+
+    const rows = Array.from({ length: Math.max(0, totalBankCount - 1) }, (_, rowIndex) => {
+      const bankIndex = rowIndex + 1;
+      const row = document.createElement("div");
+      row.className = "editor-expander-row";
+      row.style.setProperty("--bus-grid-columns", String(gridColumns));
+      const label = document.createElement("span");
+      label.className = "editor-expander-label";
+      label.textContent = `NTX ${bankIndex + 1}`;
+      label.style.gridColumn = "1 / span 3";
+      const chips = makeExpanderBank(bankIndex);
+      chips.forEach((chip, index) => {
+        chip.style.gridColumn = String(index + 4);
+        chip.style.gridRow = "1";
+      });
+      row.append(label, ...chips);
+      return row;
+    });
+    editorExpanderRows.replaceChildren(...rows);
     updateEditorBusDockVisibility();
     disarmEditorBusAssignment();
   }
@@ -617,6 +749,26 @@
     return String.fromCharCode(...(slot.guid || [])).replace(/\0/g, "").toLowerCase();
   }
 
+  function setBypassToggleContent(control, bypassed) {
+    control.dataset.bypassed = String(bypassed);
+    control.setAttribute("aria-checked", String(bypassed));
+    control.setAttribute("aria-label", bypassed ? "Enable algorithm" : "Bypass algorithm");
+    control.title = bypassed ? "Enable algorithm" : "Bypass algorithm";
+    control.innerHTML = bypassed
+      ? 'Enable <i class="bypass-zzz" aria-hidden="true"><b>Z</b><b>z</b><b>z</b></i>'
+      : "Bypass";
+  }
+
+  function makeBypassToggle(className, slotIndex, bypassed) {
+    const control = document.createElement("span");
+    control.className = className;
+    control.dataset.bypassSlot = String(slotIndex);
+    control.tabIndex = 0;
+    control.setAttribute("role", "switch");
+    setBypassToggleContent(control, bypassed);
+    return control;
+  }
+
   function makeRoutingNode(definition) {
     const node = document.createElement(definition.slotIndex == null ? "div" : "button");
     node.className = `routing-node ${definition.kind}`;
@@ -644,6 +796,7 @@
     }
     node.type = "button";
     node.dataset.slotIndex = String(definition.slotIndex);
+    node.classList.toggle("bypassed", Boolean(definition.bypassed));
     const head = document.createElement("div");
     head.className = "routing-node-head";
     const number = document.createElement("span");
@@ -664,6 +817,7 @@
     algorithm.append(algorithmKind, algorithmText);
     title.append(name, algorithm);
     head.append(number, title);
+    head.appendChild(makeBypassToggle("routing-bypass-toggle", definition.slotIndex, definition.bypassed));
     const body = document.createElement("div");
     body.className = "routing-node-ports";
     const addColumn = (side, ports) => {
@@ -962,6 +1116,7 @@
         slotIndex: slot.index,
         name: slot.name,
         algorithmName: slot.algorithmName,
+        bypassed: Boolean(slot.bypassed),
         isPlugin: Boolean(slot.isPlugin || /plug[ -]?in/i.test(slot.algorithmName)),
         inputPorts,
         mappings: masks.mappings.map(bus => routingBusLabel(bus, snapshot)),
@@ -1069,7 +1224,9 @@
     if (state.routingBusSelection != null && selection.parameterIndex != null) {
       const bus = state.routingBusSelection;
       state.routingBusSelection = null;
-      return assignRoutingPort(selection, bus);
+      const result = await assignRoutingPort(selection, bus);
+      applyPilotAccentFromAux(bus, state.routingSnapshot);
+      return result;
     }
     if (!state.routingSelection) {
       state.routingSelection = selection;
@@ -1278,7 +1435,9 @@
       selection.element.classList.remove("routing-selected-source");
       state.routingSelection = null;
       refreshRoutingPaletteAvailability(null);
-      return assignRoutingPort(selection, bus);
+      const result = await assignRoutingPort(selection, bus);
+      applyPilotAccentFromAux(bus, state.routingSnapshot);
+      return result;
     }
     if (state.routingSelection) {
       state.routingSelection.element.classList.remove("routing-selected-source");
@@ -1415,7 +1574,7 @@
   function setView(view) {
     if (view !== "editor") disarmEditorBusAssignment();
     state.view = view;
-    deviceFrame.classList.toggle("sidebar-compact", view === "routing");
+    deviceFrame.classList.remove("sidebar-compact");
     updateEditorBusDockVisibility();
     viewStack.classList.toggle("editor-mode", view === "editor");
     const viewTitles = {
@@ -1633,6 +1792,10 @@
   }
 
   function formatParameterValue(parameter, rawValue = parameter.value) {
+    const cachedLabel = parameter.valueStrings?.get(Number(rawValue));
+    if (cachedLabel) return cachedLabel;
+    const enumLabel = parameter.enumStrings?.[Number(rawValue) - parameter.min];
+    if (enumLabel) return enumLabel;
     const scaling = parameter.scaling || 1;
     const value = rawValue / scaling;
     if (parameter.unit === 0 && parameter.min === 0 && parameter.max === 1) {
@@ -1726,6 +1889,27 @@
         const parameter = parametersBySlot.get(item.slotIndex)?.find(candidate => candidate.index === item.parameterNumber);
         if (slotInfo && parameter) state.performanceEntries.set(item.itemIndex, { item, slotInfo, parameter });
       });
+      const enumTargets = [...new Map([...state.performanceEntries.values()].map(entry => [
+        mappingKey(entry.slotInfo.index, entry.parameter.index), entry
+      ])).values()];
+      for (const entry of enumTargets) {
+        entry.parameter.valueStrings = new Map();
+        try {
+          entry.parameter.enumStrings = await state.ntTransport.readParameterEnumStrings(
+            entry.slotInfo.index,
+            entry.parameter.index
+          );
+        } catch (_) {
+          entry.parameter.enumStrings = [];
+        }
+        try {
+          const currentLabel = await state.ntTransport.readParameterValueString(
+            entry.slotInfo.index,
+            entry.parameter.index
+          );
+          if (currentLabel) entry.parameter.valueStrings.set(entry.parameter.value, currentLabel);
+        } catch (_) {}
+      }
       renderPerformanceControls();
     })().catch(error => {
       showToast(`Performance Page unavailable · ${error.message}`);
@@ -1753,6 +1937,84 @@
     });
     state.parameterWriteQueue = operation;
     return operation;
+  }
+
+  function queuePerformanceValueWrite(entry, value, control) {
+    const requestedValue = Math.min(entry.parameter.max, Math.max(entry.parameter.min, Number(value)));
+    entry.pendingPerformanceValue = requestedValue;
+    if (entry.performanceWriteRunning || !state.ntTransport || !state.transportOnline) return;
+    entry.performanceWriteRunning = true;
+    const operation = state.parameterWriteQueue.catch(() => {}).then(async () => {
+      while (entry.pendingPerformanceValue != null) {
+        const nextValue = entry.pendingPerformanceValue;
+        entry.pendingPerformanceValue = null;
+        await state.ntTransport.writeParameter(entry.slotInfo.index, entry.parameter.index, nextValue);
+        entry.parameter.value = nextValue;
+        markWorkingEdit();
+      }
+      try {
+        const confirmedLabel = await state.ntTransport.readParameterValueString(
+          entry.slotInfo.index,
+          entry.parameter.index
+        );
+        if (confirmedLabel) {
+          entry.parameter.valueStrings ??= new Map();
+          entry.parameter.valueStrings.set(entry.parameter.value, confirmedLabel);
+          const card = $(`.performance-control[data-performance-item="${entry.item.itemIndex}"]`);
+          const output = $("output", card);
+          if (output) output.textContent = confirmedLabel;
+          const toggle = $(".performance-binary-toggle", card);
+          if (toggle) toggle.textContent = confirmedLabel;
+        }
+      } catch (_) {}
+      return true;
+    }).catch(error => {
+      showToast(error.message);
+      return false;
+    }).finally(() => {
+      entry.performanceWriteRunning = false;
+      control?.removeAttribute("aria-busy");
+      if (entry.pendingPerformanceValue != null) queuePerformanceValueWrite(entry, entry.pendingPerformanceValue, control);
+    });
+    control?.setAttribute("aria-busy", "true");
+    state.parameterWriteQueue = operation;
+  }
+
+  async function setSlotBypass(slotIndex, bypassed, control) {
+    if (!state.ntTransport || !state.transportOnline || control.dataset.busy === "true") return;
+    control.dataset.busy = "true";
+    const operation = state.parameterWriteQueue.catch(() => {}).then(async () => {
+      await state.ntTransport.writeParameter(slotIndex, 0, bypassed ? 1 : 0);
+      const identitySlot = state.liveIdentity?.slots.find(slot => slot.index === slotIndex);
+      if (identitySlot) identitySlot.bypassed = bypassed;
+      const routingSlot = state.liveRouting?.slots.find(slot => slot.index === slotIndex);
+      if (routingSlot) routingSlot.bypassed = bypassed;
+      const editorSlot = $(`.slot[data-index="${slotIndex}"]`, slotList);
+      const routingNode = $(`.routing-node.slot[data-slot-index="${slotIndex}"]`, routingNodes);
+      editorSlot?.classList.toggle("bypassed", bypassed);
+      routingNode?.classList.toggle("bypassed", bypassed);
+      $$(`[data-bypass-slot="${slotIndex}"]`).forEach(item => setBypassToggleContent(item, bypassed));
+      const liveEntry = state.liveParameters.get(mappingKey(slotIndex, 0));
+      if (liveEntry) updateLiveParameterEntry(liveEntry, bypassed ? 1 : 0, "midi-feedback");
+      markWorkingEdit();
+      startCpuPolling();
+      showToast(`Slot ${slotIndex + 1} ${bypassed ? "bypassed" : "enabled"} and verified from the NT`);
+      return true;
+    }).catch(error => {
+      showToast(error.message);
+      return false;
+    }).finally(() => {
+      control.dataset.busy = "false";
+    });
+    state.parameterWriteQueue = operation;
+    return operation;
+  }
+
+  function activateBypassToggle(target) {
+    const control = target.closest("[data-bypass-slot]");
+    if (!control) return false;
+    setSlotBypass(Number(control.dataset.bypassSlot), control.dataset.bypassed !== "true", control);
+    return true;
   }
 
   function renderPerformanceControls() {
@@ -1794,26 +2056,56 @@
       title.textContent = entry.item.upperLabel || entry.parameter.name;
       const detail = document.createElement("p");
       detail.textContent = entry.item.lowerLabel || `${entry.parameter.name} · Parameter ${entry.parameter.index + 1}`;
-      const slider = document.createElement("input");
-      slider.type = "range";
-      slider.min = String(entry.item.min);
-      slider.max = String(entry.item.max);
-      slider.value = String(entry.parameter.value);
-      slider.setAttribute("aria-label", `${entry.parameter.name}, performance control`);
-      updateRangeProgress(slider);
-      slider.addEventListener("input", () => {
+      const isBinary = entry.parameter.enumStrings?.length === 2
+        || Math.abs(entry.item.max - entry.item.min) === 1;
+      let liveControl;
+      if (isBinary) {
+        value.classList.add("hidden");
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "performance-binary-toggle";
+        const refreshToggle = rawValue => {
+          const active = Number(rawValue) === entry.item.max;
+          toggle.classList.toggle("active", active);
+          toggle.setAttribute("aria-pressed", String(active));
+          toggle.textContent = formatParameterValue(entry.parameter, active ? entry.item.max : entry.item.min);
+        };
+        refreshToggle(entry.parameter.value);
+        toggle.setAttribute("aria-label", `${entry.parameter.name}, two-state performance control`);
+        toggle.addEventListener("click", () => {
+          const nextValue = Number(toggle.getAttribute("aria-pressed") === "true" ? entry.item.min : entry.item.max);
+          entry.parameter.value = nextValue;
+          value.textContent = formatParameterValue(entry.parameter, nextValue);
+          refreshToggle(nextValue);
+          queuePerformanceValueWrite(entry, nextValue, toggle);
+        });
+        liveControl = toggle;
+      } else {
+        const slider = document.createElement("input");
+        slider.type = "range";
+        slider.min = String(entry.item.min);
+        slider.max = String(entry.item.max);
+        slider.value = String(entry.parameter.value);
+        slider.setAttribute("aria-label", `${entry.parameter.name}, performance control`);
         updateRangeProgress(slider);
-        value.textContent = formatParameterValue(entry.parameter, Number(slider.value));
-        entry.parameter.value = Number(slider.value);
-      });
-      slider.addEventListener("change", () => writePerformanceValue(entry, slider.value, slider));
+        slider.addEventListener("input", () => {
+          const nextValue = Number(slider.value);
+          updateRangeProgress(slider);
+          if (!entry.parameter.valueStrings?.size) {
+            value.textContent = formatParameterValue(entry.parameter, nextValue);
+          }
+          entry.parameter.value = nextValue;
+          queuePerformanceValueWrite(entry, nextValue, slider);
+        });
+        liveControl = slider;
+      }
       const reset = document.createElement("button");
       reset.type = "button";
       reset.className = "performance-reset";
       reset.textContent = "Reset to default";
       reset.title = `Reset ${entry.parameter.name} to ${formatParameterValue(entry.parameter, entry.parameter.defaultValue)}`;
       reset.addEventListener("click", () => writePerformanceValue(entry, entry.parameter.defaultValue, reset));
-      card.append(head, value, title, detail, slider, reset);
+      card.append(head, value, title, detail, liveControl, reset);
       grid.appendChild(card);
     }
     $("#performance-page-title").textContent = `Performance Page · ${state.performancePage}`;
@@ -2003,10 +2295,12 @@
     slotList.replaceChildren();
     slots.forEach((slot, index) => {
       const button = document.createElement("button");
-      button.className = `slot${index === 0 ? " active" : ""}`;
+      const colourName = colours[index % colours.length];
+      button.className = `slot slot-accent-${colourName}${index === 0 ? " active" : ""}${slot.bypassed ? " bypassed" : ""}`;
       button.dataset.slot = slot.name;
       button.dataset.algorithm = slot.algorithmName;
       button.dataset.index = String(slot.index);
+      button.draggable = true;
       const number = document.createElement("span");
       number.className = "slot-number";
       number.textContent = String(index + 1);
@@ -2016,8 +2310,9 @@
       const algorithm = document.createElement("small");
       algorithm.textContent = slot.algorithmName;
       copy.append(name, algorithm);
+      copy.appendChild(makeBypassToggle("slot-bypass-toggle", slot.index, slot.bypassed));
       const colour = document.createElement("i");
-      colour.className = `slot-colour ${colours[index % colours.length]}`;
+      colour.className = `slot-colour ${colourName}`;
       button.append(number, copy, colour);
       slotList.appendChild(button);
     });
@@ -2031,6 +2326,58 @@
     displaySlot($(".slot.active", slotList));
   }
 
+  async function moveLiveSlot(fromSlot, toSlot, { record = true, announce = true } = {}) {
+    if (!state.ntTransport || !state.transportOnline || fromSlot === toSlot) return false;
+    const pendingPoll = stopLivePolling();
+    slotList.classList.add("reordering");
+    try {
+      if (pendingPoll) await pendingPoll.catch(() => {});
+      await state.ntTransport.moveAlgorithm(fromSlot, toSlot);
+      const identity = await state.ntTransport.readSnapshot();
+      state.liveIdentity = identity;
+      state.performanceItems = [];
+      state.performanceEntries.clear();
+      showLiveIdentity(identity);
+      const movedSlot = $(`.slot[data-index="${toSlot}"]`, slotList);
+      if (movedSlot) displaySlot(movedSlot);
+      if (state.liveRouting || state.view === "routing") await loadLiveRouting({ preserveView: true });
+      markWorkingEdit();
+      if (record) recordHistory({ type: "slot-move", fromSlot, toSlot, label: `move to slot ${toSlot + 1}` });
+      if (announce) showToast(`Moved algorithm to slot ${toSlot + 1} and verified from the NT`);
+      return true;
+    } catch (error) {
+      showToast(`Could not move algorithm · ${error.message}`);
+      if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
+      return false;
+    } finally {
+      slotList.classList.remove("reordering");
+    }
+  }
+
+  async function stepEditHistory(direction) {
+    if (state.historyBusy || !state.transportOnline) return;
+    const source = direction === "undo" ? state.undoHistory : state.redoHistory;
+    const destination = direction === "undo" ? state.redoHistory : state.undoHistory;
+    const action = source.pop();
+    if (!action) return;
+    state.historyBusy = true;
+    updateHistoryControls();
+    let succeeded = false;
+    if (action.type === "slot-move") {
+      succeeded = direction === "undo"
+        ? await moveLiveSlot(action.toSlot, action.fromSlot, { record: false, announce: false })
+        : await moveLiveSlot(action.fromSlot, action.toSlot, { record: false, announce: false });
+    }
+    if (succeeded) {
+      destination.push(action);
+      showToast(`${direction === "undo" ? "Undid" : "Redid"} ${action.label} and verified from the NT`);
+    } else {
+      source.push(action);
+    }
+    state.historyBusy = false;
+    updateHistoryControls();
+  }
+
   function showLiveIdentity(identity) {
     state.hasUnsavedWorkingEdits = false;
     updateWorkingState();
@@ -2040,15 +2387,22 @@
     $("#editor-slot-count").textContent = `${identity.slotCount} slots`;
     $("#hardware-title").textContent = "disting NT · live";
     $("#hardware-detail").textContent = `${identity.version || "Unknown firmware"} · SysEx ID ${identity.sysexId}`;
-    $("#hardware-status").textContent = "Connected";
+    setHardwareStatus("Connected", true);
     editorEmptyState.classList.add("hidden");
     editorShell.classList.remove("hidden");
     renderEditorBusDock(identity);
     renderLiveSlots(identity.slots);
   }
 
+  function setHardwareStatus(label, isGood = false) {
+    const status = $("#hardware-status");
+    status.textContent = label;
+    status.classList.toggle("good", isGood);
+  }
+
   function flushDisconnectedSession() {
     stopLivePolling();
+    stopCpuPolling();
     clearSmartFeedback();
     disarmEditorBusAssignment();
     state.parameterReadToken += 1;
@@ -2072,11 +2426,15 @@
     state.performanceItems = [];
     state.performanceEntries.clear();
     state.performanceReadPromise = null;
+    state.undoHistory.length = 0;
+    state.redoHistory.length = 0;
+    state.historyBusy = false;
     routingNodes.replaceChildren();
     routingWires.replaceChildren();
     routingAuxPalette.replaceChildren();
     routingLoading.classList.add("hidden");
     updateWorkingState();
+    updateHistoryControls();
     updateEditorBusDockVisibility();
   }
 
@@ -2087,7 +2445,7 @@
     setDeviceState("disconnected");
     stateBannerCopy.textContent = message;
     connectMIDI.textContent = "Reconnect";
-    $("#hardware-status").textContent = "Disconnected";
+    setHardwareStatus("Disconnected");
   }
 
   function scheduleTransportReconnect(delay = 600) {
@@ -2154,10 +2512,12 @@
       clearTimeout(state.reconnectTimer);
       state.reconnectTimer = null;
       state.transportOnline = true;
+      updateHistoryControls();
       state.liveIdentity = identity;
       state.performanceItems = [];
       state.performanceEntries.clear();
       showLiveIdentity(identity);
+      startCpuPolling();
       setDeviceState("labConnected");
       connectMIDI.textContent = "Refresh";
       showToast(`Read ${identity.presetName || "unnamed preset"} from the real NT`);
@@ -2167,7 +2527,7 @@
       markTransportOffline(error.message);
       $("#hardware-title").textContent = "disting NT";
       $("#hardware-detail").textContent = error.message;
-      $("#hardware-status").textContent = "Unavailable";
+      setHardwareStatus("Unavailable");
       showToast(error.message);
       // NT USB MIDI endpoints often return a moment after the device itself.
       // Keep reacquiring fresh Web MIDI port objects until the reboot settles.
@@ -2205,12 +2565,40 @@
     $("strong", $("div", routingInspector)).textContent = "Connect to inspect the complete loaded preset.";
     $("p", routingInspector).textContent = "No routing data has been requested from the NT yet.";
     $("#hardware-detail").textContent = "Waiting for MIDI connection";
-    $("#hardware-status").textContent = "Not connected";
+    setHardwareStatus("Not connected");
     connectMIDI.textContent = "Connect";
     setDeviceState("labWaiting");
   }
 
   $$("[data-view]").forEach(button => button.addEventListener("click", () => setView(button.dataset.view)));
+  const openReferenceGuide = () => {
+    if (referenceGuide.open) return;
+    referenceGuide.showModal();
+    guideSearch.focus();
+  };
+  $("#reference-guide-card").addEventListener("click", openReferenceGuide);
+  $("#reference-guide-card").addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openReferenceGuide();
+    }
+  });
+  $("#close-reference-guide").addEventListener("click", () => referenceGuide.close());
+  referenceGuide.addEventListener("click", event => {
+    if (event.target === referenceGuide) referenceGuide.close();
+  });
+  guideSearch.addEventListener("input", () => {
+    const query = guideSearch.value.trim().toLowerCase();
+    let visible = 0;
+    $$("section", $("#guide-topics")).forEach(topic => {
+      const matches = !query || topic.textContent.toLowerCase().includes(query);
+      topic.classList.toggle("hidden", !matches);
+      const contentsLink = $(`.guide-wiki > nav a[href="#${topic.id}"]`);
+      if (contentsLink) contentsLink.classList.toggle("hidden", !matches);
+      if (matches) visible += 1;
+    });
+    guideResultCount.textContent = `${visible} ${visible === 1 ? "topic" : "topics"}`;
+  });
   connectMIDI.addEventListener("click", readRealIdentity);
   savePreset.addEventListener("click", async () => {
     if (!state.ntTransport || !state.liveIdentity || !state.hasUnsavedWorkingEdits) return;
@@ -2232,6 +2620,7 @@
     }
   });
   routingNodes.addEventListener("click", async event => {
+    if (activateBypassToggle(event.target)) return;
     if (await handleRoutingModeClick(event.target)) return;
     if (await handleRoutingConnectionClick(event.target)) return;
     const node = event.target.closest(".routing-node.slot");
@@ -2347,38 +2736,101 @@
   });
 
   syncModeControl.addEventListener("change", () => setSyncMode(syncModeControl.value));
+  undoEdit.addEventListener("click", () => stepEditHistory("undo"));
+  redoEdit.addEventListener("click", () => stepEditHistory("redo"));
+  document.addEventListener("keydown", event => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "z") return;
+    if (event.target.closest("input, textarea, select, [contenteditable=true]")) return;
+    event.preventDefault();
+    stepEditHistory(event.shiftKey ? "redo" : "undo");
+  });
 
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
       stopLivePolling();
+      stopCpuPolling();
       return;
     }
+    if (state.transportOnline) startCpuPolling();
     if (state.activeLiveSlotIndex != null) {
       startLivePolling(state.activeLiveSlotIndex);
     }
   });
 
   slotList.addEventListener("click", event => {
+    if (activateBypassToggle(event.target)) return;
     const slot = event.target.closest(".slot:not(.muted)");
     if (slot) displaySlot(slot);
   });
+  let draggedSlotIndex = null;
+  let slotDropIndex = null;
+  const clearSlotDragState = () => {
+    draggedSlotIndex = null;
+    slotDropIndex = null;
+    $$(".slot", slotList).forEach(slot => slot.classList.remove("dragging", "drop-before", "drop-after"));
+  };
+  slotList.addEventListener("dragstart", event => {
+    if (event.target.closest("[data-bypass-slot]")) {
+      event.preventDefault();
+      return;
+    }
+    const slot = event.target.closest(".slot");
+    if (!slot || !state.transportOnline) return;
+    draggedSlotIndex = Number(slot.dataset.index);
+    slot.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(draggedSlotIndex));
+  });
+  slotList.addEventListener("dragover", event => {
+    if (draggedSlotIndex == null) return;
+    const target = event.target.closest(".slot");
+    if (!target) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    $$(".slot", slotList).forEach(slot => slot.classList.remove("drop-before", "drop-after"));
+    const bounds = target.getBoundingClientRect();
+    const after = event.clientY > bounds.top + bounds.height / 2;
+    target.classList.add(after ? "drop-after" : "drop-before");
+    slotDropIndex = Number(target.dataset.index) + (after ? 1 : 0);
+  });
+  slotList.addEventListener("drop", event => {
+    if (draggedSlotIndex == null || slotDropIndex == null) return;
+    event.preventDefault();
+    const fromSlot = draggedSlotIndex;
+    let toSlot = slotDropIndex;
+    if (toSlot > fromSlot) toSlot -= 1;
+    toSlot = Math.max(0, Math.min(state.liveIdentity.slots.length - 1, toSlot));
+    clearSlotDragState();
+    moveLiveSlot(fromSlot, toSlot);
+  });
+  slotList.addEventListener("dragend", clearSlotDragState);
+  [slotList, routingNodes].forEach(container => container.addEventListener("keydown", event => {
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches("[data-bypass-slot]")) {
+      event.preventDefault();
+      event.stopPropagation();
+      activateBypassToggle(event.target);
+    }
+  }));
   editorBusDock.addEventListener("click", event => {
     const chip = event.target.closest(".editor-bus-chip[data-value]");
     if (!chip || chip.disabled) return;
+    const value = Number(chip.dataset.value);
+    const descriptor = editorBusDescriptor(value);
     const entry = state.armedBusEntry;
     if (!entry) {
       showToast("Tap the bus chip at the right of a parameter first");
       return;
     }
-    const value = Number(chip.dataset.value);
     if (value < entry.parameter.min || value > entry.parameter.max) return;
-    const descriptor = editorBusDescriptor(value);
     queueLiveParameterWrite(entry, value, {
       successMessage: `${entry.parameter.name} assigned to ${descriptor.label} in NT working memory`,
       afterWrite: async () => {
         if (state.liveRouting) await loadLiveRouting({ preserveView: true });
       },
-      onSuccess: disarmEditorBusAssignment
+      onSuccess: () => {
+        if (descriptor.kind === "aux") applyPilotAccentFromAux(descriptor.bus, state.liveIdentity);
+        disarmEditorBusAssignment();
+      }
     });
   });
   mappingSlotSelect.addEventListener("change", () => {

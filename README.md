@@ -4,15 +4,19 @@ NT Pilot is a browser-based editor and routing workspace for the Expert Sleepers
 
 ## Current capabilities
 
-- Reads the live preset, loaded algorithm slots, parameter pages, values and native MIDI mappings.
+- Reads the live preset, loaded algorithm slots, parameter pages, values, native mappings, Performance Page assignments and both NT CPU meters.
 - Writes parameter changes continuously while sliders move and verifies them by readback.
 - Provides Fast, Slow and Manual synchronization modes; Fast is the default.
 - Shares the selected algorithm between Editor, Routing and MIDI Mapping views.
-- Builds a live four-controls-per-page Performance surface from the selected algorithm's enabled MIDI mappings.
-- Exposes a sticky Editor bus dock with all Aux, physical input and physical output buses.
+- Builds a live four-controls-per-page surface from the preset-wide native NT Performance Page, including string values, binary controls and custom labels.
+- Exposes a sticky Editor bus dock with all Aux, physical input, physical output and firmware-reported NTX-8CV buses.
 - Shows compact bus chips on every firmware-reported bus-assignable parameter.
 - Displays the complete routing graph by default, with independent Input, Output, Aux and Mod cable filters.
 - Supports direct routing edits and explicit Add/Replace selection for algorithm outputs whose controller is reported by NT metadata.
+- Supports bidirectional port-first or Aux-first routing assignment, algorithm bypass from Editor and Routing, and animated bypass indicators.
+- Supports verified drag-and-drop algorithm reordering with Undo/Redo history and keyboard shortcuts.
+- Uses the selected Aux bus colour as the interface accent while keeping an unassigned state neutral.
+- Includes a searchable, text-first NT wiki condensed from the official firmware 1.18 manual, with page-specific source links.
 - Handles NT USB MIDI disconnects and retries connection after a module reboot.
 - Keeps working-memory edits separate from the explicit **Save preset** action.
 - Labels the future AI Assistant honestly as an inactive interface preview until a real provider and approval backend exist.
@@ -28,6 +32,8 @@ NT Helper remains an important protocol and hardware-behaviour reference. NT Pil
 - **Add/Replace is chosen before the write.** NT Helper automatically forces Replace for some algorithm-to-algorithm connections and exposes mode toggling afterward. NT Pilot asks Add or Replace at the moment a mode-capable algorithm output is assigned to an Aux bus, then writes both the real output-mode controller and bus parameter.
 - **Hardware truth without UI guesswork.** NT Pilot uses firmware I/O flags and SysEx `0x55` relationships to associate an Add/Replace controller with its exact output parameters. Fixed or unresolved outputs stay visibly read-only instead of being inferred from names.
 - **Editor and Routing share state.** Algorithm selection and confirmed bus changes carry across category pages, so the user does not have to relocate the same slot repeatedly.
+- **Slot management stays live.** Drag-and-drop order changes, bypass toggles and Undo/Redo operate on NT working memory and are verified from the module.
+- **Expansion follows hardware truth.** Physical bus counts come from firmware. NTX-8CV output banks remain on the current row while space exists and wrap cleanly only when required.
 - **Working edits are explicit.** Changes affect NT working memory immediately, while permanent preset saving remains a separate, visible action.
 - **Compact side nodes preserve the graph.** Physical I/O and conditional USB audio algorithms live in aligned side stacks instead of adding more permanent graph columns. The central algorithm list remains the primary reading path.
 
@@ -63,3 +69,5 @@ git diff --check
 The standalone browser implementation is the current source of truth. The VS Code Web MIDI bridge is intentionally deferred until the Chrome UX and hardware behaviour are approved.
 
 See [the current handoff](docs/current-handoff.md) for architecture, test state and remaining work.
+
+The built-in wiki is a concise operational guide, not a replacement for Expert Sleepers' documentation. It links to the [official firmware 1.18 manual](https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf) and the [firmware/manual archive](https://www.expert-sleepers.co.uk/distingNTfirmwareupdates.html).

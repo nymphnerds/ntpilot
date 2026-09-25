@@ -41,12 +41,17 @@ function encodeRoutingMask(value) {
 
 const input = { id: "in", name: "disting NT MIDI IN", onmidimessage: null };
 let saveCommand = null;
+let moveCommand = null;
 const output = {
   id: "out",
   name: "disting NT MIDI OUT",
   send(bytes) {
     if (bytes[6] === 0x36) {
       saveCommand = [...bytes];
+      return;
+    }
+    if (bytes[6] === 0x37) {
+      moveCommand = [...bytes];
       return;
     }
     let reply = replies.get(bytes[6]);
@@ -82,6 +87,21 @@ const output = {
     if (bytes[6] === 0x44) {
       const slot = bytes[7];
       reply = [...header, 0x44, slot, ...parameters.flatMap(parameter => encodeShort(parameter.value)), 0xF7];
+    }
+    if (bytes[6] === 0x45) {
+      const slot = bytes[7];
+      const parameter = bytes[10];
+      reply = [...header, 0x45, slot, ...encodeShort(parameter), ...encodeShort(slot === 1 ? 1 : 0), 0xF7];
+    }
+    if (bytes[6] === 0x49) {
+      const slot = bytes[7];
+      const parameter = bytes[10];
+      reply = [...header, 0x49, slot, ...encodeShort(parameter), 2, ...Buffer.from("Profile A"), 0, ...Buffer.from("Profile B"), 0, 0xF7];
+    }
+    if (bytes[6] === 0x50) {
+      const slot = bytes[7];
+      const parameter = bytes[10];
+      reply = [...header, 0x50, slot, ...encodeShort(parameter), ...Buffer.from("Profile B"), 0, 0xF7];
     }
     if (bytes[6] === 0x52) {
       const slot = bytes[7];
@@ -122,6 +142,7 @@ const output = {
         : [1n << 12n, 1n << 20n, 0n, 0n, 0n, 1n];
       reply = [...header, 0x61, slot, ...masks.flatMap(encodeRoutingMask), 0xF7];
     }
+    if (bytes[6] === 0x62) reply = [...header, 0x62, 48, 37, 10, 20, 0xF7];
     assert.ok(reply, `missing reply fixture for 0x${bytes[6].toString(16)}`);
     queueMicrotask(() => input.onmidimessage({ data: Uint8Array.from(reply) }));
   }
@@ -195,8 +216,8 @@ global.navigator = { requestMIDIAccess: async options => {
       { index: 1, guid: [5, 6, 7, 8], guidKey: "05060708", name: "KickSnare", factoryName: "Custom plug-in", isPlugin: true, isLoaded: true, filename: "KickSnare.lua" }
     ],
     slots: [
-      { index: 0, guid: [1, 2, 3, 4], guidKey: "01020304", name: "Master Clocks", algorithmName: "Clock", algorithmFactoryName: "Clock", isPlugin: false, pluginFilename: null },
-      { index: 1, guid: [5, 6, 7, 8], guidKey: "05060708", name: "Kick Snare", algorithmName: "KickSnare", algorithmFactoryName: "Custom plug-in", isPlugin: true, pluginFilename: "KickSnare.lua" }
+      { index: 0, guid: [1, 2, 3, 4], guidKey: "01020304", name: "Master Clocks", algorithmName: "Clock", algorithmFactoryName: "Clock", isPlugin: false, pluginFilename: null, bypassed: false },
+      { index: 1, guid: [5, 6, 7, 8], guidKey: "05060708", name: "Kick Snare", algorithmName: "KickSnare", algorithmFactoryName: "Custom plug-in", isPlugin: true, pluginFilename: "KickSnare.lua", bypassed: true }
     ]
   });
   assert.deepEqual(await transport.readSlotParameters(0), [
@@ -237,6 +258,13 @@ global.navigator = { requestMIDIAccess: async options => {
     parameterIndex: 1,
     outputParameterIndices: [3, 4]
   });
+  assert.deepEqual(await transport.readCpuUsage(), {
+    audioThread: 48,
+    overall: 37,
+    slots: [10, 20]
+  });
+  assert.deepEqual(await transport.readParameterEnumStrings(1, 1), ["Profile A", "Profile B"]);
+  assert.equal(await transport.readParameterValueString(1, 1), "Profile B");
   const performancePage = await transport.readPerformancePage();
   assert.equal(performancePage.length, 30);
   assert.deepEqual(performancePage[0], {
@@ -254,6 +282,8 @@ global.navigator = { requestMIDIAccess: async options => {
   transport.savePreset();
   assert.equal(saveCommand[6], 0x36);
   assert.equal(saveCommand[7], 2);
+  await transport.moveAlgorithm(1, 0);
+  assert.deepEqual(moveCommand.slice(6, 9), [0x37, 1, 0]);
   const routing = await transport.readRoutingSnapshot(await transport.readSnapshot());
   assert.equal(routing.slots.length, 2);
   assert.equal(routing.slots[0].routing.inputMask, 1n);

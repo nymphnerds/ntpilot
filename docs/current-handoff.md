@@ -40,17 +40,31 @@ The central model is the NT bus universe:
 - Algorithm list and bus dock remain fixed while the parameter pane scrolls.
 - Editor and Performance use the same custom NT Pilot slider language and continuous verified write path.
 - Long parameter lists use deterministic low-opacity row tints and fine matching edges so adjacent controls remain easy to track.
+- Every live algorithm card exposes a quick bypass toggle. Bypassed slots use a clear low-opacity treatment and an animated `Zzz` indicator in both Editor and Routing.
+- Algorithm cards support drag-and-drop reordering through the NT's native reorder command. Writes are reread and verified before the UI accepts the new order.
+- Text Undo/Redo controls and `Ctrl/Cmd+Z` / `Shift+Ctrl/Cmd+Z` cover verified slot moves.
+- Selected Editor slots use a stronger solid tint derived from their unique colour; unselected slots retain fine boundaries.
+- The compact sidebar remains visible in Routing at normal desktop widths.
 
 ## Performance and Assistant
 
-- Performance is no longer static sample content. It shows enabled native MIDI mappings from the currently selected algorithm, four controls per page.
+- Performance is no longer static sample content or derived from MIDI mappings. It reads the NT's preset-wide native Performance Page assignments, four controls per page.
 - Moving a Performance slider writes the exact same live parameter as its Editor row; polling keeps both representations synchronized.
-- Empty positions link to Mapping so mappings remain the source of control selection.
+- String-valued and binary parameters show their real labels instead of streams of raw numbers. Continuous controls coalesce writes while dragging.
+- Performance assignments remain global when a different Editor algorithm is selected.
 - Assistant remains intentionally unimplemented. Its page is visibly marked as an interface preview, all write/chat actions are disabled, and Status no longer claims an AI provider is connected.
+
+## Status, reference and visual identity
+
+- Status card typography now uses a consistent hierarchy; live hardware state is a readable badge rather than tiny incidental text.
+- The entire Knowledge card opens a built-in, searchable, text-first NT wiki.
+- The wiki condenses the official firmware 1.18 manual into 15 operational sections with a contents column and page-specific links back to the official PDF.
+- The header uses the supplied transparent NT Pilot emblem from `assets/nt-pilot-emblem.png`.
+- The default interface accent is neutral mint. A confirmed Aux assignment changes the accent to that Aux bus colour; simply selecting a port does not imply assignment.
 
 ## Current Routing behaviour
 
-- Entering Routing collapses the sidebar and shows the complete graph by default.
+- Routing shows the complete graph by default while retaining the compact sidebar.
 - Clicking empty graph space clears algorithm focus and restores the complete view.
 - The master Signals switch controls all cable types. Input, Output, Aux and Mod buttons independently filter categories.
 - Signal inputs are blue, physical outputs red, Aux routes use their bus colour, and modulation is gold and dashed.
@@ -60,6 +74,17 @@ The central model is the NT bus universe:
 - Add/Replace chips are always visible on output rows. Editable chips are backed by a real NT mode-controller parameter; fixed or unresolved chips are read-only.
 - Assigning a supported algorithm output to an Aux bus opens the anchored Add/Replace choice before writing.
 - The choice is positioned beside the user's latest pointer or touch location for every routing assignment, with viewport-edge clamping.
+- A route can be created in either interaction order: choose the port then Aux, or Aux then port.
+- Bypass is directly available on routing algorithm blocks and uses an intentionally subtle sleeping treatment.
+
+## Bus dock and expansion
+
+- Aux, input and output chips use one responsive chip size so their banks remain visually aligned as the window changes.
+- Physical inputs and outputs are grouped before expander outputs.
+- The bus universe is read from SysEx `0x60`; the UI does not assume the factory I/O counts.
+- Native outputs 1–8 and the first NTX-8CV bank 9–16 share the same physical row. Further banks remain on that row while space exists, then wrap as complete, labelled rows.
+- Placeholder NTX chips are faded off-white and have an immediate custom tooltip explaining numbering, multiple-module handling and the maximum configuration.
+- Scrollbars are visually hidden in the algorithm/parameter region so they do not cover the thin per-row colour boundary.
 
 ## Add/Replace architecture
 
@@ -87,9 +112,9 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260925-69`
-- `web-midi-transport.js?v=20260925-40`
-- `app.js?v=20260925-91`
+- `styles.css?v=20260925-174`
+- `web-midi-transport.js?v=20260925-43`
+- `app.js?v=20260925-104`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
@@ -100,6 +125,8 @@ Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 - JavaScript syntax checks pass.
 - `web-midi-transport.test.cjs` passes, including SysEx `0x55` parsing.
 - `git diff --check` passes.
+- Native Performance Page string/value queries, dual CPU meter parsing, bypass writes, slot reordering and firmware-reported bus counts have automated transport coverage.
+- All 15 built-in wiki contents links resolve to their matching text section.
 
 ## Hardware tests still needed
 
@@ -130,4 +157,4 @@ git diff --check
 
 ## Next recommended step
 
-Start with the seven hardware checks above before making further visual changes. If Add/Replace persistence fails, inspect the received `0x55` association and subsequent `0x46`/`0x45` write/readback for the selected slot and parameter; do not add another heuristic fallback.
+Start with the hardware checks above, then exercise drag/drop Undo/Redo, bypass CPU response, binary/string Performance controls and NTX-8CV discovery on a physical module. If Add/Replace persistence fails, inspect the received `0x55` association and subsequent `0x46`/`0x45` write/readback for the selected slot and parameter; do not add another heuristic fallback.

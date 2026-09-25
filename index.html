@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260925-129">
+  <link rel="stylesheet" href="styles.css?v=20260925-174">
 </head>
 <body>
   <main class="stage">
     <section class="device-frame" id="device-frame" aria-label="NT Pilot">
       <aside class="app-sidebar">
         <div class="app-mark" aria-label="NT Pilot">
-          <span class="mark-glyph">NT</span>
+          <span class="mark-glyph"><img src="assets/nt-pilot-emblem.png" alt=""></span>
           <span class="mark-copy"><strong>NT Pilot</strong><small>for disting NT</small></span>
         </div>
 
@@ -60,6 +60,10 @@
             </div>
           </div>
           <div class="status-actions">
+            <div class="history-actions" aria-label="Edit history">
+              <button id="undo-edit" type="button" disabled aria-label="Undo last edit" title="Undo (Ctrl/Cmd+Z)">Undo</button>
+              <button id="redo-edit" type="button" disabled aria-label="Redo last edit" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
+            </div>
             <label class="status-sync" for="sync-mode">
               <span>Sync</span>
               <select id="sync-mode" aria-label="Live synchronization mode">
@@ -93,6 +97,7 @@
               <div class="editor-bus-group editor-output-bus-group" id="editor-output-bus-row" aria-label="NT outputs"></div>
             </div>
           </div>
+          <div class="editor-expander-rows" id="editor-expander-rows" aria-label="NTX-8CV output expanders"></div>
         </div>
 
         <div class="view-stack">
@@ -107,13 +112,9 @@
 
             <div class="editor-shell hidden" id="editor-shell">
               <div class="editor-toolbar">
-                <div class="editor-tabs">
-                  <button class="active">Parameters</button>
-                  <button>Overview</button>
-                  <button>Performance</button>
-                </div>
+                <strong class="editor-section-heading">Algorithms</strong>
                 <div class="editor-meta">
-                  <span id="editor-slot-count">10 slots</span><span>CPU 48%</span>
+                  <span id="editor-slot-count">10 slots</span><span id="editor-cpu-usage" title="Waiting for CPU usage from the NT">Audio — · Overall —</span>
                   <span class="freshness"><i></i> Updated now</span>
                 </div>
               </div>
@@ -362,7 +363,7 @@
               <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 8h14M5 16h14"/></svg></div><div><span>Advanced connection</span><h2>SysEx device ID</h2><p>Leave at 0 unless your NT uses another ID.</p></div><label class="settings-select"><select id="sysex-id" aria-label="SysEx device ID"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option></select></label></article>
               <article class="settings-card"><div class="settings-icon sync"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18 9a7 7 0 0 0-12-2l-2 4m16 2-2 4a7 7 0 0 1-12-2"/></svg></div><div><span>Synchronization</span><h2 id="sync-mode-label">Fast</h2><p id="sync-mode-detail">Immediate MIDI feedback · 100 ms polling</p></div></article>
               <article class="settings-card"><div class="settings-icon ai"><svg viewBox="0 0 24 24"><path d="M5 6h14v11H9l-4 3V6Zm4 4h6m-6 3h4"/></svg></div><div><span>AI provider</span><h2>Not configured</h2><p>Assistant is currently an interface preview.</p></div><button class="secondary-button" disabled>Unavailable</button></article>
-              <article class="settings-card"><div class="settings-icon knowledge"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zm9 0h7v14h-7M7 9h1m8 0h1"/></svg></div><div><span>Knowledge</span><h2>NT reference library</h2><p>API, algorithms, mappings, routing · versioned</p></div><button class="secondary-button">Details</button></article>
+              <article class="settings-card settings-card-action" id="reference-guide-card" role="button" tabindex="0"><div class="settings-icon knowledge"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zm9 0h7v14h-7M7 9h1m8 0h1"/></svg></div><div><span>Knowledge</span><h2>NT wiki</h2><p>Browse practical guides for firmware 1.18</p></div><button class="secondary-button" id="open-reference-guide" type="button">Open wiki</button></article>
             </div>
             <article class="midi-monitor real-midi-control hidden" aria-labelledby="midi-monitor-title">
               <div class="midi-monitor-heading">
@@ -407,7 +408,50 @@
     </section>
   </main>
 
-  <script src="web-midi-transport.js?v=20260925-41"></script>
-  <script src="app.js?v=20260925-96"></script>
+  <dialog class="reference-guide" id="reference-guide" aria-labelledby="reference-guide-title">
+    <header>
+      <div><span>Built-in reference · firmware 1.18</span><h2 id="reference-guide-title">disting NT quick guide</h2></div>
+      <button id="close-reference-guide" type="button" aria-label="Close guide">×</button>
+    </header>
+    <label class="guide-search" for="guide-search"><span>Find a topic</span><input id="guide-search" type="search" placeholder="Try routing, performance, bypass…" autocomplete="off"></label>
+    <div class="guide-wiki">
+      <nav aria-label="Guide contents"><strong>Contents</strong><a href="#wiki-start">Getting started</a><a href="#wiki-controls">Panel controls</a><a href="#wiki-io">I/O and USB</a><a href="#wiki-presets">Presets</a><a href="#wiki-routing">Signal flow</a><a href="#wiki-algorithms">Algorithm index</a><a href="#wiki-mappings">Mappings</a><a href="#wiki-performance">Performance Page</a><a href="#wiki-cpu">CPU and engine</a><a href="#wiki-expanders">Expanders</a><a href="#wiki-storage">MicroSD and files</a><a href="#wiki-midi">MIDI and I²C</a><a href="#wiki-settings">Useful settings</a><a href="#wiki-troubleshooting">Troubleshooting</a><a href="#wiki-connection">NT Pilot connection</a></nav>
+      <div class="guide-articles" id="guide-topics">
+        <section id="wiki-start"><p class="wiki-kicker">Manual pages 10–15</p><h3>Getting started</h3><p>Patch an input to an output-processing algorithm, then add generators, utilities or effects as separate algorithm slots. A preset is the complete ordered algorithm list, all parameter values, mappings, Performance Page assignments and related state.</p><p>The module works without a card, but saving presets and loading samples, scripts or plug-ins requires a FAT32 or exFAT MicroSD card. Start with the supplied example presets to see complete routing patterns.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=10" target="_blank" rel="noopener">Official manual: Getting started →</a></section>
+
+        <section id="wiki-controls"><p class="wiki-kicker">Manual pages 16–19</p><h3>Panel controls and navigation</h3><p><b>Button 1</b> enters or exits menus. In menus, turn and press the left encoder to navigate; <b>Button 2</b> goes back. Hold <b>Button 3</b> for control help. <b>Button 4</b> is a configurable shortcut, normally Mappings or Performance Page.</p><p>In the overview, the left encoder or pot scrolls algorithms. Hold Button 4 and turn the left encoder to reorder; hold Button 4 and press the right encoder to toggle bypass. Press the left encoder or pot to enter the selected algorithm.</p><p>In an algorithm, the left pot selects a parameter page, the centre pot or left encoder selects a parameter, and the right pot or encoder changes it. Pressing the right encoder usually restores the default. The right pot uses soft takeover; press it to jump directly to its physical position.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=16" target="_blank" rel="noopener">Official manual: Navigation →</a></section>
+
+        <section id="wiki-io"><p class="wiki-kicker">Manual pages 20–22</p><h3>Inputs, outputs and USB</h3><p>The NT has 12 DC-coupled inputs. Jumpers select modular level (up to ±12 V, 101 kΩ) or line level (up to ±3.5 V / +10 dBu, 29 kΩ). Use 3.5 mm TS cables, not TRS.</p><p>Six DC-coupled outputs are on the front; outputs 7–8 are available on rear header J5. Output range is up to ±11 V. The USB-C port provides class-compliant MIDI, Audio 2.0 and Video, but the NT is not a USB host and is not powered by USB.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=20" target="_blank" rel="noopener">Official manual: Inputs, outputs and USB →</a></section>
+
+        <section id="wiki-presets"><p class="wiki-kicker">Manual pages 41–43</p><h3>Presets and working memory</h3><p>Edits affect the live preset immediately but are not stored on the card until <b>Save preset</b>. The NT does not auto-save. <b>Load parameters</b> changes only values and requires the same algorithms in the same order, so audio does not stop for a full rebuild.</p><p><b>Append</b>, <b>Insert</b> and <b>Prepend</b> combine preset files with the current chain. A single algorithm or a range can be saved for reuse. An <b>End of chain</b> preset keeps a final section—such as venue EQ or limiting—in place while the main preset changes.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=41" target="_blank" rel="noopener">Official manual: Presets →</a></section>
+
+        <section id="wiki-routing"><p class="wiki-kicker">Manual pages 29–30</p><h3>Signal flow and busses</h3><p>Algorithms read and write numbered busses. Busses 1–12 correspond to module inputs, 13–20 to outputs 1–8, and the remaining 44 are internal aux busses. An algorithm’s output can <b>Add</b> to what is already on a bus or <b>Replace</b> it.</p><p>Algorithms execute in slot order. A consumer normally needs to sit below the algorithm producing its signal. Feedback Receive/Send is the deliberate mechanism for routes that need to cross the normal top-to-bottom order.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=29" target="_blank" rel="noopener">Official manual: Signal flow →</a></section>
+
+        <section id="wiki-algorithms"><p class="wiki-kicker">Manual pages 72–427</p><h3>Algorithm index</h3><p><b>Sources and control:</b> Clock, LFO, envelopes, sequencers, Chaos, Noise, MIDI Triggers, MIDI CC Generator and Virtual CVC. <b>Pitch and synthesis:</b> VCOs, Poly CV/FM/Wavetable/Multisample/Resonator, Dream Machine and macro oscillators.</p><p><b>Audio processing:</b> mixers, filters, EQ, dynamics, delays, reverbs, spectral processors, pitch/frequency shifters and granular/texture effects. <b>Sampling and looping:</b> Sample Players, Audio Recorder, Auto-sampler, Looper and Looper (MicroSD). <b>Utilities:</b> Attenuverter, Logic, Multi-Switch, Quantizer, Scope, Tuner and routing helpers.</p><p>Each algorithm’s manual entry lists its specifications, UI, parameters, input/output busses and special behaviour. Search this wiki for a family, then use the full manual’s contents for the exact algorithm.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=72" target="_blank" rel="noopener">Official manual: Algorithm reference →</a></section>
+
+        <section id="wiki-mappings"><p class="wiki-kicker">Manual pages 44–47</p><h3>CV, MIDI and I²C mappings</h3><p>Any parameter can have several mapping types at once, and one controller can drive several parameters. Mappings are stored in the preset.</p><p><b>CV mappings add to the preset value</b> unless set as a Gate. Sources can be the algorithm’s own inputs, the physical module inputs, or another algorithm’s outputs. The change is <i>CV volts × Delta ÷ Volts</i>. Unipolar clamps negative CV to 0 V.</p><p><b>MIDI and I²C mappings directly set values.</b> MIDI supports CC, momentary/toggle notes, pitch bend, channel pressure, 14-bit CC, relative CC and—when enabled—NRPN. Symmetric mode guarantees the controller midpoint maps to the parameter midpoint. Learn captures the next received control.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=44" target="_blank" rel="noopener">Official manual: Mappings →</a></section>
+
+        <section id="wiki-performance"><p class="wiki-kicker">Manual pages 35–37 and 48</p><h3>Performance Page</h3><p>The Performance Page is a preset-wide collection of chosen parameters, independent of MIDI mappings. Assign a Performance Page index from the parameter’s mapping setup. Items can be renamed, constrained to custom min/max values and reordered.</p><p>The first four controls correspond to the four pots, and pages extend the available set. Knob Recorder algorithms can capture and replay gestures, optionally clock-synchronised. Firmware 1.18 makes a knob press reset its assigned parameter to default.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=35" target="_blank" rel="noopener">Official manual: Performance Page →</a></section>
+
+        <section id="wiki-cpu"><p class="wiki-kicker">Manual pages 31–32 and 50</p><h3>CPU, sample rate and block size</h3><p>The overview reports audio CPU and overall CPU. Audio overload causes glitches; overall load also includes display, card and background work. Higher sample rates and smaller blocks cost more CPU, while larger blocks increase latency.</p><p>Engine sample rates are 32, 44.1, 48, 88.2 or 96 kHz. Sample-rate and block-size changes require <b>Apply</b>. USB may control sample rate if <b>Allow USB rate change</b> is enabled; changing that option requires rebooting.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=31" target="_blank" rel="noopener">Official manual: Engine and CPU →</a></section>
+
+        <section id="wiki-expanders"><p class="wiki-kicker">Manual pages 13 and 50–51</p><h3>NTX-8CV, ES-5 and ESX</h3><p><b>CV (8×8):</b> up to eight NTX-8CVs provide 64 time-interleaved CV outputs. Channels are individually enabled; enabling unused channels wastes some CPU. <b>Audio 32-bit:</b> one unit provides eight full-resolution channels. <b>Audio 16-bit:</b> two units provide 16 channels. Match the NTX sample rate to the NT for audio modes.</p><p>NTX channels 1–44 carry aux 1–44, channels 45–56 carry inputs 1–12, and channels 57–64 carry outputs 1–8. In CV mode, NTX can share the link with an ES-5 and up to two ESX expanders, but shared mode halves NTX bandwidth. ES-5/ESX are otherwise addressed by compatible algorithms rather than ordinary output busses.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=50" target="_blank" rel="noopener">Official manual: NTX-8CV settings →</a></section>
+
+        <section id="wiki-storage"><p class="wiki-kicker">Manual pages 22–28 and 55–56</p><h3>MicroSD, samples and plug-ins</h3><p>Use FAT32 or exFAT. Presets are JSON. Key folders include <code>presets</code>, <code>samples</code>, <code>wavetables</code>, <code>MIDI</code>, <code>recordings</code>, <code>programs/lua</code>, <code>programs/plug-ins</code>, <code>scl</code>, <code>kbm</code> and <code>MTS</code>.</p><p>Samples may be mono or stereo WAV at any sample rate, in 8/16/24-bit or 32-bit float. Filename tags define natural pitch, switch points, round robins and velocity layers. After reinserting a powered-on card, use <b>Remount</b>. Use <b>Regenerate wavcache files</b> for unexpected corrupt/unsupported WAV errors. USB disk mode suspends all other NT operation; eject the disk before rebooting.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=22" target="_blank" rel="noopener">Official manual: MicroSD card →</a></section>
+
+        <section id="wiki-midi"><p class="wiki-kicker">Manual pages 21 and 52–53</p><h3>MIDI, Program Change and I²C</h3><p>MIDI arrives over USB, the optional breakout or Select Bus, with configurable forwarding. Soft takeover can be Sudden, Gradual or Always on; relative CC mappings bypass it. NRPN support uses CC 99/98 for the number and CC 6/38 for the value.</p><p>Program Change loads a preset whose filename contains <code>#number</code>; otherwise it indexes the alphabetically sorted files. I²C can control mappings, play notes and exchange commands through rear header J8. Exactly one or more devices on an I²C bus must provide pull-ups.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=52" target="_blank" rel="noopener">Official manual: MIDI settings →</a></section>
+
+        <section id="wiki-settings"><p class="wiki-kicker">Manual pages 49–55</p><h3>Useful global settings</h3><p><b>Display:</b> contrast, flip, screensaver, USB Video support and CPU display rate. <b>UI:</b> help duration, Button 4 shortcut, encoder preference, pot threshold and adding new algorithms already bypassed. <b>Startup:</b> optionally load the last saved or loaded preset—remember this is not auto-save.</p><p><b>MIDI:</b> CC/SysEx view changes, CC feedback, Learn exclusivity, device ID, Program Change and forwarding. <b>Globals:</b> master tuning. <b>Calibration:</b> factory calibration can be restored; save calibration explicitly to flash after changes.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=49" target="_blank" rel="noopener">Official manual: Settings →</a></section>
+
+        <section id="wiki-troubleshooting"><p class="wiki-kicker">Manual pages 31–32 and 56–58</p><h3>Troubleshooting</h3><p><b>Clicks or overload:</b> lower algorithm cost, reduce sample rate or increase block size. <b>Card was removed:</b> reinsert it and choose Remount. <b>WAV reported corrupt:</b> regenerate wavcache first. <b>Stuck MIDI notes:</b> Misc → MIDI → All notes off or All sound off.</p><p><b>No MIDI control:</b> use the MIDI monitor, then the Mappings monitor. Check channel, type, enabled state and soft takeover. <b>No I²C response:</b> use the I²C monitor, confirm address and ensure the bus has pull-ups. A fault screen preserves debugging information and lets you reboot.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=56" target="_blank" rel="noopener">Official manual: Diagnostics →</a></section>
+
+        <section id="wiki-connection"><p class="wiki-kicker">NT Pilot</p><h3>Connection and synchronization</h3><p>NT Pilot uses MIDI SysEx to discover the module and exchange live preset data. Leave the SysEx device ID at 0 for one NT; use distinct IDs for several modules. The Connected state means the NT answered an identity request, not merely that a MIDI port exists.</p><p>Fast synchronization refreshes changing state more often. Parameter and routing edits alter working memory immediately; use Save preset when you want the result written to the MicroSD card.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/distingNTfirmwareupdates.html" target="_blank" rel="noopener">Official firmware and manual archive →</a></section>
+      </div>
+    </div>
+    <footer><span id="guide-result-count">15 topics</span><div><a href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf" target="_blank" rel="noopener">Open official 1.18 manual</a><a href="https://www.expert-sleepers.co.uk/distingNTfirmwareupdates.html" target="_blank" rel="noopener">All manual versions</a></div></footer>
+  </dialog>
+
+  <script src="web-midi-transport.js?v=20260925-43"></script>
+  <script src="app.js?v=20260925-104"></script>
 </body>
 </html>

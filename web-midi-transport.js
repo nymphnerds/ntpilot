@@ -418,7 +418,7 @@
     }
 
     async readSlots(slotCount, algorithms) {
-      if (slotCount < 0 || slotCount > 32) throw new Error(`NT returned an invalid slot count (${slotCount}).`);
+      if (slotCount < 0 || slotCount > 40) throw new Error(`NT returned an invalid slot count (${slotCount}).`);
       const algorithmsByGuid = new Map(algorithms.map(algorithm => [algorithm.guidKey, algorithm]));
       const slots = [];
       for (let slot = 0; slot < slotCount; slot += 1) {
@@ -500,6 +500,56 @@
       return values;
     }
 
+    async readParameterEnumStrings(slot, parameter) {
+      const encodedParameter = encodeUnsigned21(parameter);
+      const payload = await this.request(
+        0x49,
+        0x49,
+        [slot, ...encodedParameter],
+        bytes => bytes[7] === slot && decodeUnsigned21(bytes.slice(8, 11)) === parameter
+      );
+      const count = payload[4] ?? 0;
+      const strings = [];
+      let cursor = 5;
+      for (let index = 0; index < count && cursor <= payload.length; index += 1) {
+        const end = payload.indexOf(0, cursor);
+        strings.push(decodeText(payload.slice(cursor, end < 0 ? payload.length : end)));
+        cursor = end < 0 ? payload.length : end + 1;
+      }
+      return strings;
+    }
+
+    async readParameterValueString(slot, parameter) {
+      const encodedParameter = encodeUnsigned21(parameter);
+      const payload = await this.request(
+        0x50,
+        0x50,
+        [slot, ...encodedParameter],
+        bytes => bytes[7] === slot && decodeUnsigned21(bytes.slice(8, 11)) === parameter
+      );
+      return decodeText(payload.slice(4)).replace(/\0.*$/, "");
+    }
+
+    async readSlotBypass(slot) {
+      const encodedParameter = encodeUnsigned21(0);
+      const payload = await this.request(
+        0x45,
+        0x45,
+        [slot, ...encodedParameter],
+        bytes => bytes[7] === slot && decodeUnsigned21(bytes.slice(8, 11)) === 0
+      );
+      return decodeSignedShort(payload.slice(4, 7)) === 1;
+    }
+
+    async readCpuUsage() {
+      const payload = await this.request(0x62, 0x62);
+      return {
+        audioThread: payload[0] ?? 0,
+        overall: payload[1] ?? 0,
+        slots: payload.slice(2)
+      };
+    }
+
     async readPerformancePageItem(itemIndex) {
       const payload = await this.request(0x57, 0x57, [itemIndex], bytes => bytes[8] === itemIndex);
       const version = payload[0] ?? 0;
@@ -557,6 +607,14 @@
       // 0 asks on the module, 1 generates a new file, 2 overwrites the loaded file.
       // The NT protocol provides no acknowledgement for this command.
       this.send(0x36, [option]);
+    }
+
+    async moveAlgorithm(fromSlot, toSlot) {
+      if (!Number.isInteger(fromSlot) || !Number.isInteger(toSlot) || fromSlot < 0 || toSlot < 0 || fromSlot > 127 || toSlot > 127) {
+        throw new Error("Invalid disting NT slot move.");
+      }
+      this.send(0x37, [fromSlot & 0x7F, toSlot & 0x7F]);
+      await new Promise(resolve => setTimeout(resolve, 80));
     }
 
     async readParameterPages(slot) {
@@ -661,6 +719,7 @@
       const identity = await this.readIdentity();
       const algorithms = await this.readAlgorithmCatalog();
       const slots = await this.readSlots(identity.slotCount, algorithms);
+      for (const slot of slots) slot.bypassed = await this.readSlotBypass(slot.index);
       return { ...identity, algorithms, slots };
     }
 
