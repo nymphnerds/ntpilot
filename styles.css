@@ -1,5 +1,5 @@
 :root {
-  --bg: #07111f;
+  --bg: #dbe6ef;
   --stage: #0a1627;
   --chrome: #0e1c2e;
   --chrome-2: #12243a;
@@ -30,8 +30,8 @@ html, body { min-height: 100%; height: 100%; }
 body {
   margin: 0;
   background:
-    radial-gradient(circle at 18% 15%, rgba(40, 124, 151, .22), transparent 30rem),
-    radial-gradient(circle at 88% 75%, rgba(85, 68, 137, .18), transparent 32rem),
+    radial-gradient(circle at 18% 15%, rgba(89, 143, 179, .16), transparent 30rem),
+    radial-gradient(circle at 88% 75%, rgba(114, 105, 170, .10), transparent 32rem),
     var(--bg);
   color: var(--ink);
   overflow-x: hidden;
@@ -75,14 +75,14 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .sidebar-compact .nav-badge { position: absolute; margin: 0 0 21px 22px; }
 .sidebar-compact .settings-link { position: relative; }
 
-.app-sidebar { padding: 22px 13px 16px; display: flex; flex-direction: column; color: #d1dee6; border-right: 1px solid var(--line-dark); min-width: 0; background: #29445f; }
+.app-sidebar { padding: 22px 13px 16px; display: flex; flex-direction: column; color: #bfd0da; border-right: 1px solid var(--line-dark); min-width: 0; background: var(--chrome); }
 .app-mark { display: flex; align-items: center; gap: 10px; padding: 0 9px 24px; }
 .mark-glyph { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #08221f; background: linear-gradient(145deg, #8cead7, #54ccb5); font-weight: 900; font-size: 13px; letter-spacing: -.05em; }
 .mark-copy { display: flex; flex-direction: column; line-height: 1.05; }
 .mark-copy strong { color: white; font-size: 16px; }
 .mark-copy small { color: #758d9e; font-size: 10px; margin-top: 4px; }
 .primary-nav { display: flex; flex-direction: column; gap: 4px; }
-.nav-item { width: 100%; display: flex; align-items: center; gap: 11px; border: 0; border-radius: 12px; padding: 11px 12px; color: #b7cad7; background: transparent; text-align: left; font-weight: 700; font-size: 13px; }
+.nav-item { width: 100%; display: flex; align-items: center; gap: 11px; border: 0; border-radius: 12px; padding: 11px 12px; color: #91a7b7; background: transparent; text-align: left; font-weight: 700; font-size: 13px; }
 .nav-item svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .nav-item:hover { color: #deebf1; background: rgba(255,255,255,.045); }
 .nav-item.active { color: #dbfff7; background: rgba(84,204,181,.12); box-shadow: inset 3px 0 var(--mint); }
