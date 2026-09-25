@@ -3,7 +3,7 @@
   --stage: #0a1627;
   --chrome: #0e1c2e;
   --chrome-2: #12243a;
-  --surface: #e7eef4;
+  --surface: #f4f7f8;
   --surface-2: #ffffff;
   --surface-3: #eaf0f2;
   --ink: #14202a;
@@ -75,7 +75,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .sidebar-compact .nav-badge { position: absolute; margin: 0 0 21px 22px; }
 .sidebar-compact .settings-link { position: relative; }
 
-.app-sidebar { padding: 22px 13px 16px; display: flex; flex-direction: column; color: #bfd0da; border-right: 1px solid var(--line-dark); min-width: 0; background: var(--chrome); }
+.app-sidebar { padding: 22px 13px 16px; display: flex; flex-direction: column; color: #bfd0da; border-right: 1px solid var(--line-dark); min-width: 0; }
 .app-mark { display: flex; align-items: center; gap: 10px; padding: 0 9px 24px; }
 .mark-glyph { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #08221f; background: linear-gradient(145deg, #8cead7, #54ccb5); font-weight: 900; font-size: 13px; letter-spacing: -.05em; }
 .mark-copy { display: flex; flex-direction: column; line-height: 1.05; }
