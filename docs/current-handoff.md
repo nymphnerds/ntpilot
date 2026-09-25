@@ -89,7 +89,7 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 - `styles.css?v=20260925-69`
 - `web-midi-transport.js?v=20260925-40`
-- `app.js?v=20260925-90`
+- `app.js?v=20260925-91`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
