@@ -217,7 +217,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .parameter-section.collapsed .parameter-row { display: none; }
 .parameter-fixture-note { min-height: 250px; padding: 28px; display: grid; place-content: center; gap: 7px; border: 1px dashed #c9d5d9; border-radius: 13px; background: #f7fafb; text-align: center; }
 .parameter-fixture-note strong { color: #354a55; font-size: 14px; }.parameter-fixture-note span { max-width: 420px; color: #7c8c95; font-size: 10px; line-height: 1.5; }
-.parameter-row { min-height: 70px; display: grid; grid-template-columns: minmax(90px, 1.2fr) minmax(110px, 2fr) 62px 50px; align-items: center; gap: 14px; border-bottom: 1px solid #e5ebed; padding: 7px 5px; }
+.parameter-row { min-height: 56px; display: grid; grid-template-columns: minmax(90px, 1.2fr) minmax(110px, 2fr) 62px 50px; align-items: center; gap: 14px; border-bottom: 1px solid #e5ebed; padding: 4px 5px; }
 .parameter-row.selected { background: linear-gradient(90deg, rgba(66,190,166,.07), transparent); }
 .live-parameter-row { border-bottom-color: var(--parameter-accent); background: linear-gradient(90deg, var(--parameter-tint), transparent 76%); box-shadow: inset 2px 0 0 var(--parameter-accent); transition: background .14s; }
 .live-parameter-row:hover { background: linear-gradient(90deg, var(--parameter-tint-hover), transparent 82%); }
@@ -229,7 +229,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .parameter-name strong { font-size: 12px; }
 .parameter-name span { color: #91a0a8; font-size: 10px; margin-top: 3px; }
 .parameter-row input[type="range"] { width: 100%; }
-input[type="range"] { --range-progress: 0%; width: 100%; height: 24px; margin: 0; appearance: none; -webkit-appearance: none; border: 0; outline: 0; background: transparent; cursor: pointer; }
+input[type="range"] { --range-progress: 0%; width: 100%; height: 22px; margin: 0; appearance: none; -webkit-appearance: none; border: 0; outline: 0; background: transparent; cursor: pointer; }
 input[type="range"]::-webkit-slider-runnable-track { height: 3px; border: 0; border-radius: 999px; background: linear-gradient(90deg, var(--slider-start, var(--blue)) 0, var(--slider-colour, var(--mint)) var(--range-progress), #dce6e9 var(--range-progress) 100%); }
 input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-top: -5px; appearance: none; -webkit-appearance: none; border: 2px solid var(--slider-colour, var(--mint)); border-radius: 50%; background: var(--chrome-2); box-shadow: 0 0 0 2px white, 0 2px 4px rgba(18,36,58,.2); transition: transform .14s, box-shadow .14s; }
 input[type="range"]::-moz-range-track { height: 3px; border: 0; border-radius: 999px; background: #dce6e9; }
