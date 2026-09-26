@@ -220,13 +220,14 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.bus-dock-bottom .editor-bus-dock-row,
 .device-frame.bus-dock-bottom .editor-physical-bus-row { padding-inline: var(--chrome-gutter); }
 .device-frame.ipad-mode { grid-template-columns: 280px minmax(0, 1fr); }
-.device-frame.ipad-mode .app-sidebar { display: flex; padding: 18px 14px 18px 20px; }
-.device-frame.ipad-mode .app-mark { justify-content: flex-start; gap: 13px; padding-bottom: 42px; }
+.device-frame.ipad-mode .app-sidebar { display: flex; min-height: 0; overflow-y: auto; padding: 18px 14px 18px 20px; }
+.device-frame.ipad-mode .app-mark { justify-content: flex-start; gap: 13px; padding-bottom: 28px; }
 .device-frame.ipad-mode .mark-glyph, .device-frame.ipad-mode .mark-glyph img { flex-basis: 82px; width: 82px; height: 82px; }
 .device-frame.ipad-mode .mark-copy { display: flex; }
 .device-frame.ipad-mode .mark-copy strong { font-size: 29px; }
 .device-frame.ipad-mode .mark-copy small { font-size: 18px; }
-.device-frame.ipad-mode .nav-item { justify-content: flex-start; gap: 14px; padding: 18px 10px; font-size: 24px; }
+.device-frame.ipad-mode .primary-nav { gap: 2px; }
+.device-frame.ipad-mode .nav-item { justify-content: flex-start; gap: 14px; padding: 11px 10px; font-size: 24px; }
 .device-frame.ipad-mode .nav-item svg { width: 36px; height: 36px; }
 .device-frame.ipad-mode .nav-item span:not(.nav-badge) { display: inline; }
 .device-frame.ipad-mode .interface-scale { height: 54px; padding: 3px; border-radius: 12px; }
@@ -234,7 +235,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.ipad-mode .interface-scale output { min-width: 76px; color: #223d48; font-size: 19px; font-weight: 950; }
 .device-frame.ipad-mode .status-sync { width: 100%; height: 56px; margin-top: 9px; padding: 0 7px 0 14px; justify-content: space-between; border-radius: 12px; font-size: 17px; }
 .device-frame.ipad-mode .status-sync select { height: 44px; padding-inline: 10px 28px; font-size: 17px; }
-.device-frame.ipad-mode .ipad-mode-control { padding: 13px 8px; font-size: 18px; }
+.device-frame.ipad-mode .ipad-mode-control { margin-top: 8px; padding: 13px 8px; font-size: 18px; }
 .device-frame.ipad-mode .ipad-mode-control i { flex-basis: 38px; width: 38px; height: 23px; border-radius: 13px; }.device-frame.ipad-mode .ipad-mode-control i::after { width: 19px; height: 19px; }.device-frame.ipad-mode .ipad-mode-control input:checked + i::after { transform: translateX(15px); }
 .device-frame.ipad-mode .parameter-row { min-height: 64px; padding-block: 7px; }
 .device-frame.ipad-mode .parameter-name strong { font-size: 14px; }
