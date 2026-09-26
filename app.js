@@ -48,6 +48,9 @@
   const ipadModeControl = $("#ipad-mode");
   const darkModeControl = $("#dark-mode");
   const syncModeControl = $("#sync-mode");
+  const syncPickerTrigger = $("#sync-picker-trigger");
+  const syncPickerValue = $("#sync-picker-value");
+  const syncPickerOptions = $("#sync-picker-options");
   const statusSyncControl = $(".status-sync");
   sidebarUtilityStack.insertBefore(statusSyncControl, interfaceScaleControl);
   const syncModeLabel = $("#sync-mode-label");
@@ -634,6 +637,8 @@
     state.syncMode = mode;
     syncModeControl.value = mode;
     const label = mode === "smart" ? "Slow" : mode[0].toUpperCase() + mode.slice(1);
+    syncPickerValue.textContent = label;
+    $$("[data-sync-mode]", syncPickerOptions).forEach(option => option.setAttribute("aria-selected", String(option.dataset.syncMode === mode)));
     const detail = mode === "manual" ? "No automatic NT or MIDI feedback · use Refresh" :
       mode === "fast" ? "Immediate MIDI feedback · 100 ms polling" :
         "MIDI feedback grouped at 250 ms · 250 ms polling";
@@ -3875,7 +3880,23 @@
     setDeviceState("labWaiting");
   });
 
-  syncModeControl.addEventListener("change", () => setSyncMode(syncModeControl.value));
+  syncPickerTrigger.addEventListener("click", () => {
+    const opening = syncPickerOptions.classList.contains("hidden");
+    syncPickerOptions.classList.toggle("hidden", !opening);
+    syncPickerTrigger.setAttribute("aria-expanded", String(opening));
+  });
+  syncPickerOptions.addEventListener("click", event => {
+    const option = event.target.closest("[data-sync-mode]");
+    if (!option) return;
+    setSyncMode(option.dataset.syncMode);
+    syncPickerOptions.classList.add("hidden");
+    syncPickerTrigger.setAttribute("aria-expanded", "false");
+  });
+  document.addEventListener("pointerdown", event => {
+    if (event.target.closest(".sync-picker")) return;
+    syncPickerOptions.classList.add("hidden");
+    syncPickerTrigger.setAttribute("aria-expanded", "false");
+  });
   undoEdit.addEventListener("click", () => stepEditHistory("undo"));
   redoEdit.addEventListener("click", () => stepEditHistory("redo"));
   document.addEventListener("keydown", event => {

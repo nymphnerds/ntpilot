@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-228">
+  <link rel="stylesheet" href="styles.css?v=20260926-230">
 </head>
 <body>
   <main class="stage">
@@ -84,14 +84,18 @@
               <button id="undo-edit" type="button" disabled aria-label="Undo last edit" title="Undo (Ctrl/Cmd+Z)">Undo</button>
               <button id="redo-edit" type="button" disabled aria-label="Redo last edit" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
             </div>
-            <label class="status-sync" for="sync-mode">
+            <div class="status-sync">
               <span>Sync</span>
-              <select id="sync-mode" aria-label="Live synchronization mode">
+              <div class="sync-picker">
+                <button class="sync-picker-trigger" id="sync-picker-trigger" type="button" aria-haspopup="listbox" aria-expanded="false"><b id="sync-picker-value">Fast</b><i aria-hidden="true"></i></button>
+                <div class="sync-picker-options hidden" id="sync-picker-options" role="listbox" aria-label="Live synchronization mode"><button type="button" role="option" data-sync-mode="manual">Manual</button><button type="button" role="option" data-sync-mode="smart">Slow</button><button type="button" role="option" data-sync-mode="fast" aria-selected="true">Fast</button></div>
+              </div>
+              <select class="sync-native-state hidden" id="sync-mode" aria-hidden="true" tabindex="-1">
                 <option value="manual">Manual</option>
                 <option value="smart">Slow</option>
                 <option value="fast" selected>Fast</option>
               </select>
-            </label>
+            </div>
             <span class="working-state hidden" id="working-state">Unsaved changes</span>
             <button class="primary-button hidden" id="save-preset" type="button" disabled>Save preset</button>
             <button class="secondary-button status-read-action" id="connect-midi" type="button">Connect NT</button>
@@ -485,6 +489,6 @@
 
   <script src="web-midi-transport.js?v=20260925-44"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-168"></script>
+  <script src="app.js?v=20260926-169"></script>
 </body>
 </html>

@@ -117,7 +117,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .sidebar-scale { width: 100%; height: 34px; margin-top: 0; justify-content: space-between; }
 .sidebar-utility-stack { width: 100%; margin-top: auto; display: flex; flex-direction: column; gap: 7px; }
 .sidebar-utility-stack .status-sync { width: 100%; height: 34px; margin: 0; justify-content: space-between; }
-.sidebar-scale button { height: 28px; font-size: 14px; }.sidebar-scale output { font-size: 10px; }
+.sidebar-scale button { height: 28px; color: #71818a; font-size: 12px; font-weight: 850; }.sidebar-scale output { color: #284550; font-size: 10px; font-weight: 850; }
 .ipad-mode-control { margin-top: 7px; padding: 8px 5px; display: flex; align-items: center; justify-content: space-between; gap: 7px; color: #536872; font-size: 10px; font-weight: 900; cursor: pointer; }
 .ipad-mode-control input { position: absolute; opacity: 0; pointer-events: none; }.ipad-mode-control i { position: relative; flex: 0 0 30px; width: 30px; height: 18px; border-radius: 10px; background: #cbd5d9; transition: .18s; }.ipad-mode-control i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,.22); transition: .18s; }.ipad-mode-control input:checked + i { background: var(--pilot); }.ipad-mode-control input:checked + i::after { transform: translateX(12px); }
 .history-actions { display: inline-flex; align-items: center; gap: 8px; }
@@ -138,6 +138,12 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .status-sync select { height: 26px; padding: 0 21px 0 5px; border: 0; outline: 0; color: #284550; background-color: #f7fafb; color-scheme: light; font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer; }
 .status-sync select option { color: #284550; background: white; }
 .status-sync:has(select:focus-visible) { border-color: var(--pilot); box-shadow: 0 0 0 2px color-mix(in srgb, var(--pilot) 14%, transparent); }
+.sync-picker { position: relative; align-self: stretch; display: flex; align-items: center; }
+.sync-picker-trigger { min-width: 64px; height: 100%; padding: 0 23px 0 7px; border: 0; border-radius: 7px; color: #284550; background: transparent; font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer; }
+.sync-picker-trigger b { font: inherit; font-weight: 850; }.sync-picker-trigger i { position: absolute; right: 7px; top: 50%; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #58707b; transform: translateY(-35%); }
+.sync-picker-trigger:focus-visible { outline: 2px solid var(--pilot); outline-offset: -2px; }
+.sync-picker-options { position: absolute; z-index: 100; right: 0; bottom: calc(100% + 6px); min-width: 112px; padding: 5px; display: grid; gap: 3px; border: 1px solid var(--line); border-radius: 10px; color: #344d58; background: rgba(255,255,255,.99); box-shadow: 0 10px 28px rgba(15,35,47,.22); }
+.sync-picker-options.hidden { display: none; }.sync-picker-options button { min-height: 31px; padding: 0 10px; border: 0; border-radius: 7px; color: inherit; background: transparent; font: inherit; font-weight: 800; text-align: left; cursor: pointer; }.sync-picker-options button:hover, .sync-picker-options button[aria-selected="true"] { color: var(--pilot-deep); background: var(--pilot-soft); }
 
 .state-banner { margin: 14px 20px 0; padding: 13px 15px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #fff4d5; border: 1px solid #eddda9; border-radius: 13px; color: #634d18; }
 .state-banner strong { font-size: 13px; }
@@ -246,9 +252,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.ipad-mode .nav-item svg { width: 32px; height: 32px; }
 .device-frame.ipad-mode .nav-item span:not(.nav-badge) { display: inline; }
 .device-frame.ipad-mode .sidebar-utility-stack { gap: 7px; }
-.device-frame.ipad-mode .interface-scale { height: 42px; margin-top: 0; padding: 3px 5px; border-radius: 10px; }
-.device-frame.ipad-mode .interface-scale button { width: 34px; height: 34px; font-size: 18px; line-height: 1; }
-.device-frame.ipad-mode .interface-scale output { min-width: 58px; color: #223d48; font-size: 13px; font-weight: 900; }
+.device-frame.ipad-mode .interface-scale { height: 42px; margin-top: 0; padding: 3px 5px 3px 11px; border-radius: 10px; }
+.device-frame.ipad-mode .interface-scale button { width: 24px; height: 34px; font-size: 14px; font-weight: 850; line-height: 1; }
+.device-frame.ipad-mode .interface-scale button:first-child { text-align: left; }.device-frame.ipad-mode .interface-scale button:last-child { text-align: right; }
+.device-frame.ipad-mode .interface-scale output { min-width: 58px; color: #284550; font-size: 13px; font-weight: 850; }
 .device-frame.ipad-mode .status-sync { width: 100%; height: 42px; margin-top: 0; padding: 0 5px 0 11px; justify-content: space-between; border-radius: 10px; font-size: 13px; }
 .device-frame.ipad-mode .status-sync select { height: 32px; padding-inline: 7px 24px; font-size: 13px; }
 .device-frame.ipad-mode .ipad-mode-control { margin-top: 8px; padding: 13px 8px; font-size: 18px; }
@@ -836,6 +843,7 @@ body.dark-mode { --pilot-soft: color-mix(in srgb, var(--pilot) 18%, #102033); --
 .device-frame.dark-mode .parameter-fixture-note span { color: #9fb0b9; }
 
 body.dark-mode .routing-connection-panel { color: #dfe8ec; background: rgba(17,31,46,.99); border-color: #344b5e; box-shadow: 0 16px 42px rgba(0,0,0,.52); }
+body.dark-mode .sync-picker-trigger { color: #dce7ec; }.device-frame.dark-mode .sync-picker-options { color: #dce7ec; background: #142438; border-color: #30465a; box-shadow: 0 12px 30px rgba(0,0,0,.48); }
 body.dark-mode .routing-connection-heading strong { color: #edf4f7; }
 body.dark-mode .routing-connection-panel label span,
 body.dark-mode .routing-connection-actions button { color: #c5d2d9; background: #172a3c; border-color: #3a5062; }
