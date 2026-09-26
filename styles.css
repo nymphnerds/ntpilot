@@ -893,8 +893,11 @@ body.dark-mode .algorithm-load-dialog { color: #dce7ec; border-color: #30465a; b
 
 body.dark-mode .preset-library { border-color: #30465a; background: #101e2d; box-shadow: 0 8px 22px rgba(0,0,0,.18); }body.dark-mode .preset-library-topbar, body.dark-mode .preset-inspector { border-color: #30465a; background: #142438; }body.dark-mode .preset-file-list { border-color: #30465a; background: #101e2d; }body.dark-mode .preset-up-button { border-color: #30465a; color: #dce7ec; background: #172a3c; }body.dark-mode .preset-breadcrumbs span { color: #6f8593; }body.dark-mode .preset-file-row { border-color: #30465a; color: #dce7ec; background: #172a3c; }body.dark-mode .preset-file-row.selected { border-color: color-mix(in srgb, var(--pilot) 58%, #30465a); background: color-mix(in srgb, var(--pilot) 16%, #172a3c); }body.dark-mode .preset-file-row small, body.dark-mode .preset-library-empty, body.dark-mode .preset-inspector p { color: #9fb1bb; }body.dark-mode .preset-file-icon { color: #b5d2ed; background: #203b55; }body.dark-mode .preset-file-row.directory .preset-file-icon { color: #f5d38c; background: #3b3420; }body.dark-mode .preset-inspector h2 { color: #edf4f7; }body.dark-mode .preset-inspector-kicker { color: #9fb1bb; }body.dark-mode .preset-load-dialog { color: #dce7ec; border-color: #30465a; background: #101e2d; box-shadow: 0 28px 80px rgba(0,0,0,.58); }body.dark-mode .preset-load-dialog > header, body.dark-mode .preset-load-dialog > footer { border-color: #30465a; background: #142438; }body.dark-mode .preset-load-dialog > header button, body.dark-mode .preset-load-dialog > footer button { border-color: #30465a; color: #dce7ec; background: #172a3c; }body.dark-mode .preset-load-copy strong { color: #edf4f7; }body.dark-mode .preset-load-copy p { color: #9fb1bb; }body.dark-mode .preset-load-copy .preset-load-warning { border-color: #896d35; color: #f5d38c; background: #342b1a; }body.dark-mode .preset-load-dialog > footer button:last-child { border-color: var(--pilot); color: #072b27; background: var(--pilot); }
 body.dark-mode .preset-inspector-manage .text-button { color: #a8c1cc; }body.dark-mode .preset-inspector-manage .text-button.danger { color: #f18a94; }body.dark-mode .preset-file-dialog { color: #dce7ec; border-color: #30465a; background: #101e2d; box-shadow: 0 28px 80px rgba(0,0,0,.58); }body.dark-mode .preset-file-dialog > header, body.dark-mode .preset-file-dialog > footer { border-color: #30465a; background: #142438; }body.dark-mode .preset-file-dialog > header button, body.dark-mode .preset-file-dialog > footer button, body.dark-mode .preset-file-dialog-copy input { border-color: #30465a; color: #dce7ec; background: #172a3c; }body.dark-mode .preset-file-dialog-copy strong { color: #edf4f7; }body.dark-mode .preset-file-dialog-copy p, body.dark-mode .preset-file-dialog-copy label { color: #9fb1bb; }body.dark-mode .preset-file-dialog > footer button:last-child { border-color: var(--pilot); color: #072b27; background: var(--pilot); }body.dark-mode .preset-file-dialog > footer button.danger { border-color: #c95f68; color: white; background: #b84d59; }
+
+
 @media (min-width: 651px) { body.dark-mode .presets-view .preset-inspector-manage { border-color: #30465a; } }
 body.dark-mode .algorithm-load-placement button { border-color: #30465a; color: #dce7ec; background: #172a3c; }body.dark-mode .algorithm-load-placement button.selected { border-color: var(--pilot); color: #072b27; background: var(--pilot); }
+
 body.dark-mode .sync-picker-trigger { color: #dce7ec; }.device-frame.dark-mode .sync-picker-options { color: #dce7ec; background: #142438; border-color: #30465a; box-shadow: 0 12px 30px rgba(0,0,0,.48); }
 body.dark-mode .routing-connection-heading strong { color: #edf4f7; }
 body.dark-mode .routing-connection-panel label span,
@@ -918,6 +921,51 @@ body.dark-mode .guide-articles h3,
 body.dark-mode .guide-articles b { color: #edf4f7; }
 body.dark-mode .guide-articles p { color: #afbec6; }
 body.dark-mode .guide-articles code { color: #c5d4db; background: #1a2d40; }
+
+/* Presets follows the same iPad-mode card scale and charcoal treatment as
+   Editor. Without these rules it remained at the desktop file-browser scale. */
+.device-frame.ipad-mode .preset-library { border-radius: 16px; }
+.device-frame.ipad-mode .preset-library-topbar { min-height: 58px; padding: 10px 12px; }
+.device-frame.ipad-mode .preset-up-button { width: 40px; height: 40px; border-radius: 10px; font-size: 22px; }
+.device-frame.ipad-mode .preset-breadcrumbs button { font-size: 15px; }
+.device-frame.ipad-mode .preset-breadcrumbs span { font-size: 14px; }
+.device-frame.ipad-mode .preset-file-list { padding: 12px; gap: 10px; }
+.device-frame.ipad-mode .preset-file-row { min-height: 82px; padding: 12px; grid-template-columns: 42px minmax(0,1fr) auto; gap: 11px; border-radius: 14px; }
+.device-frame.ipad-mode .preset-file-icon { width: 40px; height: 40px; border-radius: 10px; font-size: 15px; }
+.device-frame.ipad-mode .preset-file-row strong { font-size: 16px; }
+.device-frame.ipad-mode .preset-file-row small { margin-top: 4px; font-size: 13px; }
+.device-frame.ipad-mode .preset-file-affordance { font-size: 11px; }
+.device-frame.ipad-mode .preset-inspector { padding: 24px 20px; }
+.device-frame.ipad-mode .preset-inspector-kicker { font-size: 11px; }
+.device-frame.ipad-mode .preset-inspector h2 { font-size: 24px; }
+.device-frame.ipad-mode .preset-inspector p { font-size: 14px; line-height: 1.5; }
+.device-frame.ipad-mode .preset-inspector-actions button { min-height: 42px; font-size: 12px; }
+.device-frame.ipad-mode .preset-inspector-manage .text-button { font-size: 12px; }
+.device-frame.dark-mode.ipad-mode .preset-file-row { color: #cfdae0; border-color: #263b4d; background: transparent; }
+.device-frame.dark-mode.ipad-mode .preset-file-row:hover { background: #142438; }
+.device-frame.dark-mode.ipad-mode .preset-file-row.selected { border-color: color-mix(in srgb, var(--pilot) 52%, #263b4d); background: color-mix(in srgb, var(--pilot) 16%, #142438); box-shadow: 0 4px 15px rgba(0,0,0,.24); }
+.device-frame.dark-mode.ipad-mode .preset-file-icon { color: #a9bac4; background: #1b3043; }
+.device-frame.dark-mode.ipad-mode .preset-file-row small { color: #8fa3af; }
+.device-frame.dark-mode.ipad-mode .preset-inspector-kicker { color: #8fa3af; }
+.device-frame.dark-mode.ipad-mode .preset-inspector h2 { color: #edf4f7; }
+.device-frame.dark-mode.ipad-mode .preset-inspector p { color: #8fa3af; }
+
+/* The load-confirmation step was the missing part of the algorithm flow: it
+   now uses the same iPad dialog scale as the existing starting-settings step. */
+body:has(.device-frame.ipad-mode) .algorithm-load-dialog[open] { width: calc(100vw - 16px); width: calc(100dvw - 16px); max-width: 680px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-dialog > header { padding: 19px 22px 17px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-dialog > header span { font-size: 11px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-dialog > header h2 { font-size: 24px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-dialog > header button { width: 42px; height: 42px; font-size: 28px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-copy { padding: 20px 22px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-copy strong { font-size: 18px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-copy p { font-size: 14px; line-height: 1.5; }
+body:has(.device-frame.ipad-mode) .algorithm-load-copy .algorithm-load-warning { padding: 11px 13px; border-radius: 11px; font-size: 13px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-insert { margin-top: 18px; gap: 12px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-placement { gap: 8px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-placement button { min-height: 40px; padding-inline: 13px; border-radius: 9px; font-size: 11px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-dialog > footer { padding: 15px 22px; }
+body:has(.device-frame.ipad-mode) .algorithm-load-dialog > footer button { min-height: 42px; padding-inline: 15px; font-size: 12px; }
 
 @media (max-width: 900px) {
   :root { --sidebar-width: 76px; }
