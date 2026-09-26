@@ -150,8 +150,12 @@
   };
 
   function updateHistoryControls() {
-    undoEdit.disabled = state.historyBusy || !state.transportOnline || state.undoHistory.length === 0;
-    redoEdit.disabled = state.historyBusy || !state.transportOnline || state.redoHistory.length === 0;
+    undoEdit.disabled = state.historyBusy;
+    redoEdit.disabled = state.historyBusy;
+    undoEdit.classList.toggle("empty", !state.transportOnline || state.undoHistory.length === 0);
+    redoEdit.classList.toggle("empty", !state.transportOnline || state.redoHistory.length === 0);
+    undoEdit.setAttribute("aria-disabled", String(!state.transportOnline || state.undoHistory.length === 0));
+    redoEdit.setAttribute("aria-disabled", String(!state.transportOnline || state.redoHistory.length === 0));
     undoEdit.title = state.undoHistory.length ? `Undo ${state.undoHistory.at(-1).label} (Ctrl/Cmd+Z)` : "Nothing to undo";
     redoEdit.title = state.redoHistory.length ? `Redo ${state.redoHistory.at(-1).label} (Ctrl/Cmd+Shift+Z)` : "Nothing to redo";
   }
@@ -2826,11 +2830,18 @@
   }
 
   async function stepEditHistory(direction) {
-    if (state.historyBusy || !state.transportOnline) return;
+    if (state.historyBusy) return;
+    if (!state.transportOnline) {
+      showToast(`${direction === "undo" ? "Undo" : "Redo"} is unavailable while the NT is disconnected`);
+      return;
+    }
     const source = direction === "undo" ? state.undoHistory : state.redoHistory;
     const destination = direction === "undo" ? state.redoHistory : state.undoHistory;
     const action = source.pop();
-    if (!action) return;
+    if (!action) {
+      showToast(`Nothing to ${direction} yet · algorithm slot moves appear here`);
+      return;
+    }
     const control = direction === "undo" ? undoEdit : redoEdit;
     const idleLabel = direction === "undo" ? "Undo" : "Redo";
     state.historyBusy = true;
