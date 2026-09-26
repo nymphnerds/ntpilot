@@ -365,6 +365,7 @@ input[type="range"]:disabled { opacity: .48; cursor: wait; }
 .device-frame.bus-dock-bottom:has(> .routing-aux-palette:not(.hidden)) .app-main,
 .device-frame.bus-dock-bottom:has(> .routing-aux-palette:not(.hidden)) .app-sidebar { padding-bottom: var(--bottom-bus-dock-height, 92px); }
 .routing-viewport { position: relative; min-height: 0; overflow: auto; background-color: #f6f8fc; background-image: linear-gradient(rgba(77,107,157,.10) 1px, transparent 1px), linear-gradient(90deg, rgba(77,107,157,.10) 1px, transparent 1px), linear-gradient(rgba(77,107,157,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(77,107,157,.035) 1px, transparent 1px); background-size: 48px 48px, 48px 48px, 12px 12px, 12px 12px; cursor: grab; overscroll-behavior: contain; scrollbar-color: #9eafc4 #e8edf4; scrollbar-width: thin; }
+.device-frame.ipad-mode .routing-viewport { touch-action: none; }
 .routing-viewport::-webkit-scrollbar { width: 12px; height: 12px; }.routing-viewport::-webkit-scrollbar-track { background: #e8edf4; }.routing-viewport::-webkit-scrollbar-thumb { border: 3px solid #e8edf4; border-radius: 10px; background: #9eafc4; }.routing-viewport::-webkit-scrollbar-thumb:hover { background: #7f94ad; }.routing-viewport::-webkit-scrollbar-corner { background: #e8edf4; }
 .routing-viewport.dragging { cursor: grabbing; user-select: none; }.routing-viewport:focus-visible { outline: 3px solid rgba(108,174,255,.48); outline-offset: -3px; }
 .routing-zoom-layer { position: relative; min-width: 100%; min-height: 100%; overflow: hidden; contain: layout size; }

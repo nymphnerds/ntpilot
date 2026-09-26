@@ -3120,10 +3120,41 @@
   }, { passive: false });
 
   let routingDrag = null;
+  const routingTouches = new Map();
+  let routingPinch = null;
+  const routingTouchGeometry = () => {
+    const points = [...routingTouches.values()].slice(0, 2);
+    if (points.length < 2) return null;
+    return {
+      distance: Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y),
+      x: (points[0].x + points[1].x) / 2,
+      y: (points[0].y + points[1].y) / 2
+    };
+  };
   document.addEventListener("pointerdown", event => {
     state.lastRoutingPointer = { x: event.clientX, y: event.clientY };
   }, true);
   routingViewport.addEventListener("pointerdown", event => {
+    if (event.pointerType === "touch") {
+      routingTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      routingViewport.setPointerCapture(event.pointerId);
+      const geometry = routingTouchGeometry();
+      if (geometry) {
+        const rect = routingViewport.getBoundingClientRect();
+        const localX = geometry.x - rect.left;
+        const localY = geometry.y - rect.top;
+        routingPinch = {
+          distance: Math.max(1, geometry.distance),
+          zoom: state.routingZoom,
+          contentX: (routingViewport.scrollLeft + localX) / state.routingZoom,
+          contentY: (routingViewport.scrollTop + localY) / state.routingZoom
+        };
+        routingDrag = null;
+        routingViewport.classList.remove("dragging");
+        event.preventDefault();
+        return;
+      }
+    }
     if (event.button !== 0 || event.target.closest("button, input, label, .routing-node.endpoint, .routing-port")) return;
     routingDrag = {
       pointerId: event.pointerId,
@@ -3136,14 +3167,38 @@
     routingViewport.classList.add("dragging");
   });
   routingViewport.addEventListener("pointermove", event => {
+    if (event.pointerType === "touch" && routingTouches.has(event.pointerId)) {
+      routingTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      const geometry = routingTouchGeometry();
+      if (routingPinch && geometry) {
+        const rect = routingViewport.getBoundingClientRect();
+        const localX = geometry.x - rect.left;
+        const localY = geometry.y - rect.top;
+        state.routingZoom = Math.max(.2, Math.min(1.5, routingPinch.zoom * geometry.distance / routingPinch.distance));
+        applyRoutingZoom();
+        routingViewport.scrollLeft = (routingPinch.contentX * state.routingZoom) - localX;
+        routingViewport.scrollTop = (routingPinch.contentY * state.routingZoom) - localY;
+        event.preventDefault();
+        return;
+      }
+    }
     if (!routingDrag || event.pointerId !== routingDrag.pointerId) return;
     routingViewport.scrollLeft = routingDrag.left - (event.clientX - routingDrag.x);
     routingViewport.scrollTop = routingDrag.top - (event.clientY - routingDrag.y);
   });
   const finishRoutingDrag = event => {
-    if (!routingDrag || event.pointerId !== routingDrag.pointerId) return;
-    routingDrag = null;
-    routingViewport.classList.remove("dragging");
+    if (event.pointerType === "touch") {
+      routingTouches.delete(event.pointerId);
+      if (routingTouches.size < 2) {
+        routingPinch = null;
+        routingDrag = null;
+        routingViewport.classList.remove("dragging");
+      }
+    }
+    if (routingDrag && event.pointerId === routingDrag.pointerId) {
+      routingDrag = null;
+      routingViewport.classList.remove("dragging");
+    }
   };
   routingViewport.addEventListener("pointerup", finishRoutingDrag);
   routingViewport.addEventListener("pointercancel", finishRoutingDrag);
