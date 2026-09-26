@@ -35,6 +35,35 @@
     return bytes.reduce((value, byte) => (value * 128) + (byte & 0x7F), 0);
   }
 
+  function encodeUnsigned70(value) {
+    if (!Number.isSafeInteger(value) || value < 0) throw new Error("Invalid NT SD-card file position.");
+    const bytes = Array(10).fill(0);
+    let remaining = value;
+    for (let index = bytes.length - 1; index >= 0; index -= 1) {
+      bytes[index] = remaining & 0x7F;
+      remaining = Math.floor(remaining / 128);
+    }
+    return bytes;
+  }
+
+  function decodeNibbles(bytes) {
+    if (bytes.length % 2) throw new Error("The NT returned an incomplete SD-card file.");
+    const data = new Uint8Array(bytes.length / 2);
+    for (let index = 0; index < bytes.length; index += 2) {
+      const high = bytes[index];
+      const low = bytes[index + 1];
+      if (high > 0x0F || low > 0x0F) throw new Error("The NT returned invalid SD-card file data.");
+      data[index / 2] = (high << 4) | low;
+    }
+    return data;
+  }
+
+  function encodeNibbles(bytes) {
+    const data = [];
+    for (const byte of bytes) data.push((byte >> 4) & 0x0F, byte & 0x0F);
+    return data;
+  }
+
   function sdPathBytes(path) {
     if (typeof path !== "string" || !path.startsWith("/") || path.includes("\0")) {
       throw new Error("An absolute NT SD-card path is required.");
@@ -804,6 +833,34 @@
       const data = [operation, ...sdPathBytes(sdDirectoryPath(path))];
       const payload = await this.requestSDOperation(operation, data);
       return parseSDDirectoryEntries(payload);
+    }
+
+    async readSDFile(path) {
+      const operation = 2;
+      const payload = await this.requestSDOperation(operation, [operation, ...sdPathBytes(path)]);
+      if ((payload[0] ?? 1) !== 0) throw new Error(decodeText(payload.slice(1)) || "The NT could not read that SD-card file.");
+      if (payload[1] !== operation) throw new Error("The NT returned an unexpected SD-card file response.");
+      return decodeNibbles(payload.slice(2));
+    }
+
+    async writeSDFile(path, bytes) {
+      if (!(bytes instanceof Uint8Array) || !bytes.length) throw new Error("NT preset files must contain data.");
+      const pathBytes = sdPathBytes(path);
+      // The NT's documented 0x7A/0x04 operation writes 512-byte chunks.
+      // createAlways on the first chunk replaces the selected file in place.
+      for (let offset = 0; offset < bytes.length; offset += 512) {
+        const chunk = bytes.slice(offset, offset + 512);
+        const data = [
+          4,
+          ...pathBytes,
+          0,
+          offset === 0 ? 1 : 0,
+          ...encodeUnsigned70(offset),
+          ...encodeUnsigned70(chunk.length),
+          ...encodeNibbles(chunk)
+        ];
+        await this.sdOperation(4, data.slice(1));
+      }
     }
 
     // File-operation replies share the same command byte.  Attribute them by

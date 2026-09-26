@@ -148,6 +148,14 @@
   const presetFileDialogInput = $("#preset-file-dialog-input");
   const cancelPresetFileDialog = $("#cancel-preset-file-dialog");
   const confirmPresetFileDialog = $("#confirm-preset-file-dialog");
+  const presetJsonDialog = $("#preset-json-dialog");
+  const closePresetJsonDialog = $("#close-preset-json-dialog");
+  const presetJsonDialogTitle = $("#preset-json-dialog-title");
+  const presetJsonDialogName = $("#preset-json-dialog-name");
+  const presetJsonDialogInput = $("#preset-json-dialog-input");
+  const presetJsonDialogStatus = $("#preset-json-dialog-status");
+  const cancelPresetJsonDialog = $("#cancel-preset-json-dialog");
+  const confirmPresetJsonDialog = $("#confirm-preset-json-dialog");
 
   let rebootRecovery = null;
   try {
@@ -234,6 +242,7 @@
     presetTransportTail: Promise.resolve(),
     pendingPresetLoad: null,
     pendingPresetFileOperation: null,
+    pendingPresetDocument: null,
   };
   let algorithmMemoryCheckToken = 0;
   let algorithmMemoryCheckTimer = null;
@@ -2710,19 +2719,12 @@
     load.className = "primary-button";
     load.id = "load-preset";
     load.textContent = "Load preset";
-    const renameLoadedPreset = document.createElement("button");
-    renameLoadedPreset.type = "button";
-    renameLoadedPreset.className = "text-button";
-    renameLoadedPreset.textContent = "Rename loaded preset";
-    renameLoadedPreset.disabled = state.presetBrowserBusy || !state.transportOnline || !state.liveIdentity;
-    renameLoadedPreset.addEventListener("click", () => openPresetFileDialog("rename-preset"));
     if (!selected) {
       kicker.textContent = "Select a preset";
       title.textContent = "Preset library";
       copy.textContent = "Choose a .json preset from the NT's preset library. Loading replaces the working preset; appending adds its algorithms after the current last slot.";
       append.disabled = true;
       load.disabled = true;
-      manage.append(renameLoadedPreset);
     } else {
       kicker.textContent = "Selected preset";
       title.textContent = selected.name;
@@ -2731,6 +2733,12 @@
       load.disabled = state.presetBrowserBusy || !state.transportOnline;
       append.addEventListener("click", () => openPresetLoadDialog(true));
       load.addEventListener("click", () => openPresetLoadDialog(false));
+      const editDocument = document.createElement("button");
+      editDocument.type = "button";
+      editDocument.className = "text-button";
+      editDocument.textContent = "Edit JSON";
+      editDocument.disabled = state.presetBrowserBusy || !state.transportOnline;
+      editDocument.addEventListener("click", () => openPresetJsonDialog(selected));
       const renameFile = document.createElement("button");
       renameFile.type = "button";
       renameFile.className = "text-button";
@@ -2743,7 +2751,7 @@
       remove.textContent = "Delete";
       remove.disabled = state.presetBrowserBusy || !state.transportOnline;
       remove.addEventListener("click", () => openPresetFileDialog("delete", selected));
-      manage.append(renameLoadedPreset, renameFile, remove);
+      manage.append(editDocument, renameFile, remove);
     }
     // The destructive/primary controls live in the fixed inspector, so the
     // currently selected preset always has an obvious next action.
@@ -2894,6 +2902,94 @@
     confirmPresetFileDialog.classList.toggle("danger", mode === "delete");
     presetFileDialog.showModal();
     if (mode !== "delete") requestAnimationFrame(() => presetFileDialogInput.focus());
+  }
+
+  function decodePresetDocument(bytes) {
+    let text;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch (_) {
+      throw new Error("This preset file is not valid UTF-8 JSON.");
+    }
+    try {
+      return { text, document: JSON.parse(text) };
+    } catch (error) {
+      throw new Error(`This preset file is not valid JSON: ${error.message}`);
+    }
+  }
+
+  async function openPresetJsonDialog(entry) {
+    if (!entry || entry.isDirectory || state.presetBrowserBusy || !state.ntTransport || !state.transportOnline) return;
+    const path = presetPathJoin(state.presetPath, entry.name);
+    state.presetBrowserBusy = true;
+    renderPresetLibrary();
+    try {
+      const bytes = await runPresetTransportOperation(() => state.ntTransport.readSDFile(path));
+      const parsed = decodePresetDocument(bytes);
+      state.pendingPresetDocument = { entry, path, originalBytes: bytes };
+      presetJsonDialogTitle.textContent = "Edit preset JSON";
+      presetJsonDialogName.textContent = entry.name;
+      presetJsonDialogInput.value = JSON.stringify(parsed.document, null, 2);
+      presetJsonDialogStatus.textContent = "Validated JSON. Edit any stored preset field, then save it back to this file.";
+      presetJsonDialogStatus.className = "preset-json-dialog-status ready";
+      presetJsonDialog.showModal();
+      requestAnimationFrame(() => presetJsonDialogInput.focus());
+    } catch (error) {
+      showToast(`Could not open ${entry.name} · ${error.message}`);
+    } finally {
+      state.presetBrowserBusy = false;
+      renderPresetLibrary();
+    }
+  }
+
+  function presetDocumentBytes(value) {
+    const text = String(value || "");
+    if (!text.trim()) throw new Error("Preset JSON cannot be empty.");
+    try {
+      JSON.parse(text);
+    } catch (error) {
+      throw new Error(`Fix the JSON before saving: ${error.message}`);
+    }
+    return new TextEncoder().encode(text);
+  }
+
+  async function savePresetJsonDocument() {
+    const pending = state.pendingPresetDocument;
+    if (!pending || !state.ntTransport || !state.transportOnline || state.presetBrowserBusy) return;
+    let bytes;
+    try {
+      bytes = presetDocumentBytes(presetJsonDialogInput.value);
+      presetJsonDialogStatus.textContent = "JSON is valid. Saving to the NT…";
+      presetJsonDialogStatus.className = "preset-json-dialog-status ready";
+    } catch (error) {
+      presetJsonDialogStatus.textContent = error.message;
+      presetJsonDialogStatus.className = "preset-json-dialog-status error";
+      return;
+    }
+    state.presetBrowserBusy = true;
+    confirmPresetJsonDialog.disabled = true;
+    try {
+      await runPresetTransportOperation(() => state.ntTransport.writeSDFile(pending.path, bytes));
+      const verified = await runPresetTransportOperation(() => state.ntTransport.readSDFile(pending.path));
+      if (verified.length !== bytes.length || verified.some((value, index) => value !== bytes[index])) {
+        throw new Error("The NT did not confirm the saved file contents.");
+      }
+      state.selectedPresetEntry = { ...pending.entry, size: bytes.length };
+      showToast(`Saved JSON to ${pending.entry.name}`);
+      state.presetBrowserBusy = false;
+      state.pendingPresetDocument = null;
+      presetJsonDialog.close();
+      await loadPresetDirectory();
+      state.selectedPresetEntry = state.presetEntries.find(entry => entry.name === pending.entry.name && !entry.isDirectory) || null;
+    } catch (error) {
+      presetJsonDialogStatus.textContent = `Could not save: ${error.message}`;
+      presetJsonDialogStatus.className = "preset-json-dialog-status error";
+      showToast(`Could not save ${pending.entry.name} · ${error.message}`);
+    } finally {
+      state.presetBrowserBusy = false;
+      confirmPresetJsonDialog.disabled = false;
+      renderPresetLibrary();
+    }
   }
 
   function validatedPresetItemName(value) {
@@ -4715,6 +4811,15 @@
   });
   presetFileDialog.addEventListener("click", event => {
     if (event.target === presetFileDialog) presetFileDialog.close();
+  });
+  closePresetJsonDialog.addEventListener("click", () => presetJsonDialog.close());
+  cancelPresetJsonDialog.addEventListener("click", () => presetJsonDialog.close());
+  confirmPresetJsonDialog.addEventListener("click", savePresetJsonDocument);
+  presetJsonDialog.addEventListener("close", () => {
+    if (!state.presetBrowserBusy) state.pendingPresetDocument = null;
+  });
+  presetJsonDialog.addEventListener("click", event => {
+    if (event.target === presetJsonDialog) presetJsonDialog.close();
   });
   const openReferenceGuide = () => {
     if (referenceGuide.open) return;

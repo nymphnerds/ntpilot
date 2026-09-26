@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-253">
+  <link rel="stylesheet" href="styles.css?v=20260926-254">
 </head>
 <body>
   <main class="stage">
@@ -593,8 +593,14 @@
     <footer><button id="cancel-preset-file-dialog" type="button">Cancel</button><button id="confirm-preset-file-dialog" type="button">Create folder</button></footer>
   </dialog>
 
-  <script src="web-midi-transport.js?v=20260926-57"></script>
+  <dialog class="preset-json-dialog" id="preset-json-dialog" aria-labelledby="preset-json-dialog-title">
+    <header><div><span>Preset document</span><h2 id="preset-json-dialog-title">Edit preset JSON</h2></div><button id="close-preset-json-dialog" type="button" aria-label="Close preset JSON editor">×</button></header>
+    <div class="preset-json-dialog-copy"><strong id="preset-json-dialog-name"></strong><p>Edit this preset exactly as it is stored on the NT microSD card. The filename stays unchanged; save writes the validated JSON back to this selected file.</p><label for="preset-json-dialog-input">JSON document</label><textarea id="preset-json-dialog-input" spellcheck="false" autocomplete="off" wrap="off" aria-describedby="preset-json-dialog-status"></textarea><p class="preset-json-dialog-status" id="preset-json-dialog-status" role="status"></p></div>
+    <footer><button id="cancel-preset-json-dialog" type="button">Cancel</button><button id="confirm-preset-json-dialog" type="button">Save JSON</button></footer>
+  </dialog>
+
+  <script src="web-midi-transport.js?v=20260926-58"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-194"></script>
+  <script src="app.js?v=20260926-195"></script>
 </body>
 </html>

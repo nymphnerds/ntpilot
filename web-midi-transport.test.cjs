@@ -70,8 +70,21 @@ let loadPresetCommand = null;
 let wakeCommand = null;
 let setPresetNameCommand = null;
 let directoryCommand = null;
+let fileDownloadCommand = null;
+const fileUploadCommands = [];
+let presetFileBytes = Uint8Array.from(Buffer.from('{"name":"Live Set","version":1}', "utf8"));
 let sendWrongSDOperationOnce = false;
 let sendFragmentedSDListingOnce = false;
+
+function decodeUnsigned70(bytes) {
+  return bytes.reduce((value, byte) => (value * 128) + (byte & 0x7F), 0);
+}
+
+function decodeNibbles(bytes) {
+  const result = new Uint8Array(bytes.length / 2);
+  for (let index = 0; index < bytes.length; index += 2) result[index / 2] = (bytes[index] << 4) | bytes[index + 1];
+  return result;
+}
 const output = {
   id: "out",
   name: "disting NT MIDI OUT",
@@ -218,6 +231,21 @@ const output = {
           0, 0, 0, 0, 0, 0, 0, ...encodeUnsigned70(1536), ...Buffer.from("Live Set.json"), 0
         ];
         reply = [...header, 0x7A, 0, 1, ...listing, 0xF7];
+      } else if (operation === 2) {
+        fileDownloadCommand = [...bytes];
+        reply = [...header, 0x7A, 0, 2, ...[...presetFileBytes].flatMap(byte => [(byte >> 4) & 0x0F, byte & 0x0F]), 0xF7];
+      } else if (operation === 4) {
+        fileUploadCommands.push([...bytes]);
+        const pathEnd = bytes.indexOf(0, 8);
+        const createAlways = bytes[pathEnd + 1];
+        const offset = decodeUnsigned70(bytes.slice(pathEnd + 2, pathEnd + 12));
+        const count = decodeUnsigned70(bytes.slice(pathEnd + 12, pathEnd + 22));
+        const data = decodeNibbles(bytes.slice(pathEnd + 22, pathEnd + 22 + count * 2));
+        const next = new Uint8Array(Math.max(createAlways ? 0 : presetFileBytes.length, offset + data.length));
+        if (!createAlways) next.set(presetFileBytes);
+        next.set(data, offset);
+        presetFileBytes = next;
+        reply = [...header, 0x7A, 0, 4, 0xF7];
       } else {
         reply = [...header, 0x7A, 0, operation, 0xF7];
       }
@@ -433,6 +461,16 @@ global.navigator = { requestMIDIAccess: async options => {
   await transport.createSDDirectory("/presets/New");
   await transport.renameSDPath("/presets/New", "/presets/Renamed");
   await transport.deleteSDPath("/presets/Renamed");
+  assert.equal(new TextDecoder().decode(await transport.readSDFile("/presets/Live Set.json")), '{"name":"Live Set","version":1}');
+  assert.deepEqual(fileDownloadCommand.slice(6, -1), [0x7A, 2, ...Buffer.from("/presets/Live Set.json"), 86]);
+  const editedPreset = Uint8Array.from({ length: 700 }, (_, index) => index & 0xFF);
+  await transport.writeSDFile("/presets/Live Set.json", editedPreset);
+  assert.equal(fileUploadCommands.length, 2);
+  assert.deepEqual(fileUploadCommands[0].slice(6, 8), [0x7A, 4]);
+  assert.equal(fileUploadCommands[0][8 + Buffer.byteLength("/presets/Live Set.json")], 0);
+  assert.equal(fileUploadCommands[0][9 + Buffer.byteLength("/presets/Live Set.json")], 1);
+  assert.equal(fileUploadCommands[1][9 + Buffer.byteLength("/presets/Live Set.json")], 0);
+  assert.deepEqual([...await transport.readSDFile("/presets/Live Set.json")], [...editedPreset]);
   const routing = await transport.readRoutingSnapshot(await transport.readSnapshot());
   assert.equal(routing.slots.length, 2);
   assert.equal(routing.slots[0].outputModeStatus, "fixed");
