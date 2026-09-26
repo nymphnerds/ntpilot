@@ -2132,18 +2132,23 @@
     return true;
   }
 
+  async function retargetOpenRoutingConnection(bus, anchorElement) {
+    if (!routingConnectionRetarget || bus < 0) return false;
+    const retarget = routingConnectionRetarget;
+    closeRoutingConnectionPanel();
+    $$(".routing-aux-chip", routingAuxPalette).forEach(item =>
+      item.classList.toggle("selected", Number(item.dataset.bus) === bus));
+    applyPilotAccentFromAux(bus, state.routingSnapshot || state.liveIdentity);
+    await retarget(bus, anchorElement);
+    return true;
+  }
+
   async function handleAuxPaletteClick(target) {
     const chip = target.closest(".routing-aux-chip");
     if (!chip || !state.routingSnapshot) return false;
     const bus = Number(chip.dataset.bus);
     applyPilotAccentFromAux(bus, state.routingSnapshot);
-    if (routingConnectionRetarget && bus >= 0) {
-      const retarget = routingConnectionRetarget;
-      closeRoutingConnectionPanel();
-      $$(".routing-aux-chip", routingAuxPalette).forEach(item => item.classList.toggle("selected", item === chip));
-      await retarget(bus, chip);
-      return true;
-    }
+    if (await retargetOpenRoutingConnection(bus, chip)) return true;
     if (state.routingSelection?.parameterIndex != null) {
       const selection = state.routingSelection;
       selection.element.classList.remove("routing-selected-source");
@@ -3824,6 +3829,7 @@
     if (!chip || chip.disabled) return;
     const value = Number(chip.dataset.value);
     const descriptor = editorBusDescriptor(value);
+    if (value > 0 && await retargetOpenRoutingConnection(value - 1, chip)) return;
     const entry = state.armedBusEntry;
     if (!entry) {
       showToast("Tap the bus chip at the right of a parameter first");
