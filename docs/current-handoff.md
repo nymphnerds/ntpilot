@@ -44,7 +44,7 @@ Do not claim zero regression risk. Keep every stage testable and reversible, do 
 
 ## Second major missing system: add and manage algorithms/plug-ins
 
-NT Pilot can currently edit, route, bypass and reorder algorithms already present in a preset, but it does not provide the complete slot lifecycle. This is the next major product feature after the routing architecture is stabilized.
+NT Pilot can now browse live factory algorithms and installed plug-ins, load an installed plug-in, add it before/after/end of the selected slot, and—when all ten slots are occupied—replace the selected slot through a two-step destructive confirmation. Each mutation is read back from the NT before the UI accepts it. Replacement necessarily clears Undo/Redo for now because the original algorithm's non-default specification values cannot yet be restored safely.
 
 Required user workflow:
 
@@ -197,10 +197,10 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-236`
+- `styles.css?v=20260926-237`
 - `web-midi-transport.js?v=20260926-45`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-170`
+- `app.js?v=20260926-171`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
