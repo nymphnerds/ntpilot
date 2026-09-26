@@ -44,6 +44,9 @@
   const interfaceScaleUp = $("#interface-scale-up");
   const ipadModeControl = $("#ipad-mode");
   const syncModeControl = $("#sync-mode");
+  const statusSyncControl = $(".status-sync");
+  const statusSyncAnchor = document.createComment("status sync position");
+  statusSyncControl.parentNode.insertBefore(statusSyncAnchor, statusSyncControl);
   const syncModeLabel = $("#sync-mode-label");
   const syncModeDetail = $("#sync-mode-detail");
   const slotList = $(".slot-list");
@@ -649,6 +652,11 @@
     if (!bottom && editorBusDock.parentElement !== appMain) appMain.insertBefore(editorBusDock, viewStack);
     deviceFrame.classList.toggle("bus-dock-bottom", bottom);
     deviceFrame.classList.toggle("ipad-mode", bottom);
+    if (bottom) {
+      ipadModeControl.parentElement.insertBefore(statusSyncControl, ipadModeControl);
+    } else {
+      statusSyncAnchor.parentNode.insertBefore(statusSyncControl, statusSyncAnchor.nextSibling);
+    }
     updateBottomBusDockHeight();
   }
 
