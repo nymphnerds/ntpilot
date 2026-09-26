@@ -2710,12 +2710,19 @@
     load.className = "primary-button";
     load.id = "load-preset";
     load.textContent = "Load preset";
+    const renameLoadedPreset = document.createElement("button");
+    renameLoadedPreset.type = "button";
+    renameLoadedPreset.className = "text-button";
+    renameLoadedPreset.textContent = "Rename loaded preset";
+    renameLoadedPreset.disabled = state.presetBrowserBusy || !state.transportOnline || !state.liveIdentity;
+    renameLoadedPreset.addEventListener("click", () => openPresetFileDialog("rename-preset"));
     if (!selected) {
       kicker.textContent = "Select a preset";
       title.textContent = "Preset library";
       copy.textContent = "Choose a .json preset from the NT's preset library. Loading replaces the working preset; appending adds its algorithms after the current last slot.";
       append.disabled = true;
       load.disabled = true;
+      manage.append(renameLoadedPreset);
     } else {
       kicker.textContent = "Selected preset";
       title.textContent = selected.name;
@@ -2724,19 +2731,19 @@
       load.disabled = state.presetBrowserBusy || !state.transportOnline;
       append.addEventListener("click", () => openPresetLoadDialog(true));
       load.addEventListener("click", () => openPresetLoadDialog(false));
-      const rename = document.createElement("button");
-      rename.type = "button";
-      rename.className = "text-button";
-      rename.textContent = "Rename";
-      rename.disabled = state.presetBrowserBusy || !state.transportOnline;
-      rename.addEventListener("click", () => openPresetFileDialog("rename", selected));
+      const renameFile = document.createElement("button");
+      renameFile.type = "button";
+      renameFile.className = "text-button";
+      renameFile.textContent = "Rename file";
+      renameFile.disabled = state.presetBrowserBusy || !state.transportOnline;
+      renameFile.addEventListener("click", () => openPresetFileDialog("rename-file", selected));
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "text-button danger";
       remove.textContent = "Delete";
       remove.disabled = state.presetBrowserBusy || !state.transportOnline;
       remove.addEventListener("click", () => openPresetFileDialog("delete", selected));
-      manage.append(rename, remove);
+      manage.append(renameLoadedPreset, renameFile, remove);
     }
     // The destructive/primary controls live in the fixed inspector, so the
     // currently selected preset always has an obvious next action.
@@ -2865,21 +2872,25 @@
     if (state.presetBrowserBusy || !state.ntTransport || !state.transportOnline) return;
     state.pendingPresetFileOperation = { mode, entry };
     const isNewFolder = mode === "new-folder";
-    const isRename = mode === "rename";
-    presetFileDialogKicker.textContent = "Organise presets";
-    presetFileDialogTitle.textContent = isNewFolder ? "New folder" : isRename ? "Rename item" : "Delete item?";
-    presetFileDialogName.textContent = entry?.name || state.presetPath;
+    const isFileRename = mode === "rename-file";
+    const isPresetRename = mode === "rename-preset";
+    presetFileDialogKicker.textContent = isPresetRename ? "Current preset" : "Organise presets";
+    presetFileDialogTitle.textContent = isNewFolder ? "New folder" : isPresetRename ? "Rename loaded preset" : isFileRename ? "Rename file" : "Delete item?";
+    presetFileDialogName.textContent = isPresetRename ? (state.liveIdentity?.presetName || "Unnamed preset") : (entry?.name || state.presetPath);
     presetFileDialogDetail.textContent = isNewFolder
       ? `Create a folder in ${state.presetPath}.`
-      : isRename
-        ? "Rename this SD-card item. A preset must retain its .json extension to be loadable."
+      : isPresetRename
+        ? "Changes the preset title stored by the NT, then overwrites the currently loaded preset file. Any already-applied working edits will be saved too. This does not rename its .json file."
+        : isFileRename
+          ? "Changes only this SD-card filename. It does not change the preset title stored inside the JSON. A preset must retain its .json extension to be loadable."
         : entry?.isDirectory
           ? "This permanently deletes the folder only if it is empty."
           : "This permanently deletes this file from the NT microSD card.";
     presetFileDialogField.classList.toggle("hidden", mode === "delete");
-    presetFileDialogInput.value = isRename ? entry.name : "";
-    presetFileDialogInput.placeholder = isNewFolder ? "Folder name" : "";
-    confirmPresetFileDialog.textContent = isNewFolder ? "Create folder" : isRename ? "Rename" : "Delete";
+    presetFileDialogInput.maxLength = isPresetRename ? 31 : 80;
+    presetFileDialogInput.value = isPresetRename ? (state.liveIdentity?.presetName || "") : isFileRename ? entry.name : "";
+    presetFileDialogInput.placeholder = isNewFolder ? "Folder name" : isPresetRename ? "Preset title" : "Filename.json";
+    confirmPresetFileDialog.textContent = isNewFolder ? "Create folder" : isPresetRename ? "Rename & save" : isFileRename ? "Rename file" : "Delete";
     confirmPresetFileDialog.classList.toggle("danger", mode === "delete");
     presetFileDialog.showModal();
     if (mode !== "delete") requestAnimationFrame(() => presetFileDialogInput.focus());
@@ -2894,6 +2905,44 @@
     return name;
   }
 
+  function validatedPresetName(value) {
+    const name = String(value || "").trim();
+    if (!name) throw new Error("Enter a preset title.");
+    if (name.length > 31) throw new Error("NT preset titles are limited to 31 characters.");
+    if (/[^\x20-\x7E]/.test(name)) throw new Error("Use printable ASCII characters for the NT preset title.");
+    return name;
+  }
+
+  async function renameLoadedPreset(name) {
+    const original = state.liveIdentity?.presetName || "";
+    if (name === original) throw new Error("That preset already has this title.");
+    const verifiedName = await runPresetTransportOperation(async () => {
+      state.ntTransport.setPresetName(name);
+      const deadline = Date.now() + 5000;
+      let lastError = null;
+      await wait(250);
+      while (Date.now() < deadline) {
+        try {
+          const actual = await state.ntTransport.readPresetName();
+          if (actual === name) {
+            state.ntTransport.savePreset(2);
+            await wait(350);
+            return actual;
+          }
+          lastError = new Error(`NT reported the preset title as “${actual || "unnamed"}”.`);
+        } catch (error) {
+          lastError = error;
+        }
+        await wait(250);
+      }
+      throw lastError || new Error("The NT did not confirm the new preset title.");
+    });
+    state.liveIdentity = { ...state.liveIdentity, presetName: verifiedName };
+    state.hasUnsavedWorkingEdits = false;
+    showLiveIdentity(state.liveIdentity);
+    updateWorkingState();
+  }
+
   async function applyPresetFileOperation() {
     const pending = state.pendingPresetFileOperation;
     if (!pending || !state.ntTransport || !state.transportOnline || state.presetBrowserBusy) return;
@@ -2905,11 +2954,15 @@
         const name = validatedPresetItemName(presetFileDialogInput.value);
         await runPresetTransportOperation(() => state.ntTransport.createSDDirectory(presetPathJoin(state.presetPath, name)));
         showToast(`Created ${name}`);
-      } else if (mode === "rename") {
+      } else if (mode === "rename-preset") {
+        const name = validatedPresetName(presetFileDialogInput.value);
+        await renameLoadedPreset(name);
+        showToast(`Renamed and saved the loaded preset as ${name}`);
+      } else if (mode === "rename-file") {
         const name = validatedPresetItemName(presetFileDialogInput.value);
         if (name === entry.name) throw new Error("That item already has this name.");
         await runPresetTransportOperation(() => state.ntTransport.renameSDPath(presetPathJoin(state.presetPath, entry.name), presetPathJoin(state.presetPath, name)));
-        showToast(`Renamed ${entry.name} to ${name}`);
+        showToast(`Renamed file ${entry.name} to ${name}`);
       } else {
         await runPresetTransportOperation(() => state.ntTransport.deleteSDPath(presetPathJoin(state.presetPath, entry.name)));
         showToast(`Deleted ${entry.name}`);
@@ -2920,7 +2973,8 @@
       await loadPresetDirectory();
     } catch (error) {
       state.presetBrowserBusy = false;
-      showToast(`Could not ${mode === "new-folder" ? "create folder" : mode} · ${error.message}`);
+      const label = mode === "new-folder" ? "create folder" : mode === "rename-preset" ? "rename and save the loaded preset" : mode === "rename-file" ? "rename file" : mode;
+      showToast(`Could not ${label} · ${error.message}`);
     } finally {
       confirmPresetFileDialog.disabled = false;
       renderPresetLibrary();

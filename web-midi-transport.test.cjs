@@ -68,6 +68,7 @@ let loadPluginCommand = null;
 let removeCommand = null;
 let loadPresetCommand = null;
 let wakeCommand = null;
+let setPresetNameCommand = null;
 let directoryCommand = null;
 let sendWrongSDOperationOnce = false;
 let sendFragmentedSDListingOnce = false;
@@ -101,6 +102,10 @@ const output = {
     }
     if (bytes[6] === 0x07) {
       wakeCommand = [...bytes];
+      return;
+    }
+    if (bytes[6] === 0x47) {
+      setPresetNameCommand = [...bytes];
       return;
     }
     let reply = replies.get(bytes[6]);
@@ -410,6 +415,10 @@ global.navigator = { requestMIDIAccess: async options => {
   transport.loadPreset("/presets/Live Set.json", { append: true });
   assert.deepEqual(loadPresetCommand.slice(6, 8), [0x34, 1]);
   assert.equal(loadPresetCommand.at(-2), 0);
+  transport.setPresetName("Renamed preset");
+  assert.deepEqual(setPresetNameCommand.slice(6, -1), [0x47, ...Buffer.from("Renamed preset"), 0]);
+  assert.throws(() => transport.setPresetName(""), /preset name is required/i);
+  assert.throws(() => transport.setPresetName("x".repeat(32)), /31 characters/i);
   await transport.wake();
   assert.deepEqual(wakeCommand.slice(6, 8), [0x07, 0xF7]);
   const directory = await transport.readSDDirectory("/presets");

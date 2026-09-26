@@ -44,6 +44,16 @@
     return bytes;
   }
 
+  function presetNameBytes(name) {
+    if (typeof name !== "string") throw new Error("A preset name is required.");
+    const trimmed = name.trim();
+    const bytes = [...trimmed].map(character => character.charCodeAt(0));
+    if (!bytes.length) throw new Error("A preset name is required.");
+    if (bytes.length > 31) throw new Error("NT preset names are limited to 31 characters.");
+    if (bytes.some(byte => byte < 0x20 || byte > 0x7E)) throw new Error("NT preset names must use printable ASCII characters.");
+    return bytes;
+  }
+
   function sdDirectoryPath(path) {
     if (path === "/") return path;
     return path.endsWith("/") ? path : `${path}/`;
@@ -449,11 +459,11 @@
 
     async readIdentity() {
       const versionBytes = await this.request(0x22, 0x32);
-      const presetBytes = await this.request(0x41, 0x41);
+      const presetName = await this.readPresetName();
       const slotBytes = await this.request(0x60, 0x60);
       return {
         version: decodeText(versionBytes),
-        presetName: decodeText(presetBytes.slice(0, 21)),
+        presetName,
         slotCount: slotBytes[0],
         inputBusCount: slotBytes[1] ?? 12,
         outputBusCount: slotBytes[2] ?? 8,
@@ -462,6 +472,11 @@
         outputName: this.output.name,
         sysexId: this.sysexId
       };
+    }
+
+    async readPresetName() {
+      const presetBytes = await this.request(0x41, 0x41);
+      return decodeText(presetBytes.slice(0, 31));
     }
 
     async readAlgorithmCatalog() {
@@ -772,6 +787,10 @@
       // 0 asks on the module, 1 generates a new file, 2 overwrites the loaded file.
       // The NT protocol provides no acknowledgement for this command.
       this.send(0x36, [option]);
+    }
+
+    setPresetName(name) {
+      this.send(0x47, [...presetNameBytes(name), 0]);
     }
 
     loadPreset(path, { append = false } = {}) {
