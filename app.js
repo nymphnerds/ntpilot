@@ -717,9 +717,10 @@
       return chips;
     };
     const firstExpanderBank = makeExpanderBank(0);
-    editorOutputBusRow.replaceChildren(...nativeOutputs, ...firstExpanderBank);
+    const visibleFirstExpanderBank = state.ipadMode ? [] : firstExpanderBank;
+    editorOutputBusRow.replaceChildren(...nativeOutputs, ...visibleFirstExpanderBank);
     editorAuxBusRow.replaceChildren(...auxes);
-    const firstRowOutputs = [...nativeOutputs, ...firstExpanderBank];
+    const firstRowOutputs = [...nativeOutputs, ...visibleFirstExpanderBank];
     const gridColumns = state.ipadMode
       ? 22
       : Math.max(1, identity.auxBusCount, identity.inputBusCount + firstRowOutputs.length + 11);
@@ -734,16 +735,16 @@
         chip.style.gridColumn = String(index + 1);
         chip.style.gridRow = "1";
       });
-      inputLabel.style.gridColumn = "13 / span 4";
+      inputLabel.style.gridColumn = "1 / span 12";
       inputLabel.style.gridRow = "1";
-      none.style.gridColumn = "17 / span 6";
+      none.style.gridColumn = "13 / span 2";
       none.style.gridRow = "1";
       firstRowOutputs.forEach((chip, index) => {
-        chip.style.gridColumn = String(index + 1);
-        chip.style.gridRow = "2";
+        chip.style.gridColumn = String(15 + index);
+        chip.style.gridRow = "1";
       });
-      outputLabel.style.gridColumn = "17 / span 6";
-      outputLabel.style.gridRow = "2";
+      outputLabel.style.gridColumn = "15 / span 8";
+      outputLabel.style.gridRow = "1";
     } else {
       inputLabel.style.gridColumn = `${identity.inputBusCount + 1} / span 3`;
       const outputStart = identity.inputBusCount + 4;
@@ -762,8 +763,10 @@
       none.style.gridColumn = `${outputStart + firstRowOutputs.length + 3} / span 5`;
     }
 
-    const rows = Array.from({ length: Math.max(0, totalBankCount - 1) }, (_, rowIndex) => {
-      const bankIndex = rowIndex + 1;
+    const extraBankIndices = state.ipadMode
+      ? Array.from({ length: actualBankCount }, (_, index) => index)
+      : Array.from({ length: Math.max(0, totalBankCount - 1) }, (_, index) => index + 1);
+    const rows = extraBankIndices.map(bankIndex => {
       const row = document.createElement("div");
       row.className = "editor-expander-row";
       row.style.setProperty("--bus-grid-columns", String(gridColumns));
@@ -771,12 +774,13 @@
       label.className = "editor-expander-label";
       label.textContent = `NTX ${bankIndex + 1}`;
       label.style.gridColumn = "1 / span 3";
-      const chips = makeExpanderBank(bankIndex);
+      const chips = makeExpanderBank(bankIndex).filter(chip => !state.ipadMode || !chip.classList.contains("ntx-placeholder"));
       chips.forEach((chip, index) => {
         chip.style.gridColumn = String(index + 4);
         chip.style.gridRow = "1";
       });
       row.append(label, ...chips);
+      if (state.ipadMode && !chips.length) row.classList.add("hidden");
       return row;
     });
     editorExpanderRows.replaceChildren(...rows);

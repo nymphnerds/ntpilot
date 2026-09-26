@@ -242,7 +242,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.ipad-mode .parameter-name span { margin-top: 4px; font-size: 11px; }
 .device-frame.ipad-mode .live-parameter-row .map-shortcut { min-width: 30px; height: 30px; padding-inline: 7px; font-size: 10px; }
 .device-frame.ipad-mode .editor-physical-bus-row .editor-bus-chip { font-size: 15px; letter-spacing: 0; }
-.device-frame.ipad-mode .editor-physical-bus-row .editor-bus-group-label { font-size: 16px; }
+.device-frame.ipad-mode .editor-physical-bus-row .editor-bus-group-label { display: none; }
 .device-frame.ipad-mode .editor-physical-bus-row .editor-bus-none { font-size: 16px; }
 .device-frame.ipad-mode .editor-aux-bus-row,
 .device-frame.ipad-mode .editor-physical-bus-strip { row-gap: 5px; }
