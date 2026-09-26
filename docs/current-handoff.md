@@ -209,7 +209,7 @@ Initial routing content renders before output-mode hydration completes. If a use
 - `styles.css?v=20260926-242`
 - `web-midi-transport.js?v=20260926-47`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-176`
+- `app.js?v=20260926-177`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

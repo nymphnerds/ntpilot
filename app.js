@@ -3278,9 +3278,32 @@
     });
   }
 
+  function clearLiveEditorSlot() {
+    stopLivePolling();
+    state.parameterReadToken += 1;
+    state.selectedSlotIndex = null;
+    state.activeLiveSlotIndex = null;
+    state.liveParameters.clear();
+    disarmEditorBusAssignment();
+    clearSmartFeedback();
+    $("#slot-kicker").textContent = "Empty working preset";
+    $("#slot-heading").textContent = "No algorithms yet";
+    $("#parameter-list").replaceChildren();
+    $("#parameter-list").classList.add("hidden");
+    $("#parameter-fixture-note").classList.remove("hidden");
+    $("#fixture-algorithm").textContent = "Add your first algorithm";
+    $("#parameter-fixture-note span").textContent = "Use the + beside Algorithms to choose an algorithm and where to add it.";
+    mappingSlotSelect.replaceChildren(new Option("Add an algorithm to choose mappings", ""));
+    mappingSlotSelect.disabled = true;
+  }
+
   function renderLiveSlots(slots) {
     const colours = ["mint", "yellow", "lilac", "blue"];
     slotList.replaceChildren();
+    if (!slots.length) {
+      clearLiveEditorSlot();
+      return;
+    }
     slots.forEach((slot, index) => {
       const button = document.createElement("button");
       const colourName = colours[index % colours.length];
