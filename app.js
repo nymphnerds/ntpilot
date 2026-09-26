@@ -1891,12 +1891,27 @@
     $("#routing-zoom-value").textContent = `${Math.round(state.routingZoom * 100)}%`;
   }
 
-  function routingViewportPoint(clientX, clientY) {
-    const rect = routingViewport.getBoundingClientRect();
+  function captureRoutingAnchor(clientX, clientY) {
+    const rect = routingCanvas.getBoundingClientRect();
+    const width = Math.max(1, state.routingCanvasSize.width);
+    const height = Math.max(1, state.routingCanvasSize.height);
     return {
-      x: (clientX - rect.left) * (routingViewport.clientWidth / Math.max(1, rect.width)),
-      y: (clientY - rect.top) * (routingViewport.clientHeight / Math.max(1, rect.height))
+      x: (clientX - rect.left) / (Math.max(1, rect.width) / width),
+      y: (clientY - rect.top) / (Math.max(1, rect.height) / height)
     };
+  }
+
+  function restoreRoutingAnchor(anchor, clientX, clientY) {
+    const canvasRect = routingCanvas.getBoundingClientRect();
+    const viewportRect = routingViewport.getBoundingClientRect();
+    const canvasScaleX = canvasRect.width / Math.max(1, state.routingCanvasSize.width);
+    const canvasScaleY = canvasRect.height / Math.max(1, state.routingCanvasSize.height);
+    const viewportScaleX = viewportRect.width / Math.max(1, routingViewport.clientWidth);
+    const viewportScaleY = viewportRect.height / Math.max(1, routingViewport.clientHeight);
+    const anchoredClientX = canvasRect.left + anchor.x * canvasScaleX;
+    const anchoredClientY = canvasRect.top + anchor.y * canvasScaleY;
+    routingViewport.scrollLeft += (anchoredClientX - clientX) / Math.max(.01, viewportScaleX);
+    routingViewport.scrollTop += (anchoredClientY - clientY) / Math.max(.01, viewportScaleY);
   }
 
   function fitRoutingGraph(behavior = "smooth") {
@@ -3114,17 +3129,12 @@
   routingViewport.addEventListener("wheel", event => {
     if (!event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
-    const point = routingViewportPoint(event.clientX, event.clientY);
-    const localX = point.x;
-    const localY = point.y;
+    const anchor = captureRoutingAnchor(event.clientX, event.clientY);
     const previousZoom = state.routingZoom;
-    const contentX = (routingViewport.scrollLeft + localX) / previousZoom;
-    const contentY = (routingViewport.scrollTop + localY) / previousZoom;
     const direction = event.deltaY > 0 ? -.08 : .08;
     state.routingZoom = Math.max(.2, Math.min(1.5, Number((previousZoom + direction).toFixed(2))));
     applyRoutingZoom();
-    routingViewport.scrollLeft = (contentX * state.routingZoom) - localX;
-    routingViewport.scrollTop = (contentY * state.routingZoom) - localY;
+    restoreRoutingAnchor(anchor, event.clientX, event.clientY);
   }, { passive: false });
 
   let routingDrag = null;
@@ -3150,14 +3160,10 @@
       routingViewport.setPointerCapture(event.pointerId);
       const geometry = routingTouchGeometry();
       if (geometry) {
-        const point = routingViewportPoint(geometry.x, geometry.y);
-        const localX = point.x;
-        const localY = point.y;
         routingPinch = {
           distance: Math.max(1, geometry.distance),
           zoom: state.routingZoom,
-          contentX: (routingViewport.scrollLeft + localX) / state.routingZoom,
-          contentY: (routingViewport.scrollTop + localY) / state.routingZoom
+          anchor: captureRoutingAnchor(geometry.x, geometry.y)
         };
         routingDrag = null;
         routingViewport.classList.remove("dragging");
@@ -3182,13 +3188,9 @@
       routingTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
       const geometry = routingTouchGeometry();
       if (routingPinch && geometry) {
-        const point = routingViewportPoint(geometry.x, geometry.y);
-        const localX = point.x;
-        const localY = point.y;
         state.routingZoom = Math.max(.2, Math.min(1.5, routingPinch.zoom * geometry.distance / routingPinch.distance));
         applyRoutingZoom();
-        routingViewport.scrollLeft = (routingPinch.contentX * state.routingZoom) - localX;
-        routingViewport.scrollTop = (routingPinch.contentY * state.routingZoom) - localY;
+        restoreRoutingAnchor(routingPinch.anchor, geometry.x, geometry.y);
         event.preventDefault();
         return;
       }
@@ -3227,15 +3229,11 @@
   const beginNativeRoutingPinch = touches => {
     const geometry = nativeTouchGeometry(touches);
     if (!geometry) return false;
-    const point = routingViewportPoint(geometry.x, geometry.y);
-    const localX = point.x;
-    const localY = point.y;
     routingNativeTouch = {
       mode: "pinch",
       distance: Math.max(1, geometry.distance),
       zoom: state.routingZoom,
-      contentX: (routingViewport.scrollLeft + localX) / state.routingZoom,
-      contentY: (routingViewport.scrollTop + localY) / state.routingZoom
+      anchor: captureRoutingAnchor(geometry.x, geometry.y)
     };
     routingDrag = null;
     routingViewport.classList.remove("dragging");
@@ -3265,13 +3263,9 @@
       if (routingNativeTouch?.mode !== "pinch") beginNativeRoutingPinch(event.touches);
       const geometry = nativeTouchGeometry(event.touches);
       if (!geometry || routingNativeTouch?.mode !== "pinch") return;
-      const point = routingViewportPoint(geometry.x, geometry.y);
-      const localX = point.x;
-      const localY = point.y;
       state.routingZoom = Math.max(.2, Math.min(1.5, routingNativeTouch.zoom * geometry.distance / routingNativeTouch.distance));
       applyRoutingZoom();
-      routingViewport.scrollLeft = (routingNativeTouch.contentX * state.routingZoom) - localX;
-      routingViewport.scrollTop = (routingNativeTouch.contentY * state.routingZoom) - localY;
+      restoreRoutingAnchor(routingNativeTouch.anchor, geometry.x, geometry.y);
       event.preventDefault();
       return;
     }
