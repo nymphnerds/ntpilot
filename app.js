@@ -296,9 +296,16 @@
     }
   };
 
+  function userFacingText(value, fallback = "Information unavailable") {
+    const raw = value instanceof Error ? value.message : value;
+    const text = String(raw ?? "").trim();
+    if (!text || /^(?:null|undefined|nan)$/i.test(text)) return fallback;
+    return text;
+  }
+
   function showToast(message) {
     clearTimeout(state.toastTimer);
-    $("span", toast).textContent = message;
+    $("span", toast).textContent = userFacingText(message);
     toast.classList.add("visible");
     state.toastTimer = setTimeout(() => toast.classList.remove("visible"), 2400);
   }
@@ -631,6 +638,9 @@
   }
 
   function routingBusLabel(index, snapshot) {
+    if (!snapshot || !Number.isInteger(Number(index))) return "Unknown bus";
+    index = Number(index);
+    if (index < 0) return "None";
     if (index < snapshot.inputBusCount) return `${index + 1}`;
     const outputIndex = index - snapshot.inputBusCount;
     if (outputIndex < snapshot.outputBusCount) return `${outputIndex + 1}`;
@@ -1155,15 +1165,17 @@
     const title = document.createElement("span");
     title.className = "routing-node-title";
     const name = document.createElement("strong");
-    name.textContent = definition.name;
-    name.title = definition.name;
+    const algorithmName = userFacingText(definition.algorithmName, definition.isPlugin ? "Plug-in" : "Algorithm");
+    const instanceName = userFacingText(definition.name, algorithmName);
+    name.textContent = instanceName;
+    name.title = instanceName;
     const algorithm = document.createElement("small");
     algorithm.className = "routing-algorithm-name";
-    algorithm.title = definition.algorithmName;
+    algorithm.title = algorithmName;
     const algorithmKind = document.createElement("b");
     algorithmKind.textContent = definition.isPlugin ? "PLUG-IN" : "ALGO";
     const algorithmText = document.createElement("span");
-    algorithmText.textContent = definition.algorithmName;
+    algorithmText.textContent = algorithmName;
     algorithm.append(algorithmKind, algorithmText);
     title.append(name, algorithm);
     head.append(number, title);
@@ -1188,13 +1200,14 @@
         row.classList.toggle("derived", Boolean(port.derivedFrom));
         row.classList.toggle("partial", Boolean(port.partial));
         if (port.kind === "aux") row.style.setProperty("--aux-colour", routingAuxColour(port.bus, state.routingSnapshot));
-        row.title = port.title || `${port.name} · ${port.busLabel}`;
+        row.title = userFacingText(port.title, `${userFacingText(port.name, side === "input" ? "Input" : "Output")} · ${userFacingText(port.busLabel, "None")}`);
         const dot = document.createElement("i");
         const label = document.createElement("span");
-        label.textContent = port.name;
+        label.textContent = userFacingText(port.name, side === "input" ? "Input" : "Output");
         const bus = document.createElement("b");
         bus.className = `routing-bus-badge ${port.kind}`;
-        bus.textContent = side === "output" && port.kind === "input" ? `${port.busLabel} downstream` : port.busLabel;
+        const busLabel = userFacingText(port.busLabel, "None");
+        bus.textContent = side === "output" && port.kind === "input" ? `${busLabel} downstream` : busLabel;
         if (port.kind === "aux") bus.style.setProperty("--aux-colour", routingAuxColour(port.bus, state.routingSnapshot));
         const derivedCount = port.derivedCount ? document.createElement("span") : null;
         if (derivedCount) {
@@ -1341,19 +1354,39 @@
   }
 
   function updateRoutingSnapshotParameter(slotIndex, parameterIndex, value) {
+    const liveEntry = state.liveParameters.get(mappingKey(slotIndex, parameterIndex));
+    if (liveEntry) updateLiveParameterEntry(liveEntry, value, "midi-feedback");
     const snapshots = [...new Set([state.routingSnapshot, state.liveRouting].filter(Boolean))];
+    let routingParameter = null;
     snapshots.forEach(snapshot => {
       const slot = snapshot.slots?.find(item => item.index === slotIndex);
       if (!slot) return;
       [slot.parameters, slot.ioParameters].forEach(parameters => {
         const parameter = parameters?.find(item => item.index === parameterIndex);
-        if (parameter) parameter.value = value;
+        if (parameter) {
+          parameter.value = value;
+          if (parameters === slot.ioParameters) routingParameter = parameter;
+        }
       });
     });
-  }
-
-  function renderVerifiedRoutingSnapshot() {
-    if (state.routingSnapshot) renderRoutingGraph(state.routingSnapshot, { live: true, preserveView: true });
+    if (!routingParameter || !state.routingSnapshot) return;
+    const bus = Number(value) - 1;
+    const kind = bus < 0 ? "disconnected" : routingBusKind(bus, state.routingSnapshot);
+    const label = bus < 0 ? "—" : routingBusLabel(bus, state.routingSnapshot);
+    $$(`.routing-port[data-slot-index="${slotIndex}"][data-parameter-index="${parameterIndex}"]`).forEach(port => {
+      port.dataset.bus = String(bus);
+      port.classList.remove("disconnected", "input", "output", "aux", "partial");
+      port.classList.add(kind);
+      port.style.removeProperty("--aux-colour");
+      if (kind === "aux") port.style.setProperty("--aux-colour", routingAuxColour(bus, state.routingSnapshot));
+      const badge = $(".routing-bus-badge", port);
+      if (badge) {
+        badge.className = `routing-bus-badge ${kind}`;
+        badge.textContent = port.dataset.routingSide === "output" && kind === "input" ? `${label} downstream` : label;
+        badge.style.removeProperty("--aux-colour");
+        if (kind === "aux") badge.style.setProperty("--aux-colour", routingAuxColour(bus, state.routingSnapshot));
+      }
+    });
   }
 
   function scheduleRoutingReconciliation(delay = 900) {
@@ -1965,7 +1998,6 @@
         removedRoutes.push(route);
       }
       await connectRoutingSelections(first, second);
-      renderVerifiedRoutingSnapshot();
       markWorkingEdit();
       recordRoutingHistory(historyBefore, `change routing for ${routingSelectionLabel(connectingOutput || first)}`);
       const routeCopy = routesToRemove.length ? ` · removed ${routesToRemove.length} previous route${routesToRemove.length === 1 ? "" : "s"}` : "";
@@ -2109,7 +2141,6 @@
         removedRoutes.push(route);
       }
       await writeRoutingSelection(selection, bus);
-      renderVerifiedRoutingSnapshot();
       markWorkingEdit();
       recordRoutingHistory(historyBefore, `route ${routingSelectionLabel(selection)} to ${bus < 0 ? "None" : routingBusLabel(bus, state.routingSnapshot)}`);
       showToast(`${bus < 0 ? "Disconnected" : `Assigned ${routingBusLabel(bus, state.routingSnapshot)}`} and verified from the NT`);
@@ -2291,8 +2322,9 @@
     const slot = snapshot.slots.find(item => item.index === slotIndex);
     const masks = routingSlotMasks(slot, snapshot.inputBusCount + snapshot.outputBusCount + snapshot.auxBusCount);
     const list = values => values.map(bus => routingBusLabel(bus, snapshot)).join(", ") || "none";
-    $("span", copy).textContent = `Slot ${slot.index + 1} · ${slot.algorithmName}`;
-    $("strong", copy).textContent = slot.name;
+    const algorithmName = userFacingText(slot.algorithmName, "Algorithm");
+    $("span", copy).textContent = `Slot ${slot.index + 1} · ${algorithmName}`;
+    $("strong", copy).textContent = userFacingText(slot.name, algorithmName);
     detail.textContent = `Reads ${list(masks.inputs)} · writes ${list(masks.outputs)}${masks.mappings.length ? ` · modulates from ${list(masks.mappings)}` : ""}`;
   }
 
