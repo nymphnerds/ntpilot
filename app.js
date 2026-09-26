@@ -161,10 +161,82 @@
   }
 
   function recordHistory(action) {
+    if (state.historyBusy) return;
     state.undoHistory.push(action);
     if (state.undoHistory.length > 50) state.undoHistory.shift();
     state.redoHistory.length = 0;
     updateHistoryControls();
+  }
+
+  function recordParameterHistory(changes, label, { routing = false } = {}) {
+    const effective = changes.filter(change => change.before != null && change.after != null && Number(change.before) !== Number(change.after));
+    if (!effective.length) return;
+    recordHistory({ type: "parameter-batch", changes: effective, label, routing });
+  }
+
+  function captureRoutingParameterState(snapshot = state.routingSnapshot) {
+    const values = new Map();
+    (snapshot?.slots || []).forEach(slot => (slot.parameters || []).forEach(parameter => {
+      values.set(`${slot.index}:${parameter.index}`, {
+        slotIndex: slot.index,
+        parameterIndex: parameter.index,
+        before: Number(parameter.value)
+      });
+    }));
+    return values;
+  }
+
+  function recordRoutingHistory(beforeState, label) {
+    const afterState = captureRoutingParameterState();
+    const changes = [];
+    beforeState.forEach((before, key) => {
+      const after = afterState.get(key);
+      if (after && before.before !== after.before) changes.push({
+        slotIndex: before.slotIndex,
+        parameterIndex: before.parameterIndex,
+        before: before.before,
+        after: after.before
+      });
+    });
+    recordParameterHistory(changes, label, { routing: true });
+  }
+
+  async function applyParameterHistory(action, direction) {
+    const target = direction === "undo" ? "before" : "after";
+    try {
+      for (const change of action.changes) {
+        await state.ntTransport.writeParameter(change.slotIndex, change.parameterIndex, change[target]);
+      }
+      if (action.routing && state.routingSnapshot) {
+        await loadLiveRouting({ preserveView: true });
+      } else {
+        action.changes.forEach(change => {
+          const liveEntry = state.liveParameters.get(mappingKey(change.slotIndex, change.parameterIndex));
+          if (liveEntry) updateLiveParameterEntry(liveEntry, change[target], "midi-feedback");
+          state.performanceEntries.forEach(entry => {
+            if (entry.slotInfo.index === change.slotIndex && entry.parameter.index === change.parameterIndex) {
+              entry.parameter.value = change[target];
+              updatePerformanceEntry(entry);
+            }
+          });
+          if (change.parameterIndex === 0) {
+            const bypassed = Boolean(change[target]);
+            const identitySlot = state.liveIdentity?.slots.find(slot => slot.index === change.slotIndex);
+            const routingSlot = state.liveRouting?.slots.find(slot => slot.index === change.slotIndex);
+            if (identitySlot) identitySlot.bypassed = bypassed;
+            if (routingSlot) routingSlot.bypassed = bypassed;
+            $(`[data-index="${change.slotIndex}"]`, slotList)?.classList.toggle("bypassed", bypassed);
+            $$(`[data-bypass-slot="${change.slotIndex}"]`).forEach(item => setBypassToggleContent(item, bypassed));
+          }
+        });
+      }
+      markWorkingEdit();
+      startCpuPolling();
+      return true;
+    } catch (error) {
+      showToast(`History apply failed · ${error.message}`);
+      return false;
+    }
   }
 
   const deviceStates = {
@@ -355,7 +427,7 @@
     updateWorkingState();
   }
 
-  function queueLiveParameterWrite(entry, value, { afterWrite = null, onSuccess = null, successMessage = null } = {}) {
+  function queueLiveParameterWrite(entry, value, { afterWrite = null, onSuccess = null, successMessage = null, historyRouting = false } = {}) {
     const requestedValue = Math.min(entry.parameter.max, Math.max(entry.parameter.min, Number(value)));
     const previousValue = entry.parameter.value;
     if (requestedValue === previousValue) {
@@ -374,6 +446,12 @@
       await state.ntTransport.writeParameter(entry.slotInfo.index, entry.parameter.index, requestedValue);
       updateLiveParameterEntry(entry, requestedValue, "midi-feedback");
       markWorkingEdit();
+      recordParameterHistory([{
+        slotIndex: entry.slotInfo.index,
+        parameterIndex: entry.parameter.index,
+        before: previousValue,
+        after: requestedValue
+      }], `change ${entry.parameter.name}`, { routing: historyRouting });
       if (afterWrite) await afterWrite();
       if (onSuccess) onSuccess();
       showToast(successMessage || `${entry.parameter.name} changed and verified from the NT`);
@@ -404,6 +482,7 @@
 
   function queueLiveSliderWrite(entry, value, { commit = false } = {}) {
     const requestedValue = Math.min(entry.parameter.max, Math.max(entry.parameter.min, Number(value)));
+    if (entry.sliderHistoryStart == null && requestedValue !== entry.confirmedValue) entry.sliderHistoryStart = entry.confirmedValue;
     previewLiveParameterEntry(entry, requestedValue);
     if (requestedValue !== entry.confirmedValue) entry.pendingSliderValue = requestedValue;
     if (commit) entry.sliderCommitPending = true;
@@ -425,9 +504,19 @@
         markWorkingEdit();
       }
       if (!entry.sliderInteracting) previewLiveParameterEntry(entry, entry.confirmedValue);
-      if (entry.sliderCommitPending) showToast(`${entry.parameter.name} changed in NT working memory`);
+      if (entry.sliderCommitPending) {
+        recordParameterHistory([{
+          slotIndex: entry.slotInfo.index,
+          parameterIndex: entry.parameter.index,
+          before: entry.sliderHistoryStart,
+          after: entry.confirmedValue
+        }], `change ${entry.parameter.name}`);
+        entry.sliderHistoryStart = null;
+        showToast(`${entry.parameter.name} changed in NT working memory`);
+      }
     }).catch(error => {
       entry.pendingSliderValue = null;
+      entry.sliderHistoryStart = null;
       previewLiveParameterEntry(entry, entry.confirmedValue);
       updateParameterBusChip(entry);
       showToast(error.message);
@@ -1585,10 +1674,12 @@
     state.routingSelection = null;
     refreshRoutingPaletteAvailability(null);
     if (source.element === port && source.parameterIndex != null && source.bus >= 0) {
+      const historyBefore = captureRoutingParameterState();
       try {
         await writeRoutingSelection(source, -1);
         await loadLiveRouting({ preserveView: true });
         markWorkingEdit();
+        recordRoutingHistory(historyBefore, `disconnect ${routingSelectionLabel(source)}`);
         showToast("Connection removed and verified from the NT");
       } catch (error) {
         showToast(error.message);
@@ -1640,6 +1731,7 @@
   }
 
   async function finishRoutingConnection(first, second, modeChoice = null, routesToRemove = []) {
+    const historyBefore = captureRoutingParameterState();
     const pendingPoll = stopLivePolling();
     if (pendingPoll) await pendingPoll.catch(() => {});
     const originalMode = modeChoice?.details.currentMode;
@@ -1656,6 +1748,7 @@
       await connectRoutingSelections(first, second);
       await loadLiveRouting({ preserveView: true });
       markWorkingEdit();
+      recordRoutingHistory(historyBefore, `change routing for ${routingSelectionLabel(connectingOutput || first)}`);
       const routeCopy = routesToRemove.length ? ` · removed ${routesToRemove.length} previous route${routesToRemove.length === 1 ? "" : "s"}` : "";
       const modeCopy = modeChoice ? ` · ${modeChoice.mode === "replace" ? "Replace" : "Add"} mode` : "";
       showToast(`Routing changed${routeCopy}${modeCopy} and verified from the NT`);
@@ -1784,6 +1877,7 @@
     const originalMode = modeChoice?.details.currentMode;
     const modeChanged = Boolean(modeChoice && modeChoice.mode !== originalMode);
     const originalBus = selection.bus;
+    const historyBefore = captureRoutingParameterState();
     const removedRoutes = [];
     try {
       if (modeChanged) await chooseRoutingOutputMode(modeChoice.details, modeChoice.mode);
@@ -1794,6 +1888,7 @@
       await writeRoutingSelection(selection, bus);
       await loadLiveRouting({ preserveView: true });
       markWorkingEdit();
+      recordRoutingHistory(historyBefore, `route ${routingSelectionLabel(selection)} to ${bus < 0 ? "None" : routingBusLabel(bus, state.routingSnapshot)}`);
       showToast(`${bus < 0 ? "Disconnected" : `Assigned ${routingBusLabel(bus, state.routingSnapshot)}`} and verified from the NT`);
     } catch (error) {
       if (removedRoutes.length) {
@@ -1884,6 +1979,7 @@
       submitLabel: "Apply",
       onApply: async (modeChoice, routesToRemove) => {
         const originalMode = details.currentMode;
+        const historyBefore = captureRoutingParameterState();
         const removedRoutes = [];
         try {
           if (modeChoice?.mode !== originalMode) await chooseRoutingOutputMode(details, modeChoice.mode);
@@ -1893,6 +1989,7 @@
           }
           await loadLiveRouting({ preserveView: true });
           if (modeChoice?.mode !== originalMode || removedRoutes.length) markWorkingEdit();
+          recordRoutingHistory(historyBefore, `change output mode for ${routingSelectionLabel(selection)}`);
           const removedCopy = removedRoutes.length ? ` · removed ${removedRoutes.length} other route${removedRoutes.length === 1 ? "" : "s"}` : "";
           showToast(`Output mode is ${modeChoice?.mode === "replace" ? "Replace" : "Add"}${removedCopy}`);
         } catch (error) {
@@ -2396,11 +2493,18 @@
   async function writePerformanceValue(entry, value, control) {
     if (!state.ntTransport || !state.transportOnline) return;
     const requestedValue = Math.min(entry.parameter.max, Math.max(entry.parameter.min, Number(value)));
+    const previousValue = entry.parameter.value;
     control.disabled = true;
     const operation = state.parameterWriteQueue.catch(() => {}).then(async () => {
       await state.ntTransport.writeParameter(entry.slotInfo.index, entry.parameter.index, requestedValue);
       entry.parameter.value = requestedValue;
       markWorkingEdit();
+      recordParameterHistory([{
+        slotIndex: entry.slotInfo.index,
+        parameterIndex: entry.parameter.index,
+        before: previousValue,
+        after: requestedValue
+      }], `change ${entry.item.upperLabel || entry.parameter.name}`);
       renderPerformanceControls();
       return true;
     }).catch(error => {
@@ -2415,6 +2519,7 @@
 
   function queuePerformanceValueWrite(entry, value, control) {
     const requestedValue = Math.min(entry.parameter.max, Math.max(entry.parameter.min, Number(value)));
+    if (entry.performanceHistoryStart == null && requestedValue !== entry.parameter.value) entry.performanceHistoryStart = entry.parameter.value;
     entry.pendingPerformanceValue = requestedValue;
     if (entry.performanceWriteRunning || !state.ntTransport || !state.transportOnline) return;
     entry.performanceWriteRunning = true;
@@ -2426,6 +2531,13 @@
         entry.parameter.value = nextValue;
         markWorkingEdit();
       }
+      recordParameterHistory([{
+        slotIndex: entry.slotInfo.index,
+        parameterIndex: entry.parameter.index,
+        before: entry.performanceHistoryStart,
+        after: entry.parameter.value
+      }], `change ${entry.item.upperLabel || entry.parameter.name}`);
+      entry.performanceHistoryStart = null;
       try {
         const confirmedLabel = await state.ntTransport.readParameterValueString(
           entry.slotInfo.index,
@@ -2443,6 +2555,7 @@
       } catch (_) {}
       return true;
     }).catch(error => {
+      entry.performanceHistoryStart = null;
       showToast(error.message);
       return false;
     }).finally(() => {
@@ -2473,6 +2586,12 @@
       const liveEntry = state.liveParameters.get(mappingKey(slotIndex, 0));
       if (liveEntry) updateLiveParameterEntry(liveEntry, bypassed ? 1 : 0, "midi-feedback");
       markWorkingEdit();
+      recordParameterHistory([{
+        slotIndex,
+        parameterIndex: 0,
+        before: bypassed ? 0 : 1,
+        after: bypassed ? 1 : 0
+      }], `${bypassed ? "bypass" : "enable"} slot ${slotIndex + 1}`);
       startCpuPolling();
       showToast(`Slot ${slotIndex + 1} ${bypassed ? "bypassed" : "enabled"} and verified from the NT`);
       return true;
@@ -2688,6 +2807,7 @@
         sliderWriteRunning: false,
         sliderCommitPending: false,
         sliderInteracting: false,
+        sliderHistoryStart: null,
         writePending: false,
         feedbackTimer: null
       };
@@ -2839,7 +2959,7 @@
     const destination = direction === "undo" ? state.redoHistory : state.undoHistory;
     const action = source.pop();
     if (!action) {
-      showToast(`Nothing to ${direction} yet · algorithm slot moves appear here`);
+      showToast(`Nothing to ${direction} yet`);
       return;
     }
     const control = direction === "undo" ? undoEdit : redoEdit;
@@ -2855,6 +2975,7 @@
         ? await moveLiveSlot(action.toSlot, action.fromSlot, { record: false, announce: false })
         : await moveLiveSlot(action.fromSlot, action.toSlot, { record: false, announce: false });
     }
+    if (action.type === "parameter-batch") succeeded = await applyParameterHistory(action, direction);
     if (succeeded) {
       destination.push(action);
       control.classList.add("confirmed");
@@ -3467,6 +3588,7 @@
     }
     if (value < entry.parameter.min || value > entry.parameter.max) return;
     queueLiveParameterWrite(entry, value, {
+      historyRouting: true,
       successMessage: `${entry.parameter.name} assigned to ${descriptor.label} in NT working memory`,
       afterWrite: async () => {
         if (state.liveRouting) await loadLiveRouting({ preserveView: true });
