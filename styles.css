@@ -116,6 +116,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .interface-scale output { min-width: 36px; color: #536872; font-size: 8px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; cursor: default; }
 .sidebar-scale { width: 100%; height: 34px; margin-top: 0; justify-content: space-between; }
 .sidebar-utility-stack { width: 100%; margin-top: auto; display: flex; flex-direction: column; gap: 7px; }
+.device-frame:not(.ipad-mode) .sidebar-scale { display: none; }
 .sidebar-utility-stack .status-sync { width: 100%; height: 34px; margin: 0; justify-content: space-between; }
 .sidebar-scale button { height: 28px; color: #71818a; font-size: 12px; font-weight: 850; }.sidebar-scale output { color: #284550; font-size: 10px; font-weight: 850; }
 .sidebar-scale button:hover:not(:disabled), .sidebar-scale button:focus-visible, .sidebar-scale button:active:not(:disabled) { color: var(--pilot-deep); background: transparent; box-shadow: none; }.sidebar-scale button:active:not(:disabled) { transform: scale(.88); }
@@ -715,7 +716,7 @@ button.routing-node { padding: 0; text-align: left; }
 .device-frame.ipad-mode .toast { bottom: calc(var(--bottom-bus-dock-height, 0px) + 14px); max-width: min(620px, calc(100% - 36px)); padding: 13px 17px; border-radius: 13px; font-size: 15px; line-height: 1.35; text-align: center; }
 
 /* Complete charcoal-blue theme. Semantic bus, modulation and slot colours stay intact. */
-.dark-mode-control { margin-top: auto; }
+.dark-mode-control { margin-top: 7px; }
 .dark-mode-control + .ipad-mode-control { margin-top: 7px; }
 body.dark-mode { --pilot-soft: color-mix(in srgb, var(--pilot) 18%, #102033); --pilot-deep: color-mix(in srgb, var(--pilot) 72%, white); background: #050c15; }
 .device-frame.dark-mode {
