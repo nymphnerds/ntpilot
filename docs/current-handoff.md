@@ -13,7 +13,7 @@ Last updated: 26 September 2026
 - Sync and interface Scale form a matched compact stack at the bottom of the sidebar in both desktop and iPad modes, with Sync directly above Scale and identical outer dimensions for the active mode.
 - Sync uses an app-rendered three-choice menu rather than a native browser select, so its popup follows light/dark styling consistently in the iPad Web MIDI browser.
 - The built-in wiki becomes a near-edge-to-edge full-page reader in iPad mode, with larger navigation, search, article and footer typography while retaining independent contents/article scrolling.
-- The first safe algorithm-add slice is now implemented: the `Algorithms [+]` browser reads the live NT catalogue, distinguishes built-ins from plug-ins, loads an unloaded plug-in through the NT first, then adds with named starting settings and verifies each NT readback.
+- The first safe algorithm-add slice is now implemented: the `Algorithms [+]` browser reads the live NT catalogue, distinguishes built-ins from plug-ins, loads an unloaded plug-in through the NT first, then adds with named starting settings and verifies each NT readback. Add/load operations explicitly pause parameter and CPU polling; because `0x32`/`0x38` have no ACK, they wait one second and then poll only the affected slot count, slot GUID or catalogue entry for up to ten seconds before a complete UI refresh.
 - The NT SysEx add command only appends. NT Pilot turns **Add before**, **Add after** and **Add at end** into one transaction: append, native move if needed, then reread the complete preset and verify the requested GUID at its target slot.
 - This slice refuses a full 40-slot preset. Do not add destructive replacement by chaining remove/add: the old slot's complete specification state cannot yet be restored safely. Implement replacement only as a previewable, tested, reversible lifecycle plan.
 - An algorithm add is represented as one Undo/Redo history action; Undo removes only the exact verified newly-added slot, and Redo recreates it at the original target position.
@@ -201,7 +201,7 @@ Initial routing content renders before output-mode hydration completes. If a use
 ## Algorithm add limits and plug-ins
 
 - The 1.19 target supports **40 slots**. The add browser always shows `used / 40`; placement is unavailable only when all 40 are occupied.
-- Built-ins are immediately available. An installed plug-in that is not resident is selectable but needs **Load into NT**. Its compact Load popup states that code may remain resident until reboot; once loaded, that same popup switches straight to placement, starting settings and Add. It sends `0x38` and polls only that catalogue record for up to five seconds—important for slower C++ plug-ins.
+- Built-ins are immediately available. An installed plug-in that is not resident is selectable but needs **Load into NT**. Its compact Load popup states that code may remain resident until reboot; once loaded, that same popup switches straight to placement, starting settings and Add. It sends `0x38` and polls only that catalogue record for up to ten seconds—important for slower C++ plug-ins.
 - `isLoaded` is treated as device truth. A loaded plug-in used by a slot reads **in preset**; a loaded plug-in with no matching slot reads **Loaded in NT · not in preset**. Removing a slot (`0x33`) never claims to free code memory because the API has no unload command.
 - On firmware 1.19+, the starting-settings dialog serializes a SysEx `0x39` query with the selected first three specification values. It accepts the documented three- or four-row response, shows SRAM/DRAM/DTC/ITC projected `used / total`, and blocks only a validated pool shortfall. Timeouts and malformed replies are neutral “preflight unavailable” states, never false memory warnings.
 - A load timeout says that the device did not report the plug-in loaded; SysEx does not supply a precise cause. It advises a reboot to clear resident plug-ins and checking the native NT screen rather than guessing it is a memory failure.
@@ -209,9 +209,9 @@ Initial routing content renders before output-mode hydration completes. If a use
 ## Current asset versions
 
 - `styles.css?v=20260926-249`
-- `web-midi-transport.js?v=20260926-52`
+- `web-midi-transport.js?v=20260926-53`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-189`
+- `app.js?v=20260926-190`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

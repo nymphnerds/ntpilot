@@ -514,6 +514,26 @@
       return slots;
     }
 
+    async readSlotCount() {
+      const payload = await this.request(0x60, 0x60);
+      const slotCount = payload[0] ?? -1;
+      if (!Number.isInteger(slotCount) || slotCount < 0 || slotCount > 40) {
+        throw new Error(`NT returned an invalid slot count (${slotCount}).`);
+      }
+      return slotCount;
+    }
+
+    async readSlotAlgorithm(slot) {
+      if (!Number.isInteger(slot) || slot < 0 || slot > 127) throw new Error("Invalid NT slot.");
+      const payload = await this.request(0x40, 0x40, [slot], bytes => bytes[7] === slot);
+      return {
+        index: slot,
+        guid: payload.slice(1, 5),
+        guidKey: guidKey(payload.slice(1, 5)),
+        name: decodeText(payload.slice(5, 29)) || `Slot ${slot + 1}`
+      };
+    }
+
     async readSlotParameters(slot) {
       const countPayload = await this.request(
         0x42,

@@ -683,7 +683,7 @@
     const overallMeter = $("#overall-cpu-meter");
     const poll = async () => {
       if (!state.ntTransport || !state.transportOnline || document.hidden) return;
-      if (state.presetTransportBusy || state.pollInFlight || state.routingReadPromise || state.performanceReadPromise) {
+      if (state.presetTransportBusy || state.slotMutationBusy || state.pollInFlight || state.routingReadPromise || state.performanceReadPromise) {
         state.cpuTimer = setTimeout(poll, 2000);
         return;
       }
@@ -734,7 +734,7 @@
     stopLivePolling();
     state.activeLiveSlotIndex = slotIndex;
     const delay = pollingDelay();
-    if (delay == null || !state.ntTransport || !state.transportOnline || document.hidden) return;
+    if (delay == null || state.presetTransportBusy || state.slotMutationBusy || !state.ntTransport || !state.transportOnline || document.hidden) return;
     const token = state.pollToken;
 
     const poll = async () => {
@@ -2621,6 +2621,32 @@
     return operation;
   }
 
+  // Add, remove, move and plug-in load commands have no acknowledgement. A
+  // quiet transport window lets their follow-up reads establish device truth
+  // instead of competing with parameter and CPU polling.
+  async function runSlotMutationTransportOperation(task) {
+    const activeSlotIndex = state.activeLiveSlotIndex;
+    const pendingPoll = stopLivePolling();
+    stopCpuPolling();
+    try {
+      await state.presetTransportTail.catch(() => {});
+      await pendingPoll?.catch(() => {});
+      await state.cpuInFlight?.catch(() => {});
+      await state.parameterReadQueue.catch(() => {});
+      await state.parameterWriteQueue.catch(() => {});
+      await state.memoryReadTail.catch(() => {});
+      await state.routingReadPromise?.catch(() => {});
+      await state.performanceReadPromise?.catch(() => {});
+      if (!state.ntTransport || !state.transportOnline) throw new Error("The NT is no longer connected.");
+      return await task();
+    } finally {
+      if (state.ntTransport && state.transportOnline) {
+        startCpuPolling();
+        if (activeSlotIndex != null) startLivePolling(activeSlotIndex);
+      }
+    }
+  }
+
   function presetPathJoin(path, name) {
     return `${path.endsWith("/") ? path : `${path}/`}${name}`;
   }
@@ -3962,6 +3988,7 @@
     stopCpuPolling();
     try {
       if (pendingPoll) await pendingPoll.catch(() => {});
+      await state.cpuInFlight?.catch(() => {});
       await state.parameterReadQueue.catch(() => {});
       return await state.ntTransport.readMemoryUsage(algorithm);
     } finally {
@@ -4119,6 +4146,24 @@
     return identity;
   }
 
+  async function waitForSlotMutation(check, failureMessage) {
+    const deadline = Date.now() + 10000;
+    let lastError = null;
+    // The module does not acknowledge 0x32/0x33/0x37. NT Helper uses the
+    // same one-second initial settle and ten-second verification window.
+    await wait(1000);
+    while (Date.now() < deadline) {
+      try {
+        const result = await check();
+        if (result) return result;
+      } catch (error) {
+        lastError = error;
+      }
+      await wait(700);
+    }
+    throw lastError || new Error(failureMessage);
+  }
+
   async function addLiveAlgorithm(algorithm, placement, { record = true, announce = true } = {}) {
     if (!state.ntTransport || !state.transportOnline || state.slotMutationBusy) return false;
     const before = state.liveIdentity;
@@ -4133,24 +4178,27 @@
       : placement === "before" && selected ? selected.index
         : placement === "after" && selected ? selected.index + 1
           : slotCount;
-    const pendingPoll = stopLivePolling();
     state.slotMutationBusy = true;
     renderAlgorithmBrowserPlacement();
     addAlgorithmButton.disabled = true;
     try {
-      if (pendingPoll) await pendingPoll.catch(() => {});
-      await state.parameterReadQueue.catch(() => {});
-      state.ntTransport.addAlgorithm(algorithm);
-      await new Promise(resolve => setTimeout(resolve, 140));
-      let verified = await state.ntTransport.readSnapshot();
-      if (verified.slots.length !== slotCount + 1) throw new Error("The algorithm did not appear in the preset after the NT add command.");
-      const appendedSlot = verified.slots.at(-1);
-      if (appendedSlot?.guidKey !== algorithm.guidKey) throw new Error("The NT added a different algorithm than requested.");
-      if (targetSlot !== appendedSlot.index) {
-        await state.ntTransport.moveAlgorithm(appendedSlot.index, targetSlot);
-        await new Promise(resolve => setTimeout(resolve, 100));
-        verified = await state.ntTransport.readSnapshot();
-      }
+      let verified = await runSlotMutationTransportOperation(async () => {
+        state.ntTransport.addAlgorithm(algorithm);
+        const appendedSlot = await waitForSlotMutation(async () => {
+          if (await state.ntTransport.readSlotCount() !== slotCount + 1) return null;
+          const candidate = await state.ntTransport.readSlotAlgorithm(slotCount);
+          return candidate.guidKey === algorithm.guidKey ? candidate : null;
+        }, "The NT did not add that algorithm.");
+        if (targetSlot !== appendedSlot.index) {
+          await state.ntTransport.moveAlgorithm(appendedSlot.index, targetSlot);
+          await waitForSlotMutation(async () => {
+            if (await state.ntTransport.readSlotCount() !== slotCount + 1) return false;
+            const candidate = await state.ntTransport.readSlotAlgorithm(targetSlot);
+            return candidate.guidKey === algorithm.guidKey;
+          }, "The NT did not place the new algorithm at the requested position.");
+        }
+        return await state.ntTransport.readSnapshot();
+      });
       const placedSlot = verified.slots[targetSlot];
       if (!placedSlot || placedSlot.guidKey !== algorithm.guidKey) throw new Error("The NT did not place the new algorithm at the requested position.");
       state.liveIdentity = verified;
@@ -4264,16 +4312,14 @@
     state.slotMutationBusy = true;
     renderAlgorithmBrowser();
     try {
-      state.ntTransport.loadPlugin(algorithm);
-      let loaded = null;
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const candidate = await state.ntTransport.readAlgorithmInfo(algorithm.index);
-        if (candidate.guidKey !== algorithm.guidKey) throw new Error("The NT catalogue changed while this plug-in was loading.");
-        loaded = candidate;
-        if (loaded?.isLoaded) break;
-      }
-      if (!loaded?.isLoaded) throw new Error("The NT did not report it loaded after 5 seconds. SysEx does not expose the exact load error; reboot to clear resident plug-ins, then try again and check the NT screen for its native message.");
+      const loaded = await runSlotMutationTransportOperation(async () => {
+        state.ntTransport.loadPlugin(algorithm);
+        return await waitForSlotMutation(async () => {
+          const candidate = await state.ntTransport.readAlgorithmInfo(algorithm.index);
+          if (candidate.guidKey !== algorithm.guidKey) throw new Error("The NT catalogue changed while this plug-in was loading.");
+          return candidate.isLoaded ? candidate : null;
+        }, "The NT did not report this plug-in loaded. Check the native NT screen; rebooting clears resident plug-ins for a clean runtime.");
+      });
       state.liveIdentity = { ...state.liveIdentity, algorithms: state.liveIdentity.algorithms.map(item => item.index === loaded.index ? loaded : item) };
       state.pendingAlgorithm = loaded;
       showToast(`${loaded.name} loaded and ready to add`);

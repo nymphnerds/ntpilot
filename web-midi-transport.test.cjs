@@ -336,6 +336,13 @@ global.navigator = { requestMIDIAccess: async options => {
       value: 7
     }
   ]);
+  assert.equal(await transport.readSlotCount(), 2);
+  assert.deepEqual(await transport.readSlotAlgorithm(1), {
+    index: 1,
+    guid: [5, 6, 7, 8],
+    guidKey: "05060708",
+    name: "Kick Snare"
+  });
   const editorState = await transport.readSlotEditorState(0);
   assert.deepEqual(editorState.pages, [
     { index: 0, name: "Timing", parameterIndices: [0] },
