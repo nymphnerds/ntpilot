@@ -3008,7 +3008,12 @@
       presetJsonDialogStatus.className = "preset-json-dialog-status ready";
       confirmPresetJsonDialog.textContent = "Save JSON";
       presetJsonDialog.showModal();
-      requestAnimationFrame(() => presetJsonDialogInput.focus());
+      requestAnimationFrame(() => {
+        presetJsonDialogInput.focus();
+        presetJsonDialogInput.setSelectionRange(0, 0);
+        presetJsonDialogInput.scrollTop = 0;
+        presetJsonDialogInput.scrollLeft = 0;
+      });
     } catch (error) {
       showToast(`Could not open ${entry.name} · ${error.message}`);
     } finally {
