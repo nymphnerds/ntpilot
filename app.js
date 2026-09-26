@@ -3312,9 +3312,7 @@
   function algorithmBrowserSelectionCopy() {
     const algorithm = state.pendingAlgorithm;
     const slot = selectedLiveSlot();
-    const count = state.liveIdentity?.slots?.length || 0;
     if (!algorithm) return { kicker: "Choose an algorithm", detail: "Select an algorithm to choose where it goes." };
-    if (count >= 10) return { kicker: "All 10 slots are occupied", detail: "Free a slot in algorithm management before adding another algorithm." };
     if (!slot) return { kicker: algorithm.name, detail: "This will become slot 1." };
     return { kicker: algorithm.name, detail: `Choose where to add it around ${slot.name}.` };
   }
@@ -3331,8 +3329,7 @@
     algorithmBrowserPlacementActions.replaceChildren();
     const algorithm = state.pendingAlgorithm;
     const slot = selectedLiveSlot();
-    const count = state.liveIdentity?.slots?.length || 0;
-    if (!algorithm || count >= 10 || state.slotMutationBusy) return;
+    if (!algorithm || state.slotMutationBusy) return;
     const actions = slot
       ? [["before", "Add before"], ["after", "Add after"], ["end", "Add at end"]]
       : [["end", "Add first algorithm"]];
@@ -3408,10 +3405,6 @@
     if (!state.ntTransport || !state.transportOnline || state.slotMutationBusy) return false;
     const before = state.liveIdentity;
     const slotCount = before?.slots?.length || 0;
-    if (slotCount >= 10) {
-      showToast("All 10 slots are occupied. Safe replacement is the next lifecycle step.");
-      return false;
-    }
     const selected = selectedLiveSlot();
     const targetSlot = Number.isInteger(placement)
       ? Math.max(0, Math.min(slotCount, placement))
