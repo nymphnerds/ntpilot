@@ -1853,7 +1853,7 @@
 
   async function handleDerivedCountClick(target) {
     const control = target.closest(".routing-derived-count-step");
-    if (!control) return false;
+    if (!control) return Boolean(target.closest(".routing-derived-count"));
     const slotIndex = Number(control.dataset.slotIndex);
     const parameterIndex = Number(control.dataset.parameterIndex);
     const current = Number(control.dataset.value);
