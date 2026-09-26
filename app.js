@@ -1234,6 +1234,7 @@
     const renderedMode = output?.element?.querySelector(".routing-mode-toggle")?.dataset.mode || "add";
     const currentMode = details?.currentMode || renderedMode;
     const modeStatus = routingOutputModeStatus(output);
+    routingOutputModeField.classList.toggle("hidden", !output);
     modeControls.forEach(control => {
       control.checked = control.value === currentMode;
       control.disabled = !details;
@@ -1915,7 +1916,7 @@
     return true;
   }
 
-  async function assignEditorOutputBus(entry, value, anchorElement) {
+  async function assignEditorBusWithPopup(entry, value, anchorElement) {
     if (!state.routingSnapshot) {
       showToast("Reading routing choices from the NT…");
       await loadLiveRouting({ preserveView: true });
@@ -1924,7 +1925,7 @@
       showToast("Routing choices are unavailable until the NT routing state is read");
       return false;
     }
-    const port = [...$$(".routing-port[data-routing-side=\"output\"]", routingIpadList), ...$$(".routing-port[data-routing-side=\"output\"]", routingNodes)]
+    const port = [...$$(".routing-port", routingIpadList), ...$$(".routing-port", routingNodes)]
       .find(candidate => Number(candidate.dataset.slotIndex) === entry.slotInfo.index
         && Number(candidate.dataset.parameterIndex) === entry.parameter.index);
     if (!port) {
@@ -1933,14 +1934,26 @@
     }
     const selection = {
       element: port,
-      side: "output",
+      side: port.dataset.routingSide,
       bus: Number(port.dataset.bus),
       slotIndex: entry.slotInfo.index,
       parameterIndex: entry.parameter.index,
       minimum: Number(entry.parameter.min),
       maximum: Number(entry.parameter.max)
     };
-    await assignRoutingPort(selection, value - 1, null, [], false, anchorElement);
+    if (selection.side === "output") {
+      await assignRoutingPort(selection, value - 1, null, [], false, anchorElement);
+    } else {
+      const destination = { element: anchorElement, side: "both", bus: value - 1, slotIndex: null, parameterIndex: null };
+      await openRoutingConnectionPanel({
+        source: selection,
+        destination,
+        output: null,
+        destinationBus: value - 1,
+        allowRouteChanges: false,
+        onApply: () => assignRoutingPort(selection, value - 1, null, [], true, anchorElement)
+      });
+    }
     disarmEditorBusAssignment();
     return true;
   }
@@ -3617,8 +3630,8 @@
       return;
     }
     if (value < entry.parameter.min || value > entry.parameter.max) return;
-    if ((entry.parameter.ioFlags & 0x02) && value > 0) {
-      await assignEditorOutputBus(entry, value, chip);
+    if (value > 0) {
+      await assignEditorBusWithPopup(entry, value, chip);
       return;
     }
     queueLiveParameterWrite(entry, value, {
