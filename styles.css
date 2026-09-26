@@ -1191,12 +1191,12 @@ body:has(.device-frame.ipad-mode) .preset-json-dialog > header { padding: 21px 2
 body:has(.device-frame.ipad-mode) .preset-json-dialog > header span { font-size: 11px; }
 body:has(.device-frame.ipad-mode) .preset-json-dialog > header h2 { font-size: 26px; }
 body:has(.device-frame.ipad-mode) .preset-json-dialog > header button { width: 44px; height: 44px; font-size: 29px; }
-body:has(.device-frame.ipad-mode) .preset-json-dialog-copy { min-height: 0; padding: 22px 24px; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; gap: 11px; overflow: hidden; }
+body:has(.device-frame.ipad-mode) .preset-json-dialog-copy { min-height: 0; padding: 22px 24px; display: flex; flex-direction: column; gap: 11px; overflow: hidden; }
 body:has(.device-frame.ipad-mode) .preset-json-dialog-copy strong { font-size: 19px; }
 body:has(.device-frame.ipad-mode) .preset-json-dialog-copy p { font-size: 15px; }
 body:has(.device-frame.ipad-mode) .preset-json-dialog-copy label { font-size: 11px; }
 body:has(.device-frame.ipad-mode) .preset-json-name-field input { height: 44px; font-size: 16px; }
-body:has(.device-frame.ipad-mode) .preset-json-dialog-copy textarea { min-height: 0; max-height: none; height: 100%; padding: 16px; border-radius: 12px; font-size: 16px; line-height: 1.55; }
+body:has(.device-frame.ipad-mode) .preset-json-dialog-copy textarea { min-height: 0; max-height: none; height: auto; flex: 1 1 0; padding: 16px; border-radius: 12px; font-size: 16px; line-height: 1.55; }
 body:has(.device-frame.ipad-mode) .preset-json-dialog > footer { padding: 17px 24px; }
 body:has(.device-frame.ipad-mode) .preset-json-dialog > footer button { min-height: 44px; padding-inline: 17px; border-radius: 10px; font-size: 14px; }
 

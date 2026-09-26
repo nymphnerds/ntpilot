@@ -208,7 +208,7 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-256`
+- `styles.css?v=20260926-257`
 - `web-midi-transport.js?v=20260926-58`
 - `routing-logic.js?v=20260925-2`
 - `app.js?v=20260926-196`
