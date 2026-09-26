@@ -817,7 +817,7 @@ body.dark-mode .routing-connection-panel { color: #dfe8ec; background: rgba(17,3
 body.dark-mode .routing-connection-heading strong { color: #edf4f7; }
 body.dark-mode .routing-connection-panel label span,
 body.dark-mode .routing-connection-actions button { color: #c5d2d9; background: #172a3c; border-color: #3a5062; }
-body.dark-mode .routing-connection-panel label input:checked + span { color: var(--pilot-deep); background: color-mix(in srgb, var(--pilot) 20%, #142438); }
+body.dark-mode .routing-connection-panel label input:checked + span { color: var(--pilot-deep); background: var(--pilot-soft); }
 body.dark-mode .routing-connection-panel small { color: #9fb0b9; }
 body.dark-mode .routing-connection-note { color: #a9bac3; }
 body.dark-mode .routing-connection-actions button[type="submit"] { color: white; background: var(--pilot); border-color: var(--pilot); }

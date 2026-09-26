@@ -660,10 +660,10 @@
     state.pilotAccentHue = hue;
     const pilot = `hsl(${hue} 78% 48%)`;
     const deep = state.darkMode
-      ? `color-mix(in srgb, ${pilot} 72%, white)`
+      ? `hsl(${hue} 72% 72%)`
       : `hsl(${hue} 65% 31%)`;
     const soft = state.darkMode
-      ? `color-mix(in srgb, ${pilot} 18%, #102033)`
+      ? `hsl(${hue} 34% 20%)`
       : `hsl(${hue} 48% 92%)`;
     [document.documentElement, document.body, deviceFrame].forEach(element => {
       element.style.setProperty("--pilot", pilot);
