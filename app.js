@@ -98,6 +98,12 @@
   const algorithmBrowserList = $("#algorithm-browser-list");
   const algorithmBrowserPlacement = $("#algorithm-browser-placement");
   const algorithmBrowserPlacementActions = $("#algorithm-browser-placement-actions");
+  const algorithmSpecDialog = $("#algorithm-spec-dialog");
+  const closeAlgorithmSpec = $("#close-algorithm-spec");
+  const algorithmSpecName = $("#algorithm-spec-name");
+  const algorithmSpecList = $("#algorithm-spec-list");
+  const cancelAlgorithmSpec = $("#cancel-algorithm-spec");
+  const confirmAlgorithmSpec = $("#confirm-algorithm-spec");
   const algorithmRemoveDialog = $("#algorithm-remove-dialog");
   const closeAlgorithmRemove = $("#close-algorithm-remove");
   const algorithmRemoveName = $("#algorithm-remove-name");
@@ -169,6 +175,7 @@
     midiCounts: { all: 0, channel: 0, sysex: 0 },
     algorithmBrowserFilter: "all",
     pendingAlgorithm: null,
+    pendingAlgorithmPlacement: null,
     pendingSlotRemoval: null,
     slotMutationBusy: false,
   };
@@ -3319,6 +3326,7 @@
   function closeAlgorithmBrowserDialog() {
     if (algorithmBrowser.open) algorithmBrowser.close();
     state.pendingAlgorithm = null;
+    state.pendingAlgorithmPlacement = null;
     algorithmBrowserSearch.value = "";
   }
 
@@ -3400,6 +3408,70 @@
     });
     $$("[data-algorithm-filter]").forEach(button => button.classList.toggle("active", button.dataset.algorithmFilter === filter));
     renderAlgorithmBrowserPlacement();
+  }
+
+  function closeAlgorithmSpecDialog() {
+    if (algorithmSpecDialog.open) algorithmSpecDialog.close();
+    state.pendingAlgorithmPlacement = null;
+  }
+
+  function openAlgorithmSpecDialog(algorithm, placement) {
+    const specifications = algorithm.specifications || [];
+    if (specifications.length > 3) {
+      showToast(`${algorithm.name} reports more than three setup values, which the NT add command cannot send.`);
+      return;
+    }
+    state.pendingAlgorithmPlacement = placement;
+    algorithmSpecName.textContent = algorithm.name;
+    algorithmSpecList.replaceChildren();
+    if (!specifications.length) {
+      const empty = document.createElement("p");
+      empty.className = "algorithm-spec-empty";
+      empty.textContent = "This algorithm has no starting settings.";
+      algorithmSpecList.appendChild(empty);
+    }
+    specifications.forEach((specification, index) => {
+      const field = document.createElement("label");
+      field.className = "algorithm-spec-field";
+      const copy = document.createElement("span");
+      const title = document.createElement("strong");
+      title.textContent = specification.name || `Specification ${index + 1}`;
+      const range = document.createElement("small");
+      range.textContent = `${specification.min} to ${specification.max}`;
+      copy.append(title, range);
+      let control;
+      if (specification.type === 2 && specification.min === 0 && specification.max === 1) {
+        control = document.createElement("select");
+        control.append(new Option("Off", "0"), new Option("On", "1"));
+      } else {
+        control = document.createElement("input");
+        control.type = "number";
+        control.min = String(specification.min);
+        control.max = String(specification.max);
+        control.step = "1";
+        control.inputMode = "numeric";
+      }
+      control.dataset.specIndex = String(index);
+      control.value = String(specification.defaultValue ?? 0);
+      field.append(copy, control);
+      algorithmSpecList.appendChild(field);
+    });
+    const label = placement === "before" ? "Add before" : placement === "after" ? "Add after" : "Add at end";
+    confirmAlgorithmSpec.textContent = label;
+    algorithmSpecDialog.showModal();
+  }
+
+  function algorithmWithChosenSpecifications(algorithm) {
+    const specifications = algorithm.specifications || [];
+    const chosen = specifications.map((specification, index) => {
+      const control = $(`[data-spec-index="${index}"]`, algorithmSpecList);
+      const value = Number(control?.value);
+      if (!Number.isInteger(value) || value < specification.min || value > specification.max) {
+        throw new Error(`${specification.name || `Specification ${index + 1}`} must be between ${specification.min} and ${specification.max}.`);
+      }
+      return { ...specification, defaultValue: value };
+    });
+    return { ...algorithm, specifications: chosen };
   }
 
   async function refreshIdentityAfterSlotMutation({ selectSlot = null, refreshRouting = true } = {}) {
@@ -4211,6 +4283,7 @@
   closeAlgorithmBrowser.addEventListener("click", closeAlgorithmBrowserDialog);
   algorithmBrowser.addEventListener("close", () => {
     state.pendingAlgorithm = null;
+    state.pendingAlgorithmPlacement = null;
   });
   algorithmBrowserSearch.addEventListener("input", renderAlgorithmBrowser);
   $$("[data-algorithm-filter]").forEach(button => button.addEventListener("click", () => {
@@ -4231,14 +4304,35 @@
       return;
     }
     state.pendingAlgorithm = algorithm;
+    state.pendingAlgorithmPlacement = null;
     renderAlgorithmBrowser();
   });
   algorithmBrowserPlacementActions.addEventListener("click", async event => {
     const action = event.target.closest("[data-algorithm-placement]");
     if (!action || !state.pendingAlgorithm) return;
+    openAlgorithmSpecDialog(state.pendingAlgorithm, action.dataset.algorithmPlacement);
+  });
+  closeAlgorithmSpec.addEventListener("click", closeAlgorithmSpecDialog);
+  cancelAlgorithmSpec.addEventListener("click", closeAlgorithmSpecDialog);
+  algorithmSpecDialog.addEventListener("close", () => { state.pendingAlgorithmPlacement = null; });
+  confirmAlgorithmSpec.addEventListener("click", async () => {
     const algorithm = state.pendingAlgorithm;
-    const added = await addLiveAlgorithm(algorithm, action.dataset.algorithmPlacement);
-    if (added) closeAlgorithmBrowserDialog();
+    const placement = state.pendingAlgorithmPlacement;
+    if (!algorithm || !placement) return;
+    let selected;
+    try {
+      selected = algorithmWithChosenSpecifications(algorithm);
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+    confirmAlgorithmSpec.disabled = true;
+    const added = await addLiveAlgorithm(selected, placement);
+    confirmAlgorithmSpec.disabled = false;
+    if (added) {
+      closeAlgorithmSpecDialog();
+      closeAlgorithmBrowserDialog();
+    }
   });
   closeAlgorithmRemove.addEventListener("click", closeAlgorithmRemoveDialog);
   cancelAlgorithmRemove.addEventListener("click", closeAlgorithmRemoveDialog);

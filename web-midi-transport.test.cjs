@@ -13,7 +13,7 @@ const replies = new Map([
 ]);
 
 const algorithms = [
-  { guid: [1, 2, 3, 4], name: "Clock" },
+  { guid: [1, 2, 3, 4], name: "Clock", specifications: [{ name: "Division", min: 1, max: 16, defaultValue: 4, type: 0 }] },
   { guid: [5, 6, 7, 8], name: "Custom plug-in", isPlugin: true, filename: "KickSnare.lua" }
 ];
 const slots = [
@@ -74,9 +74,11 @@ const output = {
     if (bytes[6] === 0x31) {
       const index = bytes[9];
       const algorithm = algorithms[index];
+      const specifications = algorithm.specifications || [];
       reply = [
-        ...header, 0x31, 0, 0, index, ...algorithm.guid, 0,
-        ...Buffer.from(algorithm.name), 0,
+        ...header, 0x31, 0, 0, index, ...algorithm.guid, specifications.length,
+        ...specifications.flatMap(specification => [...encodeShort(specification.min), ...encodeShort(specification.max), ...encodeShort(specification.defaultValue), specification.type]),
+        ...Buffer.from(algorithm.name), 0, ...specifications.flatMap(specification => [...Buffer.from(specification.name), 0]),
         algorithm.isPlugin ? 1 : 0, 1,
         ...Buffer.from(algorithm.filename || ""), 0, 0xF7
       ];
@@ -242,7 +244,7 @@ global.navigator = { requestMIDIAccess: async options => {
     outputName: output.name,
     sysexId: 0,
     algorithms: [
-      { index: 0, guid: [1, 2, 3, 4], guidKey: "01020304", name: "Clock", factoryName: "Clock", isPlugin: false, isLoaded: true, filename: "", specifications: [] },
+      { index: 0, guid: [1, 2, 3, 4], guidKey: "01020304", name: "Clock", factoryName: "Clock", isPlugin: false, isLoaded: true, filename: "", specifications: [{ min: 1, max: 16, defaultValue: 4, type: 0, name: "Division" }] },
       { index: 1, guid: [5, 6, 7, 8], guidKey: "05060708", name: "KickSnare", factoryName: "Custom plug-in", isPlugin: true, isLoaded: true, filename: "KickSnare.lua", specifications: [] }
     ],
     slots: [

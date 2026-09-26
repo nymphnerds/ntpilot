@@ -405,10 +405,8 @@
         const names = [];
         for (let nameIndex = 0; nameIndex < 1 + numSpecs; nameIndex += 1) {
           const start = cursor;
-          let length = 0;
-          while (cursor < payload.length && length < 32 && payload[cursor] !== 0) {
+          while (cursor < payload.length && payload[cursor] !== 0) {
             cursor += 1;
-            length += 1;
           }
           names.push(decodeText(payload.slice(start, cursor)));
           if (payload[cursor] === 0) cursor += 1;
@@ -419,6 +417,9 @@
         const filenameLeaf = filename.split(/[\\/]/).pop() || "";
         const pluginName = filenameLeaf.replace(/\.(lua|3pot|o)$/i, "");
         const factoryName = names[0] || "Unknown algorithm";
+        specifications.forEach((specification, specificationIndex) => {
+          specification.name = names[specificationIndex + 1] || `Specification ${specificationIndex + 1}`;
+        });
         algorithms.push({
           index: responseIndex,
           guid,
