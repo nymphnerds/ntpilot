@@ -3122,6 +3122,7 @@
   let routingDrag = null;
   const routingTouches = new Map();
   let routingPinch = null;
+  let routingNativeTouch = null;
   const routingTouchGeometry = () => {
     const points = [...routingTouches.values()].slice(0, 2);
     if (points.length < 2) return null;
@@ -3135,6 +3136,7 @@
     state.lastRoutingPointer = { x: event.clientX, y: event.clientY };
   }, true);
   routingViewport.addEventListener("pointerdown", event => {
+    if (routingNativeTouch) return;
     if (event.pointerType === "touch") {
       routingTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
       routingViewport.setPointerCapture(event.pointerId);
@@ -3167,6 +3169,7 @@
     routingViewport.classList.add("dragging");
   });
   routingViewport.addEventListener("pointermove", event => {
+    if (routingNativeTouch) return;
     if (event.pointerType === "touch" && routingTouches.has(event.pointerId)) {
       routingTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
       const geometry = routingTouchGeometry();
@@ -3202,6 +3205,90 @@
   };
   routingViewport.addEventListener("pointerup", finishRoutingDrag);
   routingViewport.addEventListener("pointercancel", finishRoutingDrag);
+
+  const nativeTouchGeometry = touches => {
+    if (touches.length < 2) return null;
+    const first = touches[0];
+    const second = touches[1];
+    return {
+      distance: Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY),
+      x: (first.clientX + second.clientX) / 2,
+      y: (first.clientY + second.clientY) / 2
+    };
+  };
+  const beginNativeRoutingPinch = touches => {
+    const geometry = nativeTouchGeometry(touches);
+    if (!geometry) return false;
+    const rect = routingViewport.getBoundingClientRect();
+    const localX = geometry.x - rect.left;
+    const localY = geometry.y - rect.top;
+    routingNativeTouch = {
+      mode: "pinch",
+      distance: Math.max(1, geometry.distance),
+      zoom: state.routingZoom,
+      contentX: (routingViewport.scrollLeft + localX) / state.routingZoom,
+      contentY: (routingViewport.scrollTop + localY) / state.routingZoom
+    };
+    routingDrag = null;
+    routingViewport.classList.remove("dragging");
+    return true;
+  };
+  routingViewport.addEventListener("touchstart", event => {
+    if (event.touches.length >= 2) {
+      beginNativeRoutingPinch(event.touches);
+      event.preventDefault();
+      return;
+    }
+    const touch = event.touches[0];
+    if (!touch || event.target.closest("button, input, label, .routing-node.endpoint, .routing-port")) {
+      routingNativeTouch = { mode: "tap" };
+      return;
+    }
+    routingNativeTouch = {
+      mode: "pan",
+      x: touch.clientX,
+      y: touch.clientY,
+      left: routingViewport.scrollLeft,
+      top: routingViewport.scrollTop
+    };
+  }, { passive: false });
+  routingViewport.addEventListener("touchmove", event => {
+    if (event.touches.length >= 2) {
+      if (routingNativeTouch?.mode !== "pinch") beginNativeRoutingPinch(event.touches);
+      const geometry = nativeTouchGeometry(event.touches);
+      if (!geometry || routingNativeTouch?.mode !== "pinch") return;
+      const rect = routingViewport.getBoundingClientRect();
+      const localX = geometry.x - rect.left;
+      const localY = geometry.y - rect.top;
+      state.routingZoom = Math.max(.2, Math.min(1.5, routingNativeTouch.zoom * geometry.distance / routingNativeTouch.distance));
+      applyRoutingZoom();
+      routingViewport.scrollLeft = (routingNativeTouch.contentX * state.routingZoom) - localX;
+      routingViewport.scrollTop = (routingNativeTouch.contentY * state.routingZoom) - localY;
+      event.preventDefault();
+      return;
+    }
+    if (routingNativeTouch?.mode !== "pan" || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    routingViewport.scrollLeft = routingNativeTouch.left - (touch.clientX - routingNativeTouch.x);
+    routingViewport.scrollTop = routingNativeTouch.top - (touch.clientY - routingNativeTouch.y);
+    event.preventDefault();
+  }, { passive: false });
+  const finishNativeRoutingTouch = event => {
+    if (event.touches.length === 1 && routingNativeTouch?.mode === "pinch") {
+      const touch = event.touches[0];
+      routingNativeTouch = {
+        mode: "pan",
+        x: touch.clientX,
+        y: touch.clientY,
+        left: routingViewport.scrollLeft,
+        top: routingViewport.scrollTop
+      };
+      return;
+    }
+    if (!event.touches.length) routingNativeTouch = null;
+  };
+  routingViewport.addEventListener("touchend", finishNativeRoutingTouch, { passive: false });
+  routingViewport.addEventListener("touchcancel", finishNativeRoutingTouch, { passive: false });
   midiMonitorFilter.addEventListener("change", renderMIDIMonitor);
   $("#clear-midi-monitor").addEventListener("click", resetMIDIMonitor);
   $("#sysex-id").addEventListener("change", () => {
