@@ -31,6 +31,10 @@
     return [(normalized >> 14) & 0x03, (normalized >> 7) & 0x7F, normalized & 0x7F];
   }
 
+  function decodeUnsigned35(bytes) {
+    return bytes.reduce((value, byte) => (value * 128) + (byte & 0x7F), 0);
+  }
+
   function guidKey(bytes) {
     return bytes.map(value => value.toString(16).padStart(2, "0")).join("");
   }
@@ -380,59 +384,62 @@
       if (count < 1 || count > 512) throw new Error(`NT returned an invalid algorithm count (${count}).`);
       const algorithms = [];
       for (let index = 0; index < count; index += 1) {
-        const encodedIndex = encodeUnsigned21(index);
-        const payload = await this.request(
-          0x31,
-          0x31,
-          encodedIndex,
-          bytes => decodeUnsigned21(bytes.slice(7, 10)) === index
-        );
-        const responseIndex = decodeUnsigned21(payload.slice(0, 3));
-        const guid = payload.slice(3, 7);
-        const numSpecs = payload[7];
-        const specifications = [];
-        let specificationCursor = 8;
-        for (let specificationIndex = 0; specificationIndex < numSpecs; specificationIndex += 1) {
-          specifications.push({
-            min: decodeSignedShort(payload.slice(specificationCursor, specificationCursor + 3)),
-            max: decodeSignedShort(payload.slice(specificationCursor + 3, specificationCursor + 6)),
-            defaultValue: decodeSignedShort(payload.slice(specificationCursor + 6, specificationCursor + 9)),
-            type: payload[specificationCursor + 9] ?? 0
-          });
-          specificationCursor += 10;
-        }
-        let cursor = specificationCursor;
-        const names = [];
-        for (let nameIndex = 0; nameIndex < 1 + numSpecs; nameIndex += 1) {
-          const start = cursor;
-          while (cursor < payload.length && payload[cursor] !== 0) {
-            cursor += 1;
-          }
-          names.push(decodeText(payload.slice(start, cursor)));
-          if (payload[cursor] === 0) cursor += 1;
-        }
-        const isPlugin = Boolean(payload[cursor++] ?? 0);
-        const isLoaded = Boolean(payload[cursor++] ?? 0);
-        const filename = decodeText(payload.slice(cursor, cursor + 256));
-        const filenameLeaf = filename.split(/[\\/]/).pop() || "";
-        const pluginName = filenameLeaf.replace(/\.(lua|3pot|o)$/i, "");
-        const factoryName = names[0] || "Unknown algorithm";
-        specifications.forEach((specification, specificationIndex) => {
-          specification.name = names[specificationIndex + 1] || `Specification ${specificationIndex + 1}`;
-        });
-        algorithms.push({
-          index: responseIndex,
-          guid,
-          guidKey: guidKey(guid),
-          name: isPlugin && pluginName ? pluginName : factoryName,
-          factoryName,
-          isPlugin,
-          isLoaded,
-          filename,
-          specifications
-        });
+        algorithms.push(await this.readAlgorithmInfo(index));
       }
       return algorithms;
+    }
+
+    async readAlgorithmInfo(index) {
+      if (!Number.isInteger(index) || index < 0 || index > 0x1FFFFF) throw new Error("Invalid NT algorithm index.");
+      const encodedIndex = encodeUnsigned21(index);
+      const payload = await this.request(
+        0x31,
+        0x31,
+        encodedIndex,
+        bytes => decodeUnsigned21(bytes.slice(7, 10)) === index
+      );
+      const responseIndex = decodeUnsigned21(payload.slice(0, 3));
+      const guid = payload.slice(3, 7);
+      const numSpecs = payload[7];
+      const specifications = [];
+      let specificationCursor = 8;
+      for (let specificationIndex = 0; specificationIndex < numSpecs; specificationIndex += 1) {
+        specifications.push({
+          min: decodeSignedShort(payload.slice(specificationCursor, specificationCursor + 3)),
+          max: decodeSignedShort(payload.slice(specificationCursor + 3, specificationCursor + 6)),
+          defaultValue: decodeSignedShort(payload.slice(specificationCursor + 6, specificationCursor + 9)),
+          type: payload[specificationCursor + 9] ?? 0
+        });
+        specificationCursor += 10;
+      }
+      let cursor = specificationCursor;
+      const names = [];
+      for (let nameIndex = 0; nameIndex < 1 + numSpecs; nameIndex += 1) {
+        const start = cursor;
+        while (cursor < payload.length && payload[cursor] !== 0) cursor += 1;
+        names.push(decodeText(payload.slice(start, cursor)));
+        if (payload[cursor] === 0) cursor += 1;
+      }
+      const isPlugin = Boolean(payload[cursor++] ?? 0);
+      const isLoaded = Boolean(payload[cursor++] ?? 0);
+      const filename = decodeText(payload.slice(cursor, cursor + 256));
+      const filenameLeaf = filename.split(/[\\/]/).pop() || "";
+      const pluginName = filenameLeaf.replace(/\.(lua|3pot|o)$/i, "");
+      const factoryName = names[0] || "Unknown algorithm";
+      specifications.forEach((specification, specificationIndex) => {
+        specification.name = names[specificationIndex + 1] || `Specification ${specificationIndex + 1}`;
+      });
+      return {
+        index: responseIndex,
+        guid,
+        guidKey: guidKey(guid),
+        name: isPlugin && pluginName ? pluginName : factoryName,
+        factoryName,
+        isPlugin,
+        isLoaded,
+        filename,
+        specifications
+      };
     }
 
     async readSlots(slotCount, algorithms) {
@@ -565,6 +572,33 @@
         audioThread: payload[0] ?? 0,
         overall: payload[1] ?? 0,
         slots: payload.slice(2)
+      };
+    }
+
+    async readMemoryUsage(algorithm) {
+      if (!algorithm || !Array.isArray(algorithm.guid) || algorithm.guid.length !== 4) {
+        throw new Error("Invalid NT algorithm memory query.");
+      }
+      const values = (algorithm.specifications || []).slice(0, 3).map(specification => specification.defaultValue ?? 0);
+      while (values.length < 3) values.push(0);
+      const payload = await this.request(0x39, 0x39, [...algorithm.guid, ...values.flatMap(encodeSignedShort)]);
+      const status = payload[0] ?? 0;
+      if (status !== 3) {
+        return {
+          available: false,
+          reason: !(status & 1) ? "The NT could not find this algorithm." : "This plug-in is not loaded into NT memory."
+        };
+      }
+      if (payload.length < 61) throw new Error("NT returned an incomplete memory report.");
+      const pools = ["SRAM", "DRAM", "DTC", "ITC"].map((name, index) => ({
+        name,
+        total: decodeUnsigned35(payload.slice(1 + (index * 5), 6 + (index * 5))),
+        current: decodeUnsigned35(payload.slice(21 + (index * 5), 26 + (index * 5))),
+        required: decodeUnsigned35(payload.slice(41 + (index * 5), 46 + (index * 5)))
+      }));
+      return {
+        available: true,
+        pools: pools.map(pool => ({ ...pool, free: pool.total - pool.current, fits: pool.current + pool.required <= pool.total }))
       };
     }
 

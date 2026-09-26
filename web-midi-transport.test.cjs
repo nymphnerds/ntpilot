@@ -30,6 +30,16 @@ function encodeShort(value) {
   return [(unsigned >> 14) & 0x03, (unsigned >> 7) & 0x7F, unsigned & 0x7F];
 }
 
+function encodeUnsigned35(value) {
+  const bytes = [0, 0, 0, 0, 0];
+  let remaining = value;
+  for (let index = bytes.length - 1; index >= 0; index -= 1) {
+    bytes[index] = remaining & 0x7F;
+    remaining = Math.floor(remaining / 128);
+  }
+  return bytes;
+}
+
 function encodeRoutingMask(value) {
   const bytes = [];
   let remaining = BigInt(value);
@@ -81,6 +91,15 @@ const output = {
         ...Buffer.from(algorithm.name), 0, ...specifications.flatMap(specification => [...Buffer.from(specification.name), 0]),
         algorithm.isPlugin ? 1 : 0, 1,
         ...Buffer.from(algorithm.filename || ""), 0, 0xF7
+      ];
+    }
+    if (bytes[6] === 0x39) {
+      reply = [
+        ...header, 0x39, 3,
+        ...[4096, 8192, 2048, 1024].flatMap(encodeUnsigned35),
+        ...[1024, 7000, 512, 800].flatMap(encodeUnsigned35),
+        ...[512, 1600, 2048, 100].flatMap(encodeUnsigned35),
+        0xF7
       ];
     }
     if (bytes[6] === 0x40) {
@@ -295,6 +314,14 @@ global.navigator = { requestMIDIAccess: async options => {
     overall: 37,
     slots: [10, 20]
   });
+  const memory = await transport.readMemoryUsage(algorithms[0]);
+  assert.equal(memory.available, true);
+  assert.deepEqual(memory.pools.map(pool => [pool.name, pool.total, pool.current, pool.required, pool.fits]), [
+    ["SRAM", 4096, 1024, 512, true],
+    ["DRAM", 8192, 7000, 1600, false],
+    ["DTC", 2048, 512, 2048, false],
+    ["ITC", 1024, 800, 100, true]
+  ]);
   assert.deepEqual(await transport.readParameterEnumStrings(1, 1), ["Profile A", "Profile B"]);
   assert.equal(await transport.readParameterValueString(1, 1), "Profile B");
   const performancePage = await transport.readPerformancePage();

@@ -197,12 +197,19 @@ Initial routing content renders before output-mode hydration completes. If a use
 - Once a rebooted NT answers again, the app records the current view, performs one browser reload to discard Chrome's stale Web MIDI objects, restores that view and automatically reconnects.
 - Transport still permits one outstanding SysEx request. All polling, parameter writes and routing transactions must continue to coordinate through the existing stop/wait/restart pattern.
 
+## Algorithm add limits and plug-ins
+
+- The add browser shows the preset capacity directly: **x of 10 slots used**. With all ten occupied, placement actions are unavailable and the user must remove an algorithm first.
+- Built-ins are immediately available. Installed plug-ins which are not loaded show **Load into NT** rather than a mysterious greyed-out state. NT Pilot sends SysEx `0x38` and polls that exact catalogue entry for up to five seconds; this matters for slower C++ plug-ins.
+- The starting-settings dialog queries the NT's SysEx `0x39` memory report with the selected first three specification values. It shows all four hardware pools—SRAM, DRAM, DTC and ITC—as projected `used / total` values, and blocks an add with the precise pool and shortage when it will not fit.
+- A load timeout is not silently described as a generic add failure: the UI says that the plug-in did not report loaded and may be too large, unsupported or unable to load with the NT's current free memory. The device remains authoritative; successful add is still reread and verified from the NT.
+
 ## Current asset versions
 
-- `styles.css?v=20260926-241`
-- `web-midi-transport.js?v=20260926-46`
+- `styles.css?v=20260926-242`
+- `web-midi-transport.js?v=20260926-47`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-175`
+- `app.js?v=20260926-176`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
