@@ -1496,7 +1496,7 @@
       control.checked = control.value === "keep";
       control.disabled = existing.length === 0;
     });
-    routingExistingRoutesField.classList.toggle("hidden", !allowRouteChanges);
+    routingExistingRoutesField.classList.toggle("hidden", !allowRouteChanges || isInputAssignment);
     routingExistingRoutesField.classList.toggle("empty", existing.length === 0);
     routingExistingRoutesHelp.textContent = existing.length
       ? `${routingBusLabel(destinationBus, state.routingSnapshot)} has ${existing.length} other editable connection${existing.length === 1 ? "" : "s"}. Disconnecting them sets those output assignments to None.`
@@ -3597,6 +3597,15 @@
   });
   routingAuxPalette.addEventListener("click", event => handleAuxPaletteClick(event.target));
   $("#routing-connection-cancel").addEventListener("click", closeRoutingConnectionPanel);
+  routingConnectionPanel.addEventListener("click", event => {
+    const label = event.target.closest("label");
+    if (!label) return;
+    const control = $("input[type=radio]", label);
+    if (!control || control.disabled) return;
+    event.preventDefault();
+    control.checked = true;
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  });
   routingConnectionPanel.addEventListener("submit", async event => {
     event.preventDefault();
     if (!routingConnectionAction) return;
