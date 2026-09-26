@@ -239,11 +239,11 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .parameter-title span { color: #89969e; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .parameter-title h2 { margin: 3px 0 0; font-size: 20px; letter-spacing: -.025em; }
 .editor-bus-dock { z-index: 7; flex: 0 0 auto; width: 100%; overflow: visible; border-bottom: 0; background: var(--surface); }
-.device-frame.bus-dock-bottom .editor-bus-dock { position: absolute; z-index: 20; left: 0; right: 0; bottom: 0; width: 100%; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(34,58,69,.09); }
-.device-frame.bus-dock-bottom:has(.editor-bus-dock:not(.hidden)) .app-main,
-.device-frame.bus-dock-bottom:has(.editor-bus-dock:not(.hidden)) .app-sidebar { padding-bottom: var(--bottom-bus-dock-height, 92px); }
-.device-frame.bus-dock-bottom .editor-bus-dock-row,
-.device-frame.bus-dock-bottom .editor-physical-bus-row { padding-inline: var(--chrome-gutter); }
+.device-frame.ipad-mode > .editor-bus-dock { position: absolute; z-index: 20; left: 0; right: 0; bottom: 0; width: 100%; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(34,58,69,.09); }
+.device-frame.ipad-mode:has(> .editor-bus-dock:not(.hidden)) .app-main,
+.device-frame.ipad-mode:has(> .editor-bus-dock:not(.hidden)) .app-sidebar { padding-bottom: var(--bottom-bus-dock-height, 92px); }
+.device-frame.ipad-mode > .editor-bus-dock .editor-bus-dock-row,
+.device-frame.ipad-mode > .editor-bus-dock .editor-physical-bus-row { padding-inline: var(--chrome-gutter); }
 .stage:has(.device-frame.ipad-mode) { padding: 0; }
 .device-frame.ipad-mode { width: 100vw; height: 100vh; height: 100dvh; grid-template-columns: 252px minmax(0, 1fr); border: 0; border-radius: 0; box-shadow: none; }
 .device-frame.ipad-mode .app-sidebar { display: flex; min-height: 0; overflow-y: auto; padding: max(14px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom)) 16px; }
@@ -393,8 +393,8 @@ input[type="range"]:disabled { opacity: .48; cursor: wait; }
 .device-frame.ipad-mode > .routing-aux-palette .routing-aux-chip.physical.input { border-color: #6caeff; background: #6caeff; }
 .device-frame.ipad-mode > .routing-aux-palette .routing-aux-chip.physical.none { grid-column: span 2; color: #7f8f98; border-color: transparent; background: #edf2f4; }
 .device-frame.ipad-mode > .routing-aux-palette .routing-aux-chip.physical.output { border-color: #e57b7d; background: #e57b7d; }
-.device-frame.bus-dock-bottom:has(> .routing-aux-palette:not(.hidden)) .app-main,
-.device-frame.bus-dock-bottom:has(> .routing-aux-palette:not(.hidden)) .app-sidebar { padding-bottom: var(--bottom-bus-dock-height, 92px); }
+.device-frame.ipad-mode:has(> .routing-aux-palette:not(.hidden)) .app-main,
+.device-frame.ipad-mode:has(> .routing-aux-palette:not(.hidden)) .app-sidebar { padding-bottom: var(--bottom-bus-dock-height, 92px); }
 .device-frame.ipad-mode .routing-shell { grid-template-rows: minmax(0, 1fr) 0; }
 .device-frame.ipad-mode .routing-shell > .routing-toolbar,
 .device-frame.ipad-mode .routing-shell > .routing-viewport { display: none; }

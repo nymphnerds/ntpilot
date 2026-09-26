@@ -942,7 +942,7 @@
         : !routingAuxPalette.classList.contains("hidden") && routingAuxPalette.parentElement === deviceFrame
           ? routingAuxPalette
           : null;
-      const height = deviceFrame.classList.contains("bus-dock-bottom") && activeDock
+      const height = state.ipadMode && activeDock
         ? Math.ceil(activeDock.getBoundingClientRect().height)
         : 0;
       deviceFrame.style.setProperty("--bottom-bus-dock-height", `${height}px`);
