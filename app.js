@@ -674,7 +674,8 @@
   }
 
   function applyPilotAccentFromAux(bus, identity = state.routingSnapshot || state.liveIdentity) {
-    if (!identity || routingBusKind(bus, identity) !== "aux") return;
+    if (!identity || !Number.isInteger(Number(bus)) || routingBusKind(Number(bus), identity) !== "aux") return;
+    bus = Number(bus);
     const auxIndex = bus - identity.inputBusCount - identity.outputBusCount;
     applyPilotAccentHue(Math.round((auxIndex * 360) / identity.auxBusCount));
   }
@@ -1382,6 +1383,7 @@
   }
 
   async function openRoutingConnectionPanel({ source, destination, output, destinationBus, onApply, title = "New connection", submitLabel = "Connect", allowRouteChanges = true }) {
+    applyPilotAccentFromAux(destinationBus, state.routingSnapshot || state.liveIdentity);
     routingConnectionPanel.classList.toggle("ipad-panel", state.ipadMode);
     const isInputAssignment = !output && source?.side === "input";
     const details = output?.parameterIndex != null ? routingModeDetails(output) : null;
