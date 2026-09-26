@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-219">
+  <link rel="stylesheet" href="styles.css?v=20260926-220">
 </head>
 <body>
   <main class="stage">
@@ -45,6 +45,12 @@
           <output id="interface-scale-value" title="Double-click to reset interface scale">100%</output>
           <button id="interface-scale-up" type="button" aria-label="Increase interface scale">+</button>
         </div>
+
+        <label class="ipad-mode-control dark-mode-control">
+          <span>Dark mode</span>
+          <input id="dark-mode" type="checkbox">
+          <i aria-hidden="true"></i>
+        </label>
 
         <label class="ipad-mode-control">
           <span>iPad mode</span>
@@ -481,6 +487,6 @@
 
   <script src="web-midi-transport.js?v=20260925-44"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-150"></script>
+  <script src="app.js?v=20260926-151"></script>
 </body>
 </html>

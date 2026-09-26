@@ -118,6 +118,7 @@ The central model is the NT bus universe:
 
 ## Status, reference and visual identity
 
+- A persisted Dark mode switch is available in the sidebar independently of iPad mode. It uses layered charcoal-blue surfaces across the complete interface, including detached routing popups and the wiki dialog, while preserving semantic input/output/Aux/modulation colours.
 - Status card typography now uses a consistent hierarchy; live hardware state is a readable badge rather than tiny incidental text.
 - The entire Knowledge card opens a built-in, searchable, text-first NT wiki.
 - The wiki condenses the official firmware 1.18 manual into 15 operational sections with a contents column and page-specific links back to the official PDF.
@@ -183,10 +184,10 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-219`
+- `styles.css?v=20260926-220`
 - `web-midi-transport.js?v=20260925-44`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-150`
+- `app.js?v=20260926-151`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

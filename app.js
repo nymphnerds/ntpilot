@@ -45,6 +45,7 @@
   const interfaceScaleValue = $("#interface-scale-value");
   const interfaceScaleUp = $("#interface-scale-up");
   const ipadModeControl = $("#ipad-mode");
+  const darkModeControl = $("#dark-mode");
   const syncModeControl = $("#sync-mode");
   const statusSyncControl = $(".status-sync");
   const statusSyncAnchor = document.createComment("status sync position");
@@ -110,6 +111,7 @@
     routingZoom: 1,
     interfaceScale: 100,
     ipadMode: false,
+    darkMode: false,
     routingCanvasSize: { width: 1180, height: 760 },
     routingSnapshot: null,
     routingSelection: null,
@@ -811,6 +813,21 @@
     }
     setInterfaceScale(state.interfaceScale, { save: false });
     applyBusDockLayout();
+  }
+
+  function setDarkMode(enabled, { save = true } = {}) {
+    state.darkMode = Boolean(enabled);
+    darkModeControl.checked = state.darkMode;
+    deviceFrame.classList.toggle("dark-mode", state.darkMode);
+    document.body.classList.toggle("dark-mode", state.darkMode);
+    document.documentElement.style.colorScheme = state.darkMode ? "dark" : "light";
+    if (save) {
+      try {
+        localStorage.setItem("ntPilotDarkMode", state.darkMode ? "true" : "false");
+      } catch (_) {
+        // Dark mode remains active for this session.
+      }
+    }
   }
 
   function renderEditorBusDock(identity) {
@@ -3382,6 +3399,7 @@
   interfaceScaleUp.addEventListener("click", () => setInterfaceScale(state.interfaceScale + 10));
   interfaceScaleValue.addEventListener("dblclick", () => setInterfaceScale(100));
   ipadModeControl.addEventListener("change", () => setIpadMode(ipadModeControl.checked));
+  darkModeControl.addEventListener("change", () => setDarkMode(darkModeControl.checked));
   new ResizeObserver(updateBottomBusDockHeight).observe(editorBusDock);
   new ResizeObserver(updateBottomBusDockHeight).observe(routingAuxPalette);
   $("#routing-zoom-out").addEventListener("click", () => {
@@ -3905,6 +3923,16 @@
     savedInterfaceScale = 100;
   }
   setInterfaceScale(savedInterfaceScale, { save: false });
+  let savedDarkMode = false;
+  try {
+    const storedDarkMode = localStorage.getItem("ntPilotDarkMode");
+    savedDarkMode = storedDarkMode == null
+      ? Boolean(window.matchMedia?.("(prefers-color-scheme: dark)").matches)
+      : storedDarkMode === "true";
+  } catch (_) {
+    savedDarkMode = false;
+  }
+  setDarkMode(savedDarkMode, { save: false });
   let savedIpadMode = false;
   try {
     const storedIpadMode = localStorage.getItem("ntPilotIpadMode");
