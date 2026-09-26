@@ -721,6 +721,25 @@
       return parseSDDirectoryEntries(payload);
     }
 
+    async sdOperation(operation, data = []) {
+      const payloadData = [operation, ...data];
+      const payload = await this.request(0x7A, 0x7A, [...payloadData, sdChecksum(payloadData)], null, 5000);
+      if ((payload[0] ?? 1) !== 0) throw new Error(decodeText(payload.slice(1)) || "The NT rejected that SD-card operation.");
+      if (payload[1] !== operation) throw new Error("The NT returned an unexpected SD-card response.");
+    }
+
+    createSDDirectory(path) {
+      return this.sdOperation(7, sdPathBytes(path));
+    }
+
+    renameSDPath(fromPath, toPath) {
+      return this.sdOperation(5, [...sdPathBytes(fromPath), 0, ...sdPathBytes(toPath), 0]);
+    }
+
+    deleteSDPath(path) {
+      return this.sdOperation(3, sdPathBytes(path));
+    }
+
     addAlgorithm(algorithm) {
       if (!algorithm || !Array.isArray(algorithm.guid) || algorithm.guid.length !== 4) {
         throw new Error("Invalid NT algorithm selection.");

@@ -124,6 +124,7 @@
   const cancelAlgorithmRemove = $("#cancel-algorithm-remove");
   const confirmAlgorithmRemove = $("#confirm-algorithm-remove");
   const refreshPresets = $("#refresh-presets");
+  const newPresetFolder = $("#new-preset-folder");
   const presetUp = $("#preset-up");
   const presetBreadcrumbs = $("#preset-breadcrumbs");
   const presetFileList = $("#preset-file-list");
@@ -137,6 +138,16 @@
   const presetLoadWarning = $("#preset-load-warning");
   const cancelPresetLoad = $("#cancel-preset-load");
   const confirmPresetLoad = $("#confirm-preset-load");
+  const presetFileDialog = $("#preset-file-dialog");
+  const closePresetFileDialog = $("#close-preset-file-dialog");
+  const presetFileDialogKicker = $("#preset-file-dialog-kicker");
+  const presetFileDialogTitle = $("#preset-file-dialog-title");
+  const presetFileDialogName = $("#preset-file-dialog-name");
+  const presetFileDialogDetail = $("#preset-file-dialog-detail");
+  const presetFileDialogField = $("#preset-file-dialog-field");
+  const presetFileDialogInput = $("#preset-file-dialog-input");
+  const cancelPresetFileDialog = $("#cancel-preset-file-dialog");
+  const confirmPresetFileDialog = $("#confirm-preset-file-dialog");
 
   let rebootRecovery = null;
   try {
@@ -215,6 +226,7 @@
     selectedPresetEntry: null,
     presetBrowserBusy: false,
     pendingPresetLoad: null,
+    pendingPresetFileOperation: null,
   };
   let algorithmMemoryCheckToken = 0;
   let algorithmMemoryCheckTimer = null;
@@ -2613,6 +2625,8 @@
     const copy = document.createElement("p");
     const actions = document.createElement("div");
     actions.className = "preset-inspector-actions";
+    const manage = document.createElement("div");
+    manage.className = "preset-inspector-manage";
     const append = document.createElement("button");
     append.type = "button";
     append.className = "secondary-button";
@@ -2637,9 +2651,22 @@
       load.disabled = state.presetBrowserBusy || !state.transportOnline;
       append.addEventListener("click", () => openPresetLoadDialog(true));
       load.addEventListener("click", () => openPresetLoadDialog(false));
+      const rename = document.createElement("button");
+      rename.type = "button";
+      rename.className = "text-button";
+      rename.textContent = "Rename";
+      rename.disabled = state.presetBrowserBusy || !state.transportOnline;
+      rename.addEventListener("click", () => openPresetFileDialog("rename", selected));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "text-button danger";
+      remove.textContent = "Delete";
+      remove.disabled = state.presetBrowserBusy || !state.transportOnline;
+      remove.addEventListener("click", () => openPresetFileDialog("delete", selected));
+      manage.append(rename, remove);
     }
     actions.append(append, load);
-    presetInspector.append(kicker, title, copy, actions);
+    presetInspector.append(kicker, title, copy, actions, manage);
   }
 
   function renderPresetLibrary() {
@@ -2732,6 +2759,72 @@
       : "Any unsaved working changes will be lost. Undo history will be cleared. NT Pilot will reread the loaded preset before it returns control.";
     confirmPresetLoad.textContent = append ? "Append preset" : "Load preset";
     presetLoadDialog.showModal();
+  }
+
+  function openPresetFileDialog(mode, entry = null) {
+    if (state.presetBrowserBusy || !state.ntTransport || !state.transportOnline) return;
+    state.pendingPresetFileOperation = { mode, entry };
+    const isNewFolder = mode === "new-folder";
+    const isRename = mode === "rename";
+    presetFileDialogKicker.textContent = "Organise presets";
+    presetFileDialogTitle.textContent = isNewFolder ? "New folder" : isRename ? "Rename item" : "Delete item?";
+    presetFileDialogName.textContent = entry?.name || state.presetPath;
+    presetFileDialogDetail.textContent = isNewFolder
+      ? `Create a folder in ${state.presetPath}.`
+      : isRename
+        ? "Rename this SD-card item. A preset must retain its .json extension to be loadable."
+        : entry?.isDirectory
+          ? "This permanently deletes the folder only if it is empty."
+          : "This permanently deletes this file from the NT microSD card.";
+    presetFileDialogField.classList.toggle("hidden", mode === "delete");
+    presetFileDialogInput.value = isRename ? entry.name : "";
+    presetFileDialogInput.placeholder = isNewFolder ? "Folder name" : "";
+    confirmPresetFileDialog.textContent = isNewFolder ? "Create folder" : isRename ? "Rename" : "Delete";
+    confirmPresetFileDialog.classList.toggle("danger", mode === "delete");
+    presetFileDialog.showModal();
+    if (mode !== "delete") requestAnimationFrame(() => presetFileDialogInput.focus());
+  }
+
+  function validatedPresetItemName(value) {
+    const name = String(value || "").trim();
+    if (!name) throw new Error("Enter a name.");
+    if (name.includes("/") || name.includes("\\") || name.includes("\0") || /[\x00-\x1F\x7F-\uFFFF]/.test(name)) {
+      throw new Error("Use a short printable name without slashes.");
+    }
+    return name;
+  }
+
+  async function applyPresetFileOperation() {
+    const pending = state.pendingPresetFileOperation;
+    if (!pending || !state.ntTransport || !state.transportOnline || state.presetBrowserBusy) return;
+    const { mode, entry } = pending;
+    state.presetBrowserBusy = true;
+    confirmPresetFileDialog.disabled = true;
+    try {
+      if (mode === "new-folder") {
+        const name = validatedPresetItemName(presetFileDialogInput.value);
+        await state.ntTransport.createSDDirectory(presetPathJoin(state.presetPath, name));
+        showToast(`Created ${name}`);
+      } else if (mode === "rename") {
+        const name = validatedPresetItemName(presetFileDialogInput.value);
+        if (name === entry.name) throw new Error("That item already has this name.");
+        await state.ntTransport.renameSDPath(presetPathJoin(state.presetPath, entry.name), presetPathJoin(state.presetPath, name));
+        showToast(`Renamed ${entry.name} to ${name}`);
+      } else {
+        await state.ntTransport.deleteSDPath(presetPathJoin(state.presetPath, entry.name));
+        showToast(`Deleted ${entry.name}`);
+      }
+      state.selectedPresetEntry = null;
+      presetFileDialog.close();
+      state.presetBrowserBusy = false;
+      await loadPresetDirectory();
+    } catch (error) {
+      state.presetBrowserBusy = false;
+      showToast(`Could not ${mode === "new-folder" ? "create folder" : mode} · ${error.message}`);
+    } finally {
+      confirmPresetFileDialog.disabled = false;
+      renderPresetLibrary();
+    }
   }
 
   async function applyPresetLoad() {
@@ -4405,6 +4498,7 @@
 
   $$("[data-view]").forEach(button => button.addEventListener("click", () => setView(button.dataset.view)));
   refreshPresets.addEventListener("click", () => loadPresetDirectory());
+  newPresetFolder.addEventListener("click", () => openPresetFileDialog("new-folder"));
   presetUp.addEventListener("click", () => {
     if (state.presetPath !== "/") {
       state.presetPath = presetParentPath(state.presetPath);
@@ -4427,6 +4521,15 @@
   });
   presetLoadDialog.addEventListener("click", event => {
     if (event.target === presetLoadDialog) presetLoadDialog.close();
+  });
+  closePresetFileDialog.addEventListener("click", () => presetFileDialog.close());
+  cancelPresetFileDialog.addEventListener("click", () => presetFileDialog.close());
+  confirmPresetFileDialog.addEventListener("click", applyPresetFileOperation);
+  presetFileDialog.addEventListener("close", () => {
+    if (!state.presetBrowserBusy) state.pendingPresetFileOperation = null;
+  });
+  presetFileDialog.addEventListener("click", event => {
+    if (event.target === presetFileDialog) presetFileDialog.close();
   });
   const openReferenceGuide = () => {
     if (referenceGuide.open) return;

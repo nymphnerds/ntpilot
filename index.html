@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-248">
+  <link rel="stylesheet" href="styles.css?v=20260926-249">
 </head>
 <body>
   <main class="stage">
@@ -370,7 +370,7 @@
           <section class="view presets-view" data-panel="presets" aria-labelledby="presets-heading">
             <div class="view-heading presets-heading">
               <div><p class="eyebrow">disting NT microSD</p><h1 id="presets-heading">Presets</h1></div>
-              <button class="secondary-button" id="refresh-presets" type="button">Refresh library</button>
+              <div class="preset-heading-actions"><button class="secondary-button" id="new-preset-folder" type="button">New folder</button><button class="secondary-button" id="refresh-presets" type="button">Refresh library</button></div>
             </div>
             <div class="preset-library" id="preset-library">
               <div class="preset-library-topbar">
@@ -587,8 +587,14 @@
     <footer><button id="cancel-preset-load" type="button">Cancel</button><button id="confirm-preset-load" type="button">Load preset</button></footer>
   </dialog>
 
-  <script src="web-midi-transport.js?v=20260926-49"></script>
+  <dialog class="preset-file-dialog" id="preset-file-dialog" aria-labelledby="preset-file-dialog-title">
+    <header><div><span id="preset-file-dialog-kicker">Organise presets</span><h2 id="preset-file-dialog-title">New folder</h2></div><button id="close-preset-file-dialog" type="button" aria-label="Close preset organisation dialog">×</button></header>
+    <div class="preset-file-dialog-copy"><strong id="preset-file-dialog-name"></strong><p id="preset-file-dialog-detail"></p><label id="preset-file-dialog-field"><span>Name</span><input id="preset-file-dialog-input" type="text" maxlength="80" autocomplete="off"></label></div>
+    <footer><button id="cancel-preset-file-dialog" type="button">Cancel</button><button id="confirm-preset-file-dialog" type="button">Create folder</button></footer>
+  </dialog>
+
+  <script src="web-midi-transport.js?v=20260926-50"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-185"></script>
+  <script src="app.js?v=20260926-186"></script>
 </body>
 </html>

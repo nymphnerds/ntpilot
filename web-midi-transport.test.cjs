@@ -197,12 +197,16 @@ const output = {
     }
     if (bytes[6] === 0x62) reply = [...header, 0x62, 48, 37, 10, 20, 0xF7];
     if (bytes[6] === 0x7A) {
-      assert.equal(bytes[7], 1);
-      const listing = [
-        0x10, 0, 0, 0, 0, 0, 0, ...encodeUnsigned70(0), ...Buffer.from("presets"), 0,
-        0, 0, 0, 0, 0, 0, 0, ...encodeUnsigned70(1536), ...Buffer.from("Live Set.json"), 0
-      ];
-      reply = [...header, 0x7A, 0, 1, ...listing, 0xF7];
+      const operation = bytes[7];
+      if (operation === 1) {
+        const listing = [
+          0x10, 0, 0, 0, 0, 0, 0, ...encodeUnsigned70(0), ...Buffer.from("presets"), 0,
+          0, 0, 0, 0, 0, 0, 0, ...encodeUnsigned70(1536), ...Buffer.from("Live Set.json"), 0
+        ];
+        reply = [...header, 0x7A, 0, 1, ...listing, 0xF7];
+      } else {
+        reply = [...header, 0x7A, 0, operation, 0xF7];
+      }
     }
     assert.ok(reply, `missing reply fixture for 0x${bytes[6].toString(16)}`);
     queueMicrotask(() => input.onmidimessage({ data: Uint8Array.from(reply) }));
@@ -378,6 +382,9 @@ global.navigator = { requestMIDIAccess: async options => {
   assert.equal(loadPresetCommand.at(-2), 0);
   const directory = await transport.readSDDirectory("/presets");
   assert.deepEqual(directory.map(entry => [entry.name, entry.isDirectory, entry.size]), [["presets", true, 0], ["Live Set.json", false, 1536]]);
+  await transport.createSDDirectory("/presets/New");
+  await transport.renameSDPath("/presets/New", "/presets/Renamed");
+  await transport.deleteSDPath("/presets/Renamed");
   const routing = await transport.readRoutingSnapshot(await transport.readSnapshot());
   assert.equal(routing.slots.length, 2);
   assert.equal(routing.slots[0].outputModeStatus, "fixed");
