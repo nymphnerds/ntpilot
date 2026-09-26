@@ -152,6 +152,8 @@
   const closePresetJsonDialog = $("#close-preset-json-dialog");
   const presetJsonDialogTitle = $("#preset-json-dialog-title");
   const presetJsonDialogName = $("#preset-json-dialog-name");
+  const presetJsonNameField = $("#preset-json-name-field");
+  const presetJsonNameInput = $("#preset-json-name-input");
   const presetJsonDialogInput = $("#preset-json-dialog-input");
   const presetJsonDialogStatus = $("#preset-json-dialog-status");
   const cancelPresetJsonDialog = $("#cancel-preset-json-dialog");
@@ -893,9 +895,10 @@
 
   function refreshEditorBusDockState() {
     const entry = state.armedBusEntry;
+    const dock = state.ipadMode ? routingAuxPalette : editorBusDock;
     editorBusDock.classList.toggle("armed", Boolean(entry));
-    $$(".editor-bus-chip[data-value]", editorBusDock).forEach(chip => {
-      const value = Number(chip.dataset.value);
+    $$(state.ipadMode ? ".routing-aux-chip[data-bus]" : ".editor-bus-chip[data-value]", dock).forEach(chip => {
+      const value = state.ipadMode ? Number(chip.dataset.bus) + 1 : Number(chip.dataset.value);
       const valid = !entry || (value >= entry.parameter.min && value <= entry.parameter.max);
       chip.disabled = !valid || Boolean(entry?.writePending);
       chip.classList.toggle("current", Boolean(entry) && value === Number(entry.parameter.value));
@@ -940,7 +943,9 @@
   }
 
   function updateEditorBusDockVisibility() {
-    editorBusDock.classList.toggle("hidden", !state.transportOnline || !state.liveIdentity || state.view !== "editor");
+    // iPad mode deliberately reuses the Routing palette as the only bottom
+    // rail. Keeping this desktop-only avoids a second, almost-identical UI.
+    editorBusDock.classList.toggle("hidden", state.ipadMode || !state.transportOnline || !state.liveIdentity || state.view !== "editor");
     updateBottomBusDockHeight();
   }
 
@@ -959,7 +964,14 @@
   }
 
   function updateRoutingPaletteVisibility() {
-    if (state.ipadMode) routingAuxPalette.classList.toggle("hidden", state.view !== "routing");
+    if (state.ipadMode) {
+      const visible = state.view === "routing" || state.view === "editor";
+      routingAuxPalette.classList.toggle("hidden", !visible);
+      if (visible && state.view === "editor" && state.liveIdentity) {
+        renderAuxPalette(state.liveIdentity);
+        refreshEditorBusDockState();
+      }
+    }
     else routingAuxPalette.classList.remove("hidden");
     updateBottomBusDockHeight();
   }
@@ -2381,6 +2393,35 @@
     return true;
   }
 
+  async function handleEditorPaletteClick(target) {
+    const chip = target.closest(".routing-aux-chip[data-bus]");
+    if (!chip || chip.disabled) return;
+    const value = Number(chip.dataset.bus) + 1;
+    const descriptor = editorBusDescriptor(value);
+    if (value > 0 && await retargetOpenRoutingConnection(value - 1, chip)) return;
+    const entry = state.armedBusEntry;
+    if (!entry) {
+      showToast("Tap the bus chip at the right of a parameter first");
+      return;
+    }
+    if (value < entry.parameter.min || value > entry.parameter.max) return;
+    if (value > 0) {
+      await assignEditorBusWithPopup(entry, value, chip);
+      return;
+    }
+    queueLiveParameterWrite(entry, value, {
+      historyRouting: true,
+      successMessage: `${entry.parameter.name} assigned to ${descriptor.label} in NT working memory`,
+      afterWrite: async () => {
+        if (state.liveRouting) await loadLiveRouting({ preserveView: true });
+      },
+      onSuccess: () => {
+        applyPilotAccentFromBus(descriptor.bus, state.liveIdentity);
+        disarmEditorBusAssignment();
+      }
+    });
+  }
+
   async function handleRoutingModeClick(target) {
     const control = target.closest(".routing-mode-toggle");
     if (!control) return false;
@@ -2739,19 +2780,19 @@
       editDocument.textContent = "Edit JSON";
       editDocument.disabled = state.presetBrowserBusy || !state.transportOnline;
       editDocument.addEventListener("click", () => openPresetJsonDialog(selected));
-      const renameFile = document.createElement("button");
-      renameFile.type = "button";
-      renameFile.className = "text-button";
-      renameFile.textContent = "Rename file";
-      renameFile.disabled = state.presetBrowserBusy || !state.transportOnline;
-      renameFile.addEventListener("click", () => openPresetFileDialog("rename-file", selected));
+      const renamePreset = document.createElement("button");
+      renamePreset.type = "button";
+      renamePreset.className = "text-button";
+      renamePreset.textContent = "Rename preset";
+      renamePreset.disabled = state.presetBrowserBusy || !state.transportOnline;
+      renamePreset.addEventListener("click", () => openPresetRenameDialog(selected));
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "text-button danger";
       remove.textContent = "Delete";
       remove.disabled = state.presetBrowserBusy || !state.transportOnline;
       remove.addEventListener("click", () => openPresetFileDialog("delete", selected));
-      manage.append(editDocument, renameFile, remove);
+      manage.append(renamePreset, editDocument, remove);
     }
     // The destructive/primary controls live in the fixed inspector, so the
     // currently selected preset always has an obvious next action.
@@ -2880,28 +2921,56 @@
     if (state.presetBrowserBusy || !state.ntTransport || !state.transportOnline) return;
     state.pendingPresetFileOperation = { mode, entry };
     const isNewFolder = mode === "new-folder";
-    const isFileRename = mode === "rename-file";
-    const isPresetRename = mode === "rename-preset";
-    presetFileDialogKicker.textContent = isPresetRename ? "Current preset" : "Organise presets";
-    presetFileDialogTitle.textContent = isNewFolder ? "New folder" : isPresetRename ? "Rename loaded preset" : isFileRename ? "Rename file" : "Delete item?";
-    presetFileDialogName.textContent = isPresetRename ? (state.liveIdentity?.presetName || "Unnamed preset") : (entry?.name || state.presetPath);
+    presetFileDialogKicker.textContent = "Organise presets";
+    presetFileDialogTitle.textContent = isNewFolder ? "New folder" : "Delete item?";
+    presetFileDialogName.textContent = entry?.name || state.presetPath;
     presetFileDialogDetail.textContent = isNewFolder
       ? `Create a folder in ${state.presetPath}.`
-      : isPresetRename
-        ? "Changes the preset title stored by the NT, then overwrites the currently loaded preset file. Any already-applied working edits will be saved too. This does not rename its .json file."
-        : isFileRename
-          ? "Changes only this SD-card filename. It does not change the preset title stored inside the JSON. A preset must retain its .json extension to be loadable."
-        : entry?.isDirectory
-          ? "This permanently deletes the folder only if it is empty."
-          : "This permanently deletes this file from the NT microSD card.";
+      : entry?.isDirectory
+        ? "This permanently deletes the folder only if it is empty."
+        : "This permanently deletes this file from the NT microSD card.";
     presetFileDialogField.classList.toggle("hidden", mode === "delete");
-    presetFileDialogInput.maxLength = isPresetRename ? 31 : 80;
-    presetFileDialogInput.value = isPresetRename ? (state.liveIdentity?.presetName || "") : isFileRename ? entry.name : "";
-    presetFileDialogInput.placeholder = isNewFolder ? "Folder name" : isPresetRename ? "Preset title" : "Filename.json";
-    confirmPresetFileDialog.textContent = isNewFolder ? "Create folder" : isPresetRename ? "Rename & save" : isFileRename ? "Rename file" : "Delete";
+    presetFileDialogInput.maxLength = 80;
+    presetFileDialogInput.value = "";
+    presetFileDialogInput.placeholder = "Folder name";
+    confirmPresetFileDialog.textContent = isNewFolder ? "Create folder" : "Delete";
     confirmPresetFileDialog.classList.toggle("danger", mode === "delete");
     presetFileDialog.showModal();
     if (mode !== "delete") requestAnimationFrame(() => presetFileDialogInput.focus());
+  }
+
+  async function openPresetRenameDialog(entry) {
+    if (!entry || entry.isDirectory || state.presetBrowserBusy || !state.ntTransport || !state.transportOnline) return;
+    const path = presetPathJoin(state.presetPath, entry.name);
+    state.presetBrowserBusy = true;
+    renderPresetLibrary();
+    try {
+      const bytes = await runPresetTransportOperation(() => state.ntTransport.readSDFile(path));
+      const parsed = decodePresetDocument(bytes);
+      const documentName = parsed.document && !Array.isArray(parsed.document) && typeof parsed.document.name === "string"
+        ? parsed.document.name
+        : null;
+      if (documentName == null) throw new Error("This preset file has no top-level name field.");
+      state.pendingPresetFileOperation = { mode: "rename-preset-document", entry, path, document: parsed.document, documentName };
+      presetFileDialogKicker.textContent = "Preset library";
+      presetFileDialogTitle.textContent = "Rename preset";
+      presetFileDialogName.textContent = entry.name;
+      presetFileDialogDetail.textContent = "Updates this preset’s internal name and changes its .json filename to match.";
+      presetFileDialogField.classList.remove("hidden");
+      $("span", presetFileDialogField).textContent = "Preset name";
+      presetFileDialogInput.maxLength = 31;
+      presetFileDialogInput.value = documentName.trimEnd();
+      presetFileDialogInput.placeholder = "Preset name";
+      confirmPresetFileDialog.textContent = "Rename preset";
+      confirmPresetFileDialog.classList.remove("danger");
+      presetFileDialog.showModal();
+      requestAnimationFrame(() => presetFileDialogInput.focus());
+    } catch (error) {
+      showToast(`Could not open ${entry.name} · ${error.message}`);
+    } finally {
+      state.presetBrowserBusy = false;
+      renderPresetLibrary();
+    }
   }
 
   function decodePresetDocument(bytes) {
@@ -2926,12 +2995,18 @@
     try {
       const bytes = await runPresetTransportOperation(() => state.ntTransport.readSDFile(path));
       const parsed = decodePresetDocument(bytes);
-      state.pendingPresetDocument = { entry, path, originalBytes: bytes };
+      const documentName = parsed.document && !Array.isArray(parsed.document) && typeof parsed.document.name === "string"
+        ? parsed.document.name
+        : null;
+      state.pendingPresetDocument = { entry, path, originalBytes: bytes, documentName };
       presetJsonDialogTitle.textContent = "Edit preset JSON";
       presetJsonDialogName.textContent = entry.name;
+      presetJsonNameField.classList.toggle("hidden", documentName == null);
+      presetJsonNameInput.value = documentName?.trimEnd() || "";
       presetJsonDialogInput.value = JSON.stringify(parsed.document, null, 2);
       presetJsonDialogStatus.textContent = "Validated JSON. Edit any stored preset field, then save it back to this file.";
       presetJsonDialogStatus.className = "preset-json-dialog-status ready";
+      confirmPresetJsonDialog.textContent = "Save JSON";
       presetJsonDialog.showModal();
       requestAnimationFrame(() => presetJsonDialogInput.focus());
     } catch (error) {
@@ -2942,13 +3017,24 @@
     }
   }
 
-  function presetDocumentBytes(value) {
+  function presetDocumentBytes(value, originalName) {
     const text = String(value || "");
     if (!text.trim()) throw new Error("Preset JSON cannot be empty.");
+    let document;
     try {
-      JSON.parse(text);
+      document = JSON.parse(text);
     } catch (error) {
       throw new Error(`Fix the JSON before saving: ${error.message}`);
+    }
+    if (originalName != null) {
+      const nextName = presetJsonNameInput.value.trim();
+      if (!nextName) throw new Error("Enter a preset name.");
+      if (nextName !== originalName.trimEnd()) {
+        // NT preset documents store the preset title in their top-level
+        // `name` field. Preserve its fixed-width padding when changing it.
+        document.name = nextName.padEnd(Math.max(31, originalName.length));
+        return new TextEncoder().encode(JSON.stringify(document, null, 2));
+      }
     }
     return new TextEncoder().encode(text);
   }
@@ -2958,7 +3044,7 @@
     if (!pending || !state.ntTransport || !state.transportOnline || state.presetBrowserBusy) return;
     let bytes;
     try {
-      bytes = presetDocumentBytes(presetJsonDialogInput.value);
+      bytes = presetDocumentBytes(presetJsonDialogInput.value, pending.documentName);
       presetJsonDialogStatus.textContent = "JSON is valid. Saving to the NT…";
       presetJsonDialogStatus.className = "preset-json-dialog-status ready";
     } catch (error) {
@@ -3009,36 +3095,6 @@
     return name;
   }
 
-  async function renameLoadedPreset(name) {
-    const original = state.liveIdentity?.presetName || "";
-    if (name === original) throw new Error("That preset already has this title.");
-    const verifiedName = await runPresetTransportOperation(async () => {
-      state.ntTransport.setPresetName(name);
-      const deadline = Date.now() + 5000;
-      let lastError = null;
-      await wait(250);
-      while (Date.now() < deadline) {
-        try {
-          const actual = await state.ntTransport.readPresetName();
-          if (actual === name) {
-            state.ntTransport.savePreset(2);
-            await wait(350);
-            return actual;
-          }
-          lastError = new Error(`NT reported the preset title as “${actual || "unnamed"}”.`);
-        } catch (error) {
-          lastError = error;
-        }
-        await wait(250);
-      }
-      throw lastError || new Error("The NT did not confirm the new preset title.");
-    });
-    state.liveIdentity = { ...state.liveIdentity, presetName: verifiedName };
-    state.hasUnsavedWorkingEdits = false;
-    showLiveIdentity(state.liveIdentity);
-    updateWorkingState();
-  }
-
   async function applyPresetFileOperation() {
     const pending = state.pendingPresetFileOperation;
     if (!pending || !state.ntTransport || !state.transportOnline || state.presetBrowserBusy) return;
@@ -3050,15 +3106,22 @@
         const name = validatedPresetItemName(presetFileDialogInput.value);
         await runPresetTransportOperation(() => state.ntTransport.createSDDirectory(presetPathJoin(state.presetPath, name)));
         showToast(`Created ${name}`);
-      } else if (mode === "rename-preset") {
+      } else if (mode === "rename-preset-document") {
         const name = validatedPresetName(presetFileDialogInput.value);
-        await renameLoadedPreset(name);
-        showToast(`Renamed and saved the loaded preset as ${name}`);
-      } else if (mode === "rename-file") {
-        const name = validatedPresetItemName(presetFileDialogInput.value);
-        if (name === entry.name) throw new Error("That item already has this name.");
-        await runPresetTransportOperation(() => state.ntTransport.renameSDPath(presetPathJoin(state.presetPath, entry.name), presetPathJoin(state.presetPath, name)));
-        showToast(`Renamed file ${entry.name} to ${name}`);
+        const targetFilename = `${name}.json`;
+        const targetPath = presetPathJoin(state.presetPath, targetFilename);
+        const currentPath = pending.path;
+        const collision = state.presetEntries.some(item => !item.isDirectory && item.name === targetFilename && item.name !== entry.name);
+        if (collision) throw new Error(`A preset named ${targetFilename} already exists in this folder.`);
+        const updatedDocument = { ...pending.document, name: name.padEnd(Math.max(31, pending.documentName.length)) };
+        const bytes = new TextEncoder().encode(JSON.stringify(updatedDocument, null, 2));
+        await runPresetTransportOperation(() => state.ntTransport.writeSDFile(targetPath, bytes));
+        const verified = await runPresetTransportOperation(() => state.ntTransport.readSDFile(targetPath));
+        if (verified.length !== bytes.length || verified.some((value, index) => value !== bytes[index])) {
+          throw new Error("The NT did not confirm the renamed preset contents.");
+        }
+        if (targetPath !== currentPath) await runPresetTransportOperation(() => state.ntTransport.deleteSDPath(currentPath));
+        showToast(`Renamed preset to ${name}`);
       } else {
         await runPresetTransportOperation(() => state.ntTransport.deleteSDPath(presetPathJoin(state.presetPath, entry.name)));
         showToast(`Deleted ${entry.name}`);
@@ -3069,7 +3132,7 @@
       await loadPresetDirectory();
     } catch (error) {
       state.presetBrowserBusy = false;
-      const label = mode === "new-folder" ? "create folder" : mode === "rename-preset" ? "rename and save the loaded preset" : mode === "rename-file" ? "rename file" : mode;
+      const label = mode === "new-folder" ? "create folder" : mode === "rename-preset-document" ? "rename preset" : mode;
       showToast(`Could not ${label} · ${error.message}`);
     } finally {
       confirmPresetFileDialog.disabled = false;
@@ -4890,7 +4953,10 @@
   routingViewport.addEventListener("click", event => {
     if (!event.target.closest(".routing-node, .routing-port, button, input, label")) selectRoutingSlot(null);
   });
-  routingAuxPalette.addEventListener("click", event => handleAuxPaletteClick(event.target));
+  routingAuxPalette.addEventListener("click", event => {
+    if (state.ipadMode && state.view === "editor") return handleEditorPaletteClick(event.target);
+    return handleAuxPaletteClick(event.target);
+  });
   $("#routing-connection-cancel").addEventListener("click", closeRoutingConnectionPanel);
   routingConnectionPanel.addEventListener("click", event => {
     const label = event.target.closest("label");
