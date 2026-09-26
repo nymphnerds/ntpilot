@@ -582,7 +582,32 @@
   function updateParameterBusChip(entry) {
     if (!entry?.busChip) return;
     applyEditorBusChipAppearance(entry.busChip, entry.parameter.value);
+    applyParameterBusColour(entry, entry.parameter.value);
     entry.busChip.setAttribute("aria-label", `${entry.parameter.name}: ${entry.busChip.textContent}. Choose bus assignment.`);
+  }
+
+  function applyParameterBusColour(entry, value) {
+    if (!entry?.busChip || !entry.row) return;
+    const descriptor = editorBusDescriptor(value);
+    const colour = descriptor.kind === "input"
+      ? "#438ee8"
+      : descriptor.kind === "output"
+        ? "#df4b4b"
+        : descriptor.kind === "aux"
+          ? routingAuxColour(descriptor.bus, state.liveIdentity)
+          : "#a8b5bc";
+    entry.row.style.setProperty("--parameter-tint", `color-mix(in srgb, ${colour} 4%, transparent)`);
+    entry.row.style.setProperty("--parameter-tint-hover", `color-mix(in srgb, ${colour} 9%, transparent)`);
+    entry.row.style.setProperty("--parameter-accent", `color-mix(in srgb, ${colour} 62%, transparent)`);
+    entry.row.style.setProperty("--slider-colour", colour);
+  }
+
+  function defaultParameterColour(target, parameter = null) {
+    const colour = parameter?.mapping?.cv?.enabled ? "#c69300" : "#57b8ae";
+    target.style.setProperty("--parameter-tint", `color-mix(in srgb, ${colour} 4%, transparent)`);
+    target.style.setProperty("--parameter-tint-hover", `color-mix(in srgb, ${colour} 9%, transparent)`);
+    target.style.setProperty("--parameter-accent", `color-mix(in srgb, ${colour} 62%, transparent)`);
+    target.style.setProperty("--slider-colour", colour);
   }
 
   function refreshEditorBusDockState() {
@@ -640,17 +665,30 @@
 
   function updateBottomBusDockHeight() {
     requestAnimationFrame(() => {
-      const height = deviceFrame.classList.contains("bus-dock-bottom") && !editorBusDock.classList.contains("hidden")
-        ? Math.ceil(editorBusDock.getBoundingClientRect().height)
+      const activeDock = !editorBusDock.classList.contains("hidden")
+        ? editorBusDock
+        : !routingAuxPalette.classList.contains("hidden") && routingAuxPalette.parentElement === deviceFrame
+          ? routingAuxPalette
+          : null;
+      const height = deviceFrame.classList.contains("bus-dock-bottom") && activeDock
+        ? Math.ceil(activeDock.getBoundingClientRect().height)
         : 0;
       deviceFrame.style.setProperty("--bottom-bus-dock-height", `${height}px`);
     });
+  }
+
+  function updateRoutingPaletteVisibility() {
+    if (state.ipadMode) routingAuxPalette.classList.toggle("hidden", state.view !== "routing");
+    else routingAuxPalette.classList.remove("hidden");
+    updateBottomBusDockHeight();
   }
 
   function applyBusDockLayout() {
     const bottom = state.ipadMode;
     if (bottom && editorBusDock.parentElement !== deviceFrame) deviceFrame.appendChild(editorBusDock);
     if (!bottom && editorBusDock.parentElement !== appMain) appMain.insertBefore(editorBusDock, viewStack);
+    if (bottom && routingAuxPalette.parentElement !== deviceFrame) deviceFrame.appendChild(routingAuxPalette);
+    if (!bottom && routingAuxPalette.parentElement !== routingViewport.parentElement) routingViewport.parentElement.insertBefore(routingAuxPalette, routingViewport);
     deviceFrame.classList.toggle("bus-dock-bottom", bottom);
     deviceFrame.classList.toggle("ipad-mode", bottom);
     if (bottom) {
@@ -659,6 +697,8 @@
       statusSyncAnchor.parentNode.insertBefore(statusSyncControl, statusSyncAnchor.nextSibling);
     }
     if (state.liveIdentity) renderEditorBusDock(state.liveIdentity);
+    if (state.liveRouting) renderAuxPalette(state.liveRouting);
+    updateRoutingPaletteVisibility();
     updateBottomBusDockHeight();
   }
 
@@ -792,12 +832,14 @@
     const used = new Set(snapshot.slots.flatMap(slot => (slot.ioParameters || []).map(parameter => Number(parameter.value) - 1)));
     const firstAux = snapshot.inputBusCount + snapshot.outputBusCount;
     const fragment = document.createDocumentFragment();
-    const none = document.createElement("button");
-    none.type = "button";
-    none.className = "routing-aux-chip none";
-    none.dataset.bus = "-1";
-    none.textContent = "None";
-    fragment.appendChild(none);
+    if (!state.ipadMode) {
+      const none = document.createElement("button");
+      none.type = "button";
+      none.className = "routing-aux-chip none";
+      none.dataset.bus = "-1";
+      none.textContent = "None";
+      fragment.appendChild(none);
+    }
     for (let index = 0; index < snapshot.auxBusCount; index += 1) {
       const bus = firstAux + index;
       const chip = document.createElement("button");
@@ -808,7 +850,33 @@
       chip.textContent = `A${index + 1}`;
       fragment.appendChild(chip);
     }
+    if (state.ipadMode) {
+      for (let index = 0; index < snapshot.inputBusCount; index += 1) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "routing-aux-chip physical input";
+        chip.dataset.bus = String(index);
+        chip.textContent = String(index + 1);
+        fragment.appendChild(chip);
+      }
+      const none = document.createElement("button");
+      none.type = "button";
+      none.className = "routing-aux-chip none physical";
+      none.dataset.bus = "-1";
+      none.textContent = "None";
+      fragment.appendChild(none);
+      for (let index = 0; index < snapshot.outputBusCount; index += 1) {
+        const bus = snapshot.inputBusCount + index;
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "routing-aux-chip physical output";
+        chip.dataset.bus = String(bus);
+        chip.textContent = String(index + 1);
+        fragment.appendChild(chip);
+      }
+    }
     routingAuxPalette.replaceChildren(fragment);
+    updateBottomBusDockHeight();
   }
 
   function routingMaskIndices(mask, total) {
@@ -1884,6 +1952,7 @@
     state.view = view;
     deviceFrame.classList.remove("sidebar-compact");
     updateEditorBusDockVisibility();
+    updateRoutingPaletteVisibility();
     viewStack.classList.toggle("editor-mode", view === "editor");
     const viewTitles = {
       editor: "Editor",
@@ -2190,6 +2259,12 @@
   function updatePerformanceEntry(entry) {
     const card = $(`.performance-control[data-key="${mappingKey(entry.slotInfo.index, entry.parameter.index)}"]`);
     if (!card) return;
+    const totalBusCount = state.liveIdentity
+      ? state.liveIdentity.inputBusCount + state.liveIdentity.outputBusCount + state.liveIdentity.auxBusCount
+      : 0;
+    if (totalBusCount > 0 && window.NTWebMIDITransport.isRoutingBusParameter(entry.parameter, totalBusCount)) {
+      applyParameterBusColour({ busChip: true, row: card }, entry.parameter.value);
+    }
     const slider = $("input[type=range]", card);
     const value = $("output", card);
     if (slider && document.activeElement !== slider) {
@@ -2366,9 +2441,13 @@
       const card = document.createElement("article");
       card.className = `control-card performance-control ${["accent-mint", "accent-yellow", "accent-lilac", "accent-blue"][index]}`;
       card.dataset.performanceItem = String(entry.item.itemIndex);
-      const performanceHue = (entry.parameter.index * 47 + entry.slotInfo.index * 23 + 188) % 360;
-      card.style.setProperty("--slider-start", `hsla(${performanceHue}, 68%, 48%, .12)`);
-      card.style.setProperty("--slider-colour", `hsl(${performanceHue}, 68%, 48%)`);
+      defaultParameterColour(card, entry.parameter);
+      const performanceBusCount = state.liveIdentity
+        ? state.liveIdentity.inputBusCount + state.liveIdentity.outputBusCount + state.liveIdentity.auxBusCount
+        : 0;
+      if (performanceBusCount > 0 && window.NTWebMIDITransport.isRoutingBusParameter(entry.parameter, performanceBusCount)) {
+        applyParameterBusColour({ busChip: true, row: card }, entry.parameter.value);
+      }
       const head = document.createElement("div");
       head.className = "control-card-head";
       const slot = document.createElement("span");
@@ -2469,12 +2548,7 @@
     const createParameterRow = parameter => {
       const row = document.createElement("div");
       row.className = "parameter-row live-parameter-row";
-      const parameterHue = (parameter.index * 47 + slotInfo.index * 23 + 188) % 360;
-      row.style.setProperty("--parameter-tint", `hsla(${parameterHue}, 72%, 58%, .018)`);
-      row.style.setProperty("--parameter-tint-hover", `hsla(${parameterHue}, 72%, 58%, .05)`);
-      row.style.setProperty("--parameter-accent", `hsla(${parameterHue}, 68%, 48%, .46)`);
-      row.style.setProperty("--slider-start", `hsla(${parameterHue}, 68%, 48%, .12)`);
-      row.style.setProperty("--slider-colour", `hsl(${parameterHue}, 68%, 48%)`);
+      defaultParameterColour(row, parameter);
 
       const name = document.createElement("div");
       name.className = "parameter-name";
@@ -3019,6 +3093,7 @@
   interfaceScaleValue.addEventListener("dblclick", () => setInterfaceScale(100));
   ipadModeControl.addEventListener("change", () => setIpadMode(ipadModeControl.checked));
   new ResizeObserver(updateBottomBusDockHeight).observe(editorBusDock);
+  new ResizeObserver(updateBottomBusDockHeight).observe(routingAuxPalette);
   $("#routing-zoom-out").addEventListener("click", () => {
     state.routingZoom = Math.max(.2, Number((state.routingZoom - .1).toFixed(2)));
     applyRoutingZoom();
