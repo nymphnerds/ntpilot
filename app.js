@@ -1891,6 +1891,14 @@
     $("#routing-zoom-value").textContent = `${Math.round(state.routingZoom * 100)}%`;
   }
 
+  function routingViewportPoint(clientX, clientY) {
+    const rect = routingViewport.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (routingViewport.clientWidth / Math.max(1, rect.width)),
+      y: (clientY - rect.top) * (routingViewport.clientHeight / Math.max(1, rect.height))
+    };
+  }
+
   function fitRoutingGraph(behavior = "smooth") {
     const { width, height } = state.routingCanvasSize;
     const availableWidth = Math.max(320, routingViewport.clientWidth - 24);
@@ -3106,9 +3114,9 @@
   routingViewport.addEventListener("wheel", event => {
     if (!event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
-    const rect = routingViewport.getBoundingClientRect();
-    const localX = event.clientX - rect.left;
-    const localY = event.clientY - rect.top;
+    const point = routingViewportPoint(event.clientX, event.clientY);
+    const localX = point.x;
+    const localY = point.y;
     const previousZoom = state.routingZoom;
     const contentX = (routingViewport.scrollLeft + localX) / previousZoom;
     const contentY = (routingViewport.scrollTop + localY) / previousZoom;
@@ -3142,9 +3150,9 @@
       routingViewport.setPointerCapture(event.pointerId);
       const geometry = routingTouchGeometry();
       if (geometry) {
-        const rect = routingViewport.getBoundingClientRect();
-        const localX = geometry.x - rect.left;
-        const localY = geometry.y - rect.top;
+        const point = routingViewportPoint(geometry.x, geometry.y);
+        const localX = point.x;
+        const localY = point.y;
         routingPinch = {
           distance: Math.max(1, geometry.distance),
           zoom: state.routingZoom,
@@ -3174,9 +3182,9 @@
       routingTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
       const geometry = routingTouchGeometry();
       if (routingPinch && geometry) {
-        const rect = routingViewport.getBoundingClientRect();
-        const localX = geometry.x - rect.left;
-        const localY = geometry.y - rect.top;
+        const point = routingViewportPoint(geometry.x, geometry.y);
+        const localX = point.x;
+        const localY = point.y;
         state.routingZoom = Math.max(.2, Math.min(1.5, routingPinch.zoom * geometry.distance / routingPinch.distance));
         applyRoutingZoom();
         routingViewport.scrollLeft = (routingPinch.contentX * state.routingZoom) - localX;
@@ -3219,9 +3227,9 @@
   const beginNativeRoutingPinch = touches => {
     const geometry = nativeTouchGeometry(touches);
     if (!geometry) return false;
-    const rect = routingViewport.getBoundingClientRect();
-    const localX = geometry.x - rect.left;
-    const localY = geometry.y - rect.top;
+    const point = routingViewportPoint(geometry.x, geometry.y);
+    const localX = point.x;
+    const localY = point.y;
     routingNativeTouch = {
       mode: "pinch",
       distance: Math.max(1, geometry.distance),
@@ -3257,9 +3265,9 @@
       if (routingNativeTouch?.mode !== "pinch") beginNativeRoutingPinch(event.touches);
       const geometry = nativeTouchGeometry(event.touches);
       if (!geometry || routingNativeTouch?.mode !== "pinch") return;
-      const rect = routingViewport.getBoundingClientRect();
-      const localX = geometry.x - rect.left;
-      const localY = geometry.y - rect.top;
+      const point = routingViewportPoint(geometry.x, geometry.y);
+      const localX = point.x;
+      const localY = point.y;
       state.routingZoom = Math.max(.2, Math.min(1.5, routingNativeTouch.zoom * geometry.distance / routingNativeTouch.distance));
       applyRoutingZoom();
       routingViewport.scrollLeft = (routingNativeTouch.contentX * state.routingZoom) - localX;
