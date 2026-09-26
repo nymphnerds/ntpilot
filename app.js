@@ -9,6 +9,7 @@
   const connectionLabel = $("#connection-label");
   const deviceFrame = $("#device-frame");
   const appMain = $(".app-main");
+  const primaryNav = $(".primary-nav");
   const deviceTitle = $("#device-title");
   const editorShell = $("#editor-shell");
   const editorEmptyState = $("#editor-empty-state");
@@ -653,7 +654,7 @@
     deviceFrame.classList.toggle("bus-dock-bottom", bottom);
     deviceFrame.classList.toggle("ipad-mode", bottom);
     if (bottom) {
-      ipadModeControl.parentElement.insertBefore(statusSyncControl, ipadModeControl);
+      primaryNav.insertAdjacentElement("afterend", statusSyncControl);
     } else {
       statusSyncAnchor.parentNode.insertBefore(statusSyncControl, statusSyncAnchor.nextSibling);
     }

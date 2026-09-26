@@ -233,8 +233,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.ipad-mode .interface-scale { height: 54px; padding: 3px; border-radius: 12px; }
 .device-frame.ipad-mode .interface-scale button { width: 46px; height: 46px; font-size: 26px; line-height: 1; }
 .device-frame.ipad-mode .interface-scale output { min-width: 76px; color: #223d48; font-size: 19px; font-weight: 950; }
-.device-frame.ipad-mode .status-sync { width: 100%; height: 56px; margin-top: 9px; padding: 0 7px 0 14px; justify-content: space-between; border-radius: 12px; font-size: 17px; }
-.device-frame.ipad-mode .status-sync select { height: 44px; padding-inline: 10px 28px; font-size: 17px; }
+.device-frame.ipad-mode .status-sync { width: 100%; height: 42px; margin-top: 7px; padding: 0 5px 0 11px; justify-content: space-between; border-radius: 10px; font-size: 13px; }
+.device-frame.ipad-mode .status-sync select { height: 32px; padding-inline: 7px 24px; font-size: 13px; }
 .device-frame.ipad-mode .ipad-mode-control { margin-top: 8px; padding: 13px 8px; font-size: 18px; }
 .device-frame.ipad-mode .ipad-mode-control i { flex-basis: 38px; width: 38px; height: 23px; border-radius: 13px; }.device-frame.ipad-mode .ipad-mode-control i::after { width: 19px; height: 19px; }.device-frame.ipad-mode .ipad-mode-control input:checked + i::after { transform: translateX(15px); }
 .device-frame.ipad-mode .parameter-row { min-height: 64px; padding-block: 7px; }
