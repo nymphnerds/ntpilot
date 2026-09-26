@@ -4,6 +4,9 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const routingLogic = window.NTPilotRoutingLogic;
+  const storageLogic = window.NTPilotStorageLogic;
+  const { OperationScheduler } = window.NTPilotOperationScheduler;
+  const deviceLogic = window.NTPilotDeviceLogic;
 
   const connectionPill = $("#connection-pill");
   const connectionLabel = $("#connection-label");
@@ -45,6 +48,7 @@
   const interfaceScaleUp = $("#interface-scale-up");
   const interfaceScaleControl = $(".interface-scale");
   const sidebarUtilityStack = $(".sidebar-utility-stack");
+  const sidebarEdgeToggle = $("#sidebar-edge-toggle");
   const ipadModeControl = $("#ipad-mode");
   const darkModeControl = $("#dark-mode");
   const syncModeControl = $("#sync-mode");
@@ -158,6 +162,35 @@
   const presetJsonDialogStatus = $("#preset-json-dialog-status");
   const cancelPresetJsonDialog = $("#cancel-preset-json-dialog");
   const confirmPresetJsonDialog = $("#confirm-preset-json-dialog");
+  const assistantWorkspace = $("#assistant-workspace");
+  const assistantConversation = $(".assistant-conversation");
+  const assistantThread = $("#messages");
+  const assistantComposeArea = $(".assistant-compose-area", assistantConversation);
+  const assistantDock = $("#assistant-dock");
+  const assistantDockContent = $("#assistant-dock-content");
+  const assistantDockTitle = $("#assistant-dock-title");
+  const assistantDockResize = $("#assistant-dock-resize");
+  const assistantInput = $("#chat-input");
+  const assistantHeading = $("#assistant-heading");
+  const assistantSessionTitle = $("#assistant-session-title");
+  const assistantDraftContext = $("#assistant-draft-context");
+  const assistantAttachmentOptions = $("#assistant-attachment-options");
+  const assistantAttachButton = $("#assistant-attach-button");
+  const assistantFileInput = $("#assistant-file-input");
+  const assistantImageInput = $("#assistant-image-input");
+  const assistantFolderInput = $("#assistant-folder-input");
+  const assistantAttachmentsCard = $("#assistant-attachments-card");
+  const assistantAttachmentsSummary = $("#assistant-attachments-summary");
+  const assistantAttachmentList = $("#assistant-attachment-list");
+  const assistantSessionList = $("#assistant-session-list");
+  const assistantProviderStatus = $("#assistant-provider-status");
+  const assistantProviderReadiness = $("#assistant-provider-readiness");
+  const assistantModelSetting = $("#assistant-model-setting");
+  const assistantModelSelect = $("#assistant-model-select");
+  const assistantAccountName = $("#assistant-account-name");
+  const assistantAccountDetail = $("#assistant-account-detail");
+  const assistantComposeNote = $("#assistant-compose-note");
+  const assistantDraftAttachments = new Map();
 
   let rebootRecovery = null;
   try {
@@ -177,7 +210,6 @@
     reconnectTimer: null,
     reloadAfterReconnect: false,
     liveIdentity: null,
-    liveRouting: null,
     routingReadPromise: null,
     routingReconcileTimer: null,
     routingModeHydrationPromise: null,
@@ -186,6 +218,15 @@
     interfaceScale: 100,
     ipadMode: false,
     darkMode: false,
+    sidebarCollapsed: false,
+    assistantDocked: false,
+    assistantHostAvailable: false,
+    assistantAccount: null,
+    assistantLogin: null,
+    assistantThreadId: null,
+    assistantThreads: [],
+    assistantModels: [],
+    assistantSending: false,
     pilotAccentHue: 164,
     routingCanvasSize: { width: 1180, height: 760 },
     routingSnapshot: null,
@@ -194,15 +235,13 @@
     device: "ready",
     view: "editor",
     mappingDirty: false,
+    mappingWriteBusy: false,
     selectedMapping: null,
     mappingBaseline: null,
-    undoMapping: null,
-    hasOfflineDraft: false,
     toastTimer: null,
     learnTimer: null,
     parameterReadToken: 0,
-    parameterReadQueue: Promise.resolve(),
-    parameterWriteQueue: Promise.resolve(),
+    parameterReadInFlight: Promise.resolve(),
     hasUnsavedWorkingEdits: false,
     liveParameters: new Map(),
     armedBusEntry: null,
@@ -234,18 +273,39 @@
     pendingSlotRemoval: null,
     pendingPluginLoad: null,
     slotMutationBusy: false,
-    memoryReadTail: Promise.resolve(),
     presetPath: PRESET_LIBRARY_ROOT,
     presetEntries: [],
     selectedPresetEntry: null,
     presetBrowserBusy: false,
     presetBrowserError: null,
-    presetTransportBusy: false,
-    presetTransportTail: Promise.resolve(),
     pendingPresetLoad: null,
     pendingPresetFileOperation: null,
     pendingPresetDocument: null,
   };
+  let hardwareResumeSlotIndex = null;
+  const hardwareOperations = new OperationScheduler({
+    before: async ({ kind }) => {
+      const context = {
+        activeSlotIndex: state.activeLiveSlotIndex,
+        pendingPoll: stopLivePolling()
+      };
+      stopCpuPolling();
+      await context.pendingPoll?.catch(() => {});
+      await state.cpuInFlight?.catch(() => {});
+      return context;
+    },
+    after: async ({ context }) => {
+      hardwareResumeSlotIndex = state.activeLiveSlotIndex ?? context?.activeSlotIndex ?? null;
+    },
+    onStateChange: ({ busy }) => {
+      if (busy) return;
+      const resumeSlotIndex = hardwareResumeSlotIndex;
+      hardwareResumeSlotIndex = null;
+      if (!state.ntTransport || !state.transportOnline) return;
+      startCpuPolling();
+      if (resumeSlotIndex != null) startLivePolling(resumeSlotIndex);
+    }
+  });
   let algorithmMemoryCheckToken = 0;
   let algorithmMemoryCheckTimer = null;
 
@@ -304,9 +364,11 @@
   async function applyParameterHistory(action, direction) {
     const target = direction === "undo" ? "before" : "after";
     try {
-      for (const change of action.changes) {
-        await state.ntTransport.writeParameter(change.slotIndex, change.parameterIndex, change[target]);
-      }
+      await runSlotMutationTransportOperation(async () => {
+        for (const change of action.changes) {
+          await state.ntTransport.writeParameter(change.slotIndex, change.parameterIndex, change[target]);
+        }
+      });
       if (action.routing && state.routingSnapshot) {
         await loadLiveRouting({ preserveView: true });
       } else {
@@ -322,7 +384,7 @@
           if (change.parameterIndex === 0) {
             const bypassed = Boolean(change[target]);
             const identitySlot = state.liveIdentity?.slots.find(slot => slot.index === change.slotIndex);
-            const routingSlot = state.liveRouting?.slots.find(slot => slot.index === change.slotIndex);
+            const routingSlot = state.routingSnapshot?.slots.find(slot => slot.index === change.slotIndex);
             if (identitySlot) identitySlot.bypassed = bypassed;
             if (routingSlot) routingSlot.bypassed = bypassed;
             $(`[data-index="${change.slotIndex}"]`, slotList)?.classList.toggle("bypassed", bypassed);
@@ -487,7 +549,41 @@
     state.midiEvents.unshift(event);
     if (state.midiEvents.length > 200) state.midiEvents.length = 200;
     scheduleMIDIMonitorRender();
+    captureMIDILearn(event.message);
     if (event.message.subtype === "cc") applyLiveCCFeedback(event.message);
+  }
+
+  function stopMIDILearn(message = null) {
+    clearTimeout(state.learnTimer);
+    state.learnTimer = null;
+    const button = $("#learn-button");
+    button.classList.remove("listening");
+    $("#learn-label").textContent = "Learn";
+    if (message) showToast(message);
+  }
+
+  function captureMIDILearn(message) {
+    if (!state.learnTimer || message.kind !== "channel" || !state.selectedMapping) return;
+    let type = null;
+    let controller = 0;
+    if (message.subtype === "cc") {
+      type = "CC";
+      controller = message.controller;
+    } else if (message.subtype === "note-on") {
+      type = "Note — momentary";
+      controller = message.note;
+    } else if (message.subtype === "pitch-bend") {
+      type = "Pitch bend";
+    } else if (message.subtype === "channel-pressure") {
+      type = "Channel pressure";
+    }
+    if (!type) return;
+    mapChannel.value = String(message.channel);
+    mapType.value = type;
+    mapCC.value = String(controller);
+    mapEnabled.checked = true;
+    markMappingDirty();
+    stopMIDILearn(`Captured ${message.label}`);
   }
 
   function applyLiveCCFeedback(message) {
@@ -549,6 +645,54 @@
     workingState.classList.toggle("hidden", !visible);
     savePreset.classList.toggle("hidden", !state.liveIdentity);
     savePreset.disabled = !visible;
+    updateAssistantContext();
+  }
+
+  function updateAssistantContext() {
+    if (!assistantWorkspace) return;
+    const identity = state.liveIdentity;
+    const connected = Boolean(state.transportOnline && state.ntTransport && identity);
+    const deviceStatus = $("#assistant-device-status");
+    const deviceDetail = $("#assistant-device-detail");
+    const deviceIndicator = $("#assistant-device-indicator");
+    const presetName = $("#assistant-preset-name");
+    const presetDetail = $("#assistant-preset-detail");
+    const workingStatus = $("#assistant-working-status");
+    const liveContextChip = $("#assistant-live-context-chip");
+    const readiness = $("#assistant-device-readiness");
+
+    if (connected) {
+      const name = identity.presetName || "Unnamed preset";
+      deviceStatus.textContent = "disting NT connected";
+      deviceDetail.textContent = `${identity.version || "Unknown firmware"} · SysEx ID ${identity.sysexId}`;
+      deviceIndicator.classList.add("live");
+      presetName.textContent = name;
+      presetDetail.textContent = `${identity.slotCount ?? identity.slots?.length ?? 0} / ${MAX_ALGORITHM_SLOTS} algorithm slots · live working state`;
+      workingStatus.textContent = state.hasUnsavedWorkingEdits ? "Unsaved working changes" : "No unsaved changes";
+      workingStatus.classList.toggle("unsaved", state.hasUnsavedWorkingEdits);
+      liveContextChip.classList.add("live");
+      $("b", liveContextChip).textContent = `${name} · live`;
+      readiness.classList.add("ready");
+      $("i", readiness).textContent = "✓";
+      $("small", readiness).textContent = `${name} · ${identity.slotCount ?? identity.slots?.length ?? 0} slots`;
+      return;
+    }
+
+    const reconnecting = state.device === "syncing" || state.device === "disconnected";
+    deviceStatus.textContent = reconnecting ? "Waiting for disting NT" : "No NT connected";
+    deviceDetail.textContent = reconnecting
+      ? "The Assistant will refresh live context when the MIDI endpoint returns."
+      : "Connect the module to add live firmware and device state.";
+    deviceIndicator.classList.remove("live");
+    presetName.textContent = "Unavailable";
+    presetDetail.textContent = "No live preset has been read.";
+    workingStatus.textContent = "Read-only context";
+    workingStatus.classList.remove("unsaved");
+    liveContextChip.classList.remove("live");
+    $("b", liveContextChip).textContent = reconnecting ? "NT reconnecting" : "No live NT";
+    readiness.classList.remove("ready");
+    $("i", readiness).textContent = "○";
+    $("small", readiness).textContent = reconnecting ? "Waiting for the module to return" : "Connect the module to inspect it";
   }
 
   function markWorkingEdit() {
@@ -569,7 +713,7 @@
     entry.slider.disabled = true;
     if (entry.busChip) entry.busChip.disabled = true;
     if (state.armedBusEntry === entry) refreshEditorBusDockState();
-    const operation = state.parameterWriteQueue.catch(() => {}).then(async () => {
+    const operation = runHardwareOperation("parameter-write", async () => {
       if (pendingPoll) await pendingPoll.catch(() => {});
       if (!state.ntTransport || !state.transportOnline) throw new Error("The NT is no longer connected.");
       await state.ntTransport.writeParameter(entry.slotInfo.index, entry.parameter.index, requestedValue);
@@ -598,7 +742,6 @@
       if (state.armedBusEntry === entry) refreshEditorBusDockState();
       if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
     });
-    state.parameterWriteQueue = operation;
     return operation;
   }
 
@@ -619,7 +762,7 @@
 
     entry.sliderWriteRunning = true;
     const pendingPoll = stopLivePolling();
-    const operation = state.parameterWriteQueue.catch(() => {}).then(async () => {
+    const operation = runHardwareOperation("parameter-stream", async () => {
       if (pendingPoll) await pendingPoll.catch(() => {});
       while (entry.pendingSliderValue != null) {
         const nextValue = entry.pendingSliderValue;
@@ -658,7 +801,6 @@
       }
       if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
     });
-    state.parameterWriteQueue = operation;
   }
 
   function stopLivePolling() {
@@ -696,7 +838,7 @@
     const overallMeter = $("#overall-cpu-meter");
     const poll = async () => {
       if (!state.ntTransport || !state.transportOnline || document.hidden) return;
-      if (state.presetTransportBusy || state.slotMutationBusy || state.pollInFlight || state.routingReadPromise || state.performanceReadPromise) {
+      if (hardwareOperations.busy || state.slotMutationBusy || state.pollInFlight || state.routingReadPromise || state.performanceReadPromise) {
         state.cpuTimer = setTimeout(poll, 2000);
         return;
       }
@@ -747,7 +889,7 @@
     stopLivePolling();
     state.activeLiveSlotIndex = slotIndex;
     const delay = pollingDelay();
-    if (delay == null || state.presetTransportBusy || state.slotMutationBusy || !state.ntTransport || !state.transportOnline || document.hidden) return;
+    if (delay == null || hardwareOperations.busy || state.slotMutationBusy || !state.ntTransport || !state.transportOnline || document.hidden) return;
     const token = state.pollToken;
 
     const poll = async () => {
@@ -985,7 +1127,7 @@
     deviceFrame.classList.toggle("bus-dock-bottom", bottom);
     deviceFrame.classList.toggle("ipad-mode", bottom);
     if (state.liveIdentity) renderEditorBusDock(state.liveIdentity);
-    if (state.liveRouting) renderAuxPalette(state.liveRouting);
+    if (state.routingSnapshot) renderAuxPalette(state.routingSnapshot);
     updateRoutingPaletteVisibility();
     updateBottomBusDockHeight();
   }
@@ -1513,7 +1655,7 @@
   function updateRoutingSnapshotParameter(slotIndex, parameterIndex, value) {
     const liveEntry = state.liveParameters.get(mappingKey(slotIndex, parameterIndex));
     if (liveEntry) updateLiveParameterEntry(liveEntry, value, "midi-feedback");
-    const snapshots = [...new Set([state.routingSnapshot, state.liveRouting].filter(Boolean))];
+    const snapshots = state.routingSnapshot ? [state.routingSnapshot] : [];
     let routingParameter = null;
     snapshots.forEach(snapshot => {
       const slot = snapshot.slots?.find(item => item.index === slotIndex);
@@ -2108,8 +2250,10 @@
       button.setAttribute("aria-disabled", "true");
     });
     try {
-      await state.ntTransport.writeParameter(slotIndex, parameterIndex, next);
-      await loadLiveRouting({ preserveView: true });
+      await runHardwareOperation("routing-mutation", async () => {
+        await state.ntTransport.writeParameter(slotIndex, parameterIndex, next);
+        await loadLiveRouting({ preserveView: true, withinOperation: true });
+      });
       markWorkingEdit();
       recordRoutingHistory(historyBefore, `change pitch CV count to ${next}`);
       showToast(`Pitch CV count changed to ${next} and verified from the NT`);
@@ -2141,47 +2285,24 @@
 
   async function finishRoutingConnection(first, second, modeChoice = null, routesToRemove = []) {
     const historyBefore = captureRoutingParameterState();
-    const pendingPoll = stopLivePolling();
-    if (pendingPoll) await pendingPoll.catch(() => {});
     const originalMode = modeChoice?.details.currentMode;
-    const modeChanged = Boolean(modeChoice && modeChoice.mode !== originalMode);
     const connectingOutput = [first, second].find(item => item.side === "output" && item.parameterIndex != null);
-    const originalConnectingBus = connectingOutput?.bus ?? -1;
-    const removedRoutes = [];
     try {
-      if (modeChanged) await chooseRoutingOutputMode(modeChoice.details, modeChoice.mode);
-      for (const route of routesToRemove) {
-        await writeRoutingSelection(route, -1);
-        removedRoutes.push(route);
-      }
-      await connectRoutingSelections(first, second);
+      const result = await runHardwareOperation("routing-mutation", () => routingLogic.executeRoutingTransaction({
+        modeChange: modeChoice ? { before: originalMode, after: modeChoice.mode } : null,
+        routesToRemove,
+        writeMode: mode => chooseRoutingOutputMode(modeChoice.details, mode),
+        writeRoute: writeRoutingSelection,
+        apply: () => connectRoutingSelections(first, second)
+      }));
       markWorkingEdit();
       recordRoutingHistory(historyBefore, `change routing for ${routingSelectionLabel(connectingOutput || first)}`);
-      const routeCopy = routesToRemove.length ? ` · removed ${routesToRemove.length} previous route${routesToRemove.length === 1 ? "" : "s"}` : "";
+      const routeCopy = result.removedRoutes.length ? ` · removed ${result.removedRoutes.length} previous route${result.removedRoutes.length === 1 ? "" : "s"}` : "";
       const modeCopy = modeChoice ? ` · ${modeChoice.mode === "replace" ? "Replace" : "Add"} mode` : "";
       showToast(`Connected${routeCopy}${modeCopy}`);
       scheduleRoutingReconciliation();
     } catch (error) {
-      if (removedRoutes.length) {
-        try {
-          if (connectingOutput) await writeRoutingSelection(connectingOutput, originalConnectingBus);
-          for (const route of removedRoutes) await writeRoutingSelection(route, route.bus);
-        } catch (rollbackError) {
-          showToast(`${error.message} Route rollback also failed; refresh routing.`);
-          return;
-        }
-      }
-      if (modeChanged) {
-        try {
-          await chooseRoutingOutputMode(modeChoice.details, originalMode);
-        } catch (rollbackError) {
-          showToast(`${error.message} Output-mode rollback also failed; refresh routing.`);
-          return;
-        }
-      }
-      showToast(error.message);
-    } finally {
-      if (state.activeLiveSlotIndex != null && !state.routingReadPromise) startLivePolling(state.activeLiveSlotIndex);
+      showToast(error.rollbackErrors?.length ? `${error.message} Rollback also failed; refresh routing.` : error.message);
     }
   }
 
@@ -2201,14 +2322,6 @@
       .map(parameter => Number(parameter.value) - 1)).filter(value => value >= 0));
   }
 
-  function compatibleFreeAux(first, second) {
-    const snapshot = state.routingSnapshot;
-    const used = routingUsedBuses();
-    const firstAux = snapshot.inputBusCount + snapshot.outputBusCount;
-    return Array.from({ length: snapshot.auxBusCount }, (_, index) => firstAux + index)
-      .find(bus => !used.has(bus) && routingSelectionAcceptsBus(first, bus) && routingSelectionAcceptsBus(second, bus));
-  }
-
   async function writeRoutingSelection(selection, bus) {
     if (selection.parameterIndex == null || selection.slotIndex == null) throw new Error("That route has no writable NT parameter.");
     if (!routingSelectionAcceptsBus(selection, bus)) {
@@ -2219,49 +2332,13 @@
   }
 
   async function connectRoutingSelections(first, second) {
-    const parameters = [first, second].filter(item => item.parameterIndex != null);
-    const endpoints = [first, second].filter(item => item.parameterIndex == null && item.bus >= 0);
-    if (!parameters.length) throw new Error("Choose at least one writable algorithm port.");
-
-    if (endpoints.length) {
-      if (parameters.length !== 1) throw new Error("Choose one algorithm port and one physical bus.");
-      const compatibilityError = routingLogic.endpointCompatibilityError(parameters[0], endpoints[0]);
-      if (compatibilityError) throw new Error(compatibilityError);
-      await writeRoutingSelection(parameters[0], endpoints[0].bus);
-      return;
-    }
-
-    if (parameters.length !== 2 || parameters[0].side === parameters[1].side) {
-      throw new Error("Choose one algorithm output and one algorithm input.");
-    }
-    const output = parameters.find(item => item.side === "output");
-    const input = parameters.find(item => item.side === "input");
-    if (!output || !input) throw new Error("Choose one algorithm output and one algorithm input.");
-
-    let bus = output.bus;
-    let writeOutput = false;
-    if (bus < 0) {
-      bus = compatibleFreeAux(output, input);
-      if (bus == null) throw new Error("No free Aux bus is permitted by both ports.");
-      writeOutput = true;
-    } else if (!routingSelectionAcceptsBus(input, bus)) {
-      throw new Error(`${routingBusLabel(bus, state.routingSnapshot)} is not permitted by the selected input.`);
-    }
-
-    const originalOutputBus = output.bus;
-    if (writeOutput) await writeRoutingSelection(output, bus);
-    try {
-      await writeRoutingSelection(input, bus);
-    } catch (error) {
-      if (writeOutput) {
-        try {
-          await writeRoutingSelection(output, originalOutputBus);
-        } catch (rollbackError) {
-          throw new Error(`${error.message} The source rollback also failed; refresh routing before continuing.`);
-        }
-      }
-      throw error;
-    }
+    const snapshot = state.routingSnapshot;
+    const plan = routingLogic.planRoutingConnection(first, second, {
+      usedBuses: routingUsedBuses(),
+      firstAux: snapshot.inputBusCount + snapshot.outputBusCount,
+      auxCount: snapshot.auxBusCount
+    });
+    await routingLogic.executeConnectionPlan(plan, writeRoutingSelection);
   }
 
   async function assignRoutingPort(selection, bus, modeChoice = null, routesToRemove = [], confirmed = false, anchorElement = null) {
@@ -2284,45 +2361,24 @@
       });
       return true;
     }
-    const pendingPoll = stopLivePolling();
-    if (pendingPoll) await pendingPoll.catch(() => {});
     const originalMode = modeChoice?.details.currentMode;
-    const modeChanged = Boolean(modeChoice && modeChoice.mode !== originalMode);
     const originalBus = selection.bus;
     const historyBefore = captureRoutingParameterState();
-    const removedRoutes = [];
     try {
-      if (modeChanged) await chooseRoutingOutputMode(modeChoice.details, modeChoice.mode);
-      for (const route of routesToRemove) {
-        await writeRoutingSelection(route, -1);
-        removedRoutes.push(route);
-      }
-      await writeRoutingSelection(selection, bus);
+      await runHardwareOperation("routing-mutation", () => routingLogic.executeRoutingTransaction({
+        modeChange: modeChoice ? { before: originalMode, after: modeChoice.mode } : null,
+        routesToRemove,
+        writeMode: mode => chooseRoutingOutputMode(modeChoice.details, mode),
+        writeRoute: writeRoutingSelection,
+        apply: () => writeRoutingSelection(selection, bus),
+        restorePrimary: () => writeRoutingSelection(selection, originalBus)
+      }));
       markWorkingEdit();
       recordRoutingHistory(historyBefore, `route ${routingSelectionLabel(selection)} to ${bus < 0 ? "None" : routingBusLabel(bus, state.routingSnapshot)}`);
       showToast(bus < 0 ? "Disconnected" : `Connected to ${routingBusContextLabel(bus)}`);
       scheduleRoutingReconciliation();
     } catch (error) {
-      if (removedRoutes.length) {
-        try {
-          await writeRoutingSelection(selection, originalBus);
-          for (const route of removedRoutes) await writeRoutingSelection(route, route.bus);
-        } catch (rollbackError) {
-          showToast(`${error.message} Route rollback also failed; refresh routing.`);
-          return true;
-        }
-      }
-      if (modeChanged) {
-        try {
-          await chooseRoutingOutputMode(modeChoice.details, originalMode);
-        } catch (rollbackError) {
-          showToast(`${error.message} Output-mode rollback also failed; refresh routing.`);
-          return true;
-        }
-      }
-      showToast(error.message);
-    } finally {
-      if (state.activeLiveSlotIndex != null && !state.routingReadPromise) startLivePolling(state.activeLiveSlotIndex);
+      showToast(error.rollbackErrors?.length ? `${error.message} Rollback also failed; refresh routing.` : error.message);
     }
     return true;
   }
@@ -2413,7 +2469,7 @@
       historyRouting: true,
       successMessage: `${entry.parameter.name} assigned to ${descriptor.label} in NT working memory`,
       afterWrite: async () => {
-        if (state.liveRouting) await loadLiveRouting({ preserveView: true });
+        if (state.routingSnapshot) await loadLiveRouting({ preserveView: true, withinOperation: true });
       },
       onSuccess: () => {
         applyPilotAccentFromBus(descriptor.bus, state.liveIdentity);
@@ -2462,34 +2518,27 @@
       onApply: async (modeChoice, routesToRemove) => {
         const originalMode = details.currentMode;
         const historyBefore = captureRoutingParameterState();
-        const removedRoutes = [];
         try {
-          if (modeChoice?.mode !== originalMode) await chooseRoutingOutputMode(details, modeChoice.mode);
-          for (const route of routesToRemove) {
-            await writeRoutingSelection(route, -1);
-            removedRoutes.push(route);
-          }
-          await loadLiveRouting({ preserveView: true });
-          if (modeChoice?.mode !== originalMode || removedRoutes.length) markWorkingEdit();
+          const result = await runHardwareOperation("routing-mutation", () => routingLogic.executeRoutingTransaction({
+            modeChange: modeChoice ? { before: originalMode, after: modeChoice.mode } : null,
+            routesToRemove,
+            writeMode: mode => chooseRoutingOutputMode(details, mode),
+            writeRoute: writeRoutingSelection,
+            apply: () => loadLiveRouting({ preserveView: true, withinOperation: true })
+          }));
+          if (result.modeChanged || result.removedRoutes.length) markWorkingEdit();
           recordRoutingHistory(historyBefore, `change output mode for ${routingSelectionLabel(selection)}`);
-          const removedCopy = removedRoutes.length ? ` · removed ${removedRoutes.length} other route${removedRoutes.length === 1 ? "" : "s"}` : "";
+          const removedCopy = result.removedRoutes.length ? ` · removed ${result.removedRoutes.length} other route${result.removedRoutes.length === 1 ? "" : "s"}` : "";
           showToast(`Output mode is ${modeChoice?.mode === "replace" ? "Replace" : "Add"}${removedCopy}`);
         } catch (error) {
-          try {
-            if (modeChoice?.mode !== originalMode) await chooseRoutingOutputMode(details, originalMode);
-            for (const route of removedRoutes) await writeRoutingSelection(route, route.bus);
-          } catch (rollbackError) {
-            showToast(`${error.message} Rollback also failed; refresh routing.`);
-            return;
-          }
-          showToast(error.message);
+          showToast(error.rollbackErrors?.length ? `${error.message} Rollback also failed; refresh routing.` : error.message);
         }
       }
     });
     return true;
   }
 
-  function selectRoutingSlot(slotIndex, snapshot = state.liveRouting) {
+  function selectRoutingSlot(slotIndex, snapshot = state.routingSnapshot) {
     if (!snapshot) return;
     [routingNodes, routingIpadList].forEach(surface => $$(".routing-node.slot", surface).forEach(node => node.classList.toggle("selected", Number(node.dataset.slotIndex) === slotIndex)));
     $$(".routing-wire", routingWires).forEach(wire => {
@@ -2565,17 +2614,15 @@
     routingCanvas.classList.toggle("hide-modulation", !routingShowMod.matches("[aria-pressed=true]"));
   }
 
-  async function loadLiveRouting({ preserveView = false, background = false } = {}) {
-    if (!state.ntTransport || !state.liveIdentity || state.routingReadPromise) return state.routingReadPromise;
+  async function loadLiveRouting({ preserveView = false, background = false, withinOperation = false } = {}) {
+    if (!state.ntTransport || !state.liveIdentity) return null;
+    if (!withinOperation && state.routingReadPromise) return state.routingReadPromise;
     const token = ++state.routingReadToken;
     if (!background) routingLoading.classList.remove("hidden");
-    state.routingReadPromise = (async () => {
-      const pendingPoll = stopLivePolling();
-      if (pendingPoll) await pendingPoll.catch(() => {});
-      await state.parameterReadQueue.catch(() => {});
+    const read = async () => {
       const snapshot = await state.ntTransport.readRoutingSnapshot(state.liveIdentity);
       if (token !== state.routingReadToken) return;
-      state.liveRouting = snapshot;
+      state.routingSnapshot = snapshot;
       renderRoutingGraph(snapshot, { live: true, preserveView });
       if (!background) {
         routingLoading.classList.add("hidden");
@@ -2586,25 +2633,48 @@
       if (token !== state.routingReadToken) return;
       renderRoutingGraph(snapshot, { live: true, preserveView: true });
       if (!background) showToast("Routing ready");
-    })().catch(error => {
+    };
+    const handleFailure = error => {
       if (token === state.routingReadToken) {
         showToast(background ? `Routing reconciliation failed · ${error.message}` : error.message);
       }
-    }).finally(() => {
+      if (withinOperation) throw error;
+    };
+    const finish = () => {
       if (token === state.routingReadToken) {
         if (!background) routingLoading.classList.add("hidden");
         if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
       }
-      state.routingReadPromise = null;
       state.routingModeHydrationPromise = null;
+    };
+    if (withinOperation) return read().catch(handleFailure).finally(finish);
+    state.routingReadPromise = runHardwareOperation("routing-read", read).catch(handleFailure).finally(() => {
+      finish();
+      state.routingReadPromise = null;
     });
     return state.routingReadPromise;
   }
 
+  function updateSidebarCompactState() {
+    const compact = state.sidebarCollapsed || state.assistantDocked;
+    deviceFrame.classList.toggle("sidebar-compact", compact);
+    if (sidebarEdgeToggle) {
+      const label = compact ? "Expand sidebar" : "Collapse sidebar";
+      sidebarEdgeToggle.setAttribute("aria-label", label);
+      sidebarEdgeToggle.title = label;
+    }
+  }
+
+  function setSidebarCollapsed(collapsed) {
+    state.sidebarCollapsed = Boolean(collapsed);
+    updateSidebarCompactState();
+  }
+
   function setView(view) {
+    if (view === "assistant" && state.assistantDocked) closeAssistantDock();
     if (view !== "editor") disarmEditorBusAssignment();
     state.view = view;
-    deviceFrame.classList.remove("sidebar-compact");
+    updateSidebarCompactState();
     updateEditorBusDockVisibility();
     updateRoutingPaletteVisibility();
     viewStack.classList.toggle("editor-mode", view === "editor");
@@ -2619,12 +2689,15 @@
     };
     $("#current-view-title").textContent = viewTitles[view] || "Editor";
     $$("[data-panel]").forEach(panel => panel.classList.toggle("active", panel.dataset.panel === view));
-    $$("[data-view]").forEach(button => button.classList.toggle("active", button.dataset.view === view));
+    $$("[data-view]").forEach(button => {
+      const active = button.dataset.view === view || (state.assistantDocked && button.dataset.view === "assistant");
+      button.classList.toggle("active", active);
+    });
     viewStack.scrollTop = 0;
     if (view === "routing") {
-      if (state.liveRouting) selectRoutingSlot(null, state.liveRouting);
+      if (state.routingSnapshot) selectRoutingSlot(null, state.routingSnapshot);
       requestAnimationFrame(() => fitRoutingGraph("auto"));
-      if (state.ntTransport && !state.liveRouting) loadLiveRouting();
+      if (state.ntTransport && !state.routingSnapshot) loadLiveRouting();
     }
     if (view === "mapping") {
       const selectedSlot = $(".slot.active", slotList);
@@ -2635,68 +2708,35 @@
       if (state.ntTransport && state.transportOnline && !state.performanceItems.length) loadPerformancePage();
     }
     if (view === "presets") loadPresetDirectory();
+    if (view === "assistant") {
+      updateAssistantContext();
+      assistantWorkspace?.classList.remove("sessions-open", "context-open");
+    }
   }
 
   function wait(milliseconds) {
     return new Promise(resolve => setTimeout(resolve, milliseconds));
   }
 
-  // The NT has one SysEx conversation at a time.  Card operations are slow
-  // enough that background parameter/CPU polls can otherwise steal their
-  // response, so preset work gets an explicit quiet transport window.
-  function runPresetTransportOperation(task) {
-    const operation = state.presetTransportTail.catch(() => {}).then(async () => {
-      const activeSlotIndex = state.activeLiveSlotIndex;
-      const pendingPoll = stopLivePolling();
-      stopCpuPolling();
-      state.presetTransportBusy = true;
-      try {
-        await pendingPoll?.catch(() => {});
-        await state.cpuInFlight?.catch(() => {});
-        await state.parameterReadQueue.catch(() => {});
-        await state.parameterWriteQueue.catch(() => {});
-        await state.routingReadPromise?.catch(() => {});
-        await state.performanceReadPromise?.catch(() => {});
-        if (!state.ntTransport || !state.transportOnline) throw new Error("The NT is no longer connected.");
+  // The NT permits one SysEx conversation at a time. All multi-message or
+  // fire-and-readback operations share this scheduler and its quiet window.
+  function runHardwareOperation(kind, task, { wake = false } = {}) {
+    return hardwareOperations.run(kind, async () => {
+      if (!state.ntTransport || !state.transportOnline) throw new Error("The NT is no longer connected.");
+      if (wake) {
         await state.ntTransport.wake();
         await wait(80);
-        return await task();
-      } finally {
-        state.presetTransportBusy = false;
-        if (state.ntTransport && state.transportOnline) {
-          startCpuPolling();
-          if (activeSlotIndex != null) startLivePolling(activeSlotIndex);
-        }
       }
+      return task();
     });
-    state.presetTransportTail = operation.catch(() => {});
-    return operation;
   }
 
-  // Add, remove, move and plug-in load commands have no acknowledgement. A
-  // quiet transport window lets their follow-up reads establish device truth
-  // instead of competing with parameter and CPU polling.
-  async function runSlotMutationTransportOperation(task) {
-    const activeSlotIndex = state.activeLiveSlotIndex;
-    const pendingPoll = stopLivePolling();
-    stopCpuPolling();
-    try {
-      await state.presetTransportTail.catch(() => {});
-      await pendingPoll?.catch(() => {});
-      await state.cpuInFlight?.catch(() => {});
-      await state.parameterReadQueue.catch(() => {});
-      await state.parameterWriteQueue.catch(() => {});
-      await state.memoryReadTail.catch(() => {});
-      await state.routingReadPromise?.catch(() => {});
-      await state.performanceReadPromise?.catch(() => {});
-      if (!state.ntTransport || !state.transportOnline) throw new Error("The NT is no longer connected.");
-      return await task();
-    } finally {
-      if (state.ntTransport && state.transportOnline) {
-        startCpuPolling();
-        if (activeSlotIndex != null) startLivePolling(activeSlotIndex);
-      }
-    }
+  function runPresetTransportOperation(task) {
+    return runHardwareOperation("preset", task, { wake: true });
+  }
+
+  function runSlotMutationTransportOperation(task) {
+    return runHardwareOperation("slot-mutation", task);
   }
 
   function presetPathJoin(path, name) {
@@ -3060,13 +3100,11 @@
     state.presetBrowserBusy = true;
     confirmPresetJsonDialog.disabled = true;
     try {
-      await runPresetTransportOperation(() => state.ntTransport.writeSDFile(pending.path, bytes));
-      const verified = await runPresetTransportOperation(() => state.ntTransport.readSDFile(pending.path));
-      if (verified.length !== bytes.length || verified.some((value, index) => value !== bytes[index])) {
-        throw new Error("The NT did not confirm the saved file contents.");
-      }
+      const backupPath = await runPresetTransportOperation(() => storageLogic.replaceFileSafely(state.ntTransport, pending.path, bytes));
       state.selectedPresetEntry = { ...pending.entry, size: bytes.length };
-      showToast(`Saved JSON to ${pending.entry.name}`);
+      showToast(backupPath
+        ? `Saved JSON; the old backup remains at ${backupPath}`
+        : `Saved JSON to ${pending.entry.name}`);
       state.presetBrowserBusy = false;
       state.pendingPresetDocument = null;
       presetJsonDialog.close();
@@ -3120,13 +3158,16 @@
         if (collision) throw new Error(`A preset named ${targetFilename} already exists in this folder.`);
         const updatedDocument = { ...pending.document, name: name.padEnd(Math.max(31, pending.documentName.length)) };
         const bytes = new TextEncoder().encode(JSON.stringify(updatedDocument, null, 2));
-        await runPresetTransportOperation(() => state.ntTransport.writeSDFile(targetPath, bytes));
-        const verified = await runPresetTransportOperation(() => state.ntTransport.readSDFile(targetPath));
-        if (verified.length !== bytes.length || verified.some((value, index) => value !== bytes[index])) {
-          throw new Error("The NT did not confirm the renamed preset contents.");
+        let backupPath = null;
+        if (targetPath === currentPath) {
+          backupPath = await runPresetTransportOperation(() => storageLogic.replaceFileSafely(state.ntTransport, currentPath, bytes));
+        } else {
+          await runPresetTransportOperation(() => state.ntTransport.writeSDFile(targetPath, bytes));
+          const verified = await runPresetTransportOperation(() => state.ntTransport.readSDFile(targetPath));
+          if (!storageLogic.sameBytes(verified, bytes)) throw new Error("The NT did not confirm the renamed preset contents.");
+          await runPresetTransportOperation(() => state.ntTransport.deleteSDPath(currentPath));
         }
-        if (targetPath !== currentPath) await runPresetTransportOperation(() => state.ntTransport.deleteSDPath(currentPath));
-        showToast(`Renamed preset to ${name}`);
+        showToast(backupPath ? `Renamed preset; the old backup remains at ${backupPath}` : `Renamed preset to ${name}`);
       } else {
         await runPresetTransportOperation(() => state.ntTransport.deleteSDPath(presetPathJoin(state.presetPath, entry.name)));
         showToast(`Deleted ${entry.name}`);
@@ -3163,7 +3204,7 @@
         while (Date.now() < deadline) {
           try {
             const snapshot = await state.ntTransport.readSnapshot();
-            if (!pending.append || snapshot.slots.length >= priorSlotCount) return snapshot;
+            if (!pending.append || snapshot.slots.length > priorSlotCount) return snapshot;
           } catch (error) {
             lastError = error;
           }
@@ -3172,7 +3213,7 @@
         throw lastError || new Error("The NT did not become ready after loading this preset.");
       });
       state.liveIdentity = verified;
-      state.liveRouting = null;
+      state.routingSnapshot = null;
       state.performanceItems = [];
       state.performanceEntries.clear();
       state.undoHistory.length = 0;
@@ -3216,11 +3257,7 @@
   }
 
   function canMutate() {
-    return state.device === "ready" || state.device === "offline";
-  }
-
-  function canApplyToHardware() {
-    return false;
+    return state.device === "labConnected" && state.transportOnline && Boolean(state.ntTransport);
   }
 
   function setDeviceState(nextState) {
@@ -3238,21 +3275,23 @@
     stateBannerCopy.textContent = detail.copy;
     stateAction.textContent = detail.action;
     mappingForm.setAttribute("aria-disabled", String(!canMutate()));
-    applyMapping.textContent = nextState === "offline" ? "Save to draft" : "Apply to NT";
-    applyMapping.disabled = !canMutate() || !state.mappingDirty;
+    applyMapping.textContent = "Apply to NT";
+    applyMapping.disabled = state.mappingWriteBusy || !canMutate() || !state.mappingDirty;
     updateMappingState();
   }
 
   function currentMappingValues() {
     return {
-      channel: mapChannel.value,
+      version: Number(state.selectedMapping?.dataset.mappingVersion || 7),
+      channel: Number(mapChannel.value),
       type: mapType.value,
-      cc: mapCC.value,
-      min: mapMin.value,
-      max: mapMax.value,
+      cc: Number(mapCC.value),
+      min: Number(mapMin.value),
+      max: Number(mapMax.value),
       enabled: mapEnabled.checked,
       relative: mapRelative.checked,
-      symmetric: mapSymmetric.checked
+      symmetric: mapSymmetric.checked,
+      viewChange: state.selectedMapping?.dataset.viewChange === "true"
     };
   }
 
@@ -3260,18 +3299,17 @@
     state.selectedMapping = item;
     $$(".mapping-item").forEach(row => row.classList.toggle("active", row === item));
     $("#mapping-param").textContent = item.dataset.name;
-    $("#mapping-path").textContent = item.dataset.path || `Slot 7 · WitchboardX · ${item.dataset.category}`;
+    $("#mapping-path").textContent = item.dataset.path || item.dataset.category || "Parameter mapping";
     mapChannel.value = item.dataset.channel || "1";
     mapType.value = item.dataset.type || "CC";
     mapCC.value = item.dataset.cc || "0";
     mapMin.value = item.dataset.min || "0";
     mapMax.value = item.dataset.max || "100";
-    mapEnabled.checked = Boolean(item.dataset.cc);
+    mapEnabled.checked = item.dataset.enabled === "true";
     mapRelative.checked = item.dataset.relative === "true";
     mapSymmetric.checked = item.dataset.symmetric === "true";
     state.mappingBaseline = currentMappingValues();
     state.mappingDirty = false;
-    state.undoMapping = null;
     resetMapping.textContent = "Cancel";
     updateMappingState();
   }
@@ -3290,7 +3328,7 @@
     mappingConfirmation.className = `confirmed-badge${state.mappingDirty ? " draft" : ""}`;
     const settledLabel = state.device === "offline" ? "Local draft" : "Read from NT";
     mappingConfirmation.innerHTML = `<i></i> ${state.mappingDirty ? "Not applied" : settledLabel}`;
-    applyMapping.disabled = !canMutate() || !state.mappingDirty;
+    applyMapping.disabled = state.mappingWriteBusy || !canMutate() || !state.mappingDirty;
   }
 
   function updateMappingSummary() {
@@ -3314,7 +3352,6 @@
 
   function markMappingDirty() {
     state.mappingDirty = JSON.stringify(currentMappingValues()) !== JSON.stringify(state.mappingBaseline);
-    if (state.mappingDirty) state.undoMapping = null;
     resetMapping.textContent = "Cancel";
     updateMappingState();
   }
@@ -3344,15 +3381,18 @@
     item.dataset.channel = values.channel;
     item.dataset.type = values.type;
     item.dataset.cc = values.enabled ? values.cc : "";
+    item.dataset.enabled = String(Boolean(values.enabled));
+    item.dataset.mappingVersion = String(values.version || 7);
     item.dataset.min = values.min;
     item.dataset.max = values.max;
     item.dataset.relative = String(Boolean(values.relative));
     item.dataset.symmetric = String(Boolean(values.symmetric));
+    item.dataset.viewChange = String(Boolean(values.viewChange));
     item.dataset.draft = "false";
     const label = $("em", item);
     label.textContent = mappingLabel(values);
     label.className = values.enabled ? "mapped-label" : "";
-    item.classList.toggle("conflict", values.enabled && values.channel === "1" && values.cc === "74");
+    item.classList.toggle("conflict", mappingIsConflicted());
     if (item.classList.contains("conflict")) {
       const warning = document.createElement("i");
       warning.textContent = "!";
@@ -3364,6 +3404,69 @@
       state.selectedMapping = null;
     }
     updateMappingSummary();
+  }
+
+  async function writeSelectedMIDIMapping(values, { record = true, announce = true } = {}) {
+    const item = state.selectedMapping;
+    if (state.mappingWriteBusy || !item?.dataset.mappingKey || !state.ntTransport || !state.transportOnline) return false;
+    const slotIndex = Number(item.dataset.slotIndex);
+    const parameterIndex = Number(item.dataset.parameterIndex);
+    const name = item.dataset.name;
+    const before = state.mappingBaseline;
+    state.mappingWriteBusy = true;
+    applyMapping.disabled = true;
+    mappingConfirmation.className = "confirmed-badge draft verifying";
+    mappingConfirmation.innerHTML = "<i></i> Reading back…";
+    try {
+      const confirmed = await runSlotMutationTransportOperation(() =>
+        state.ntTransport.writeMIDIMapping(slotIndex, parameterIndex, values));
+      const applied = { version: confirmed.version, ...confirmed.midi };
+      const liveEntry = state.liveParameters.get(mappingKey(slotIndex, parameterIndex));
+      if (liveEntry) liveEntry.parameter.mapping = confirmed;
+      applyMappingToItem(applied);
+      state.mappingBaseline = applied;
+      state.mappingDirty = false;
+      markWorkingEdit();
+      if (record) recordHistory({
+        type: "midi-mapping",
+        slotIndex,
+        parameterIndex,
+        before,
+        after: applied,
+        label: `map ${name}`
+      });
+      if (announce) showToast(`${name} mapping applied and read back from the NT`);
+      return true;
+    } catch (error) {
+      if (announce) showToast(`Could not apply ${name} mapping · ${error.message}`);
+      return false;
+    } finally {
+      state.mappingWriteBusy = false;
+      updateMappingState();
+    }
+  }
+
+  async function applyMIDIMappingHistory(action, direction) {
+    const values = action[direction === "undo" ? "before" : "after"];
+    try {
+      await runSlotMutationTransportOperation(() => state.ntTransport.writeMIDIMapping(
+        action.slotIndex,
+        action.parameterIndex,
+        values
+      ));
+      if (state.selectedSlotIndex === action.slotIndex) {
+        const slot = $(`.slot[data-index="${action.slotIndex}"]`, slotList);
+        if (slot) {
+          queueLiveParameterRead(slot);
+          await state.parameterReadInFlight;
+        }
+      }
+      markWorkingEdit();
+      return true;
+    } catch (error) {
+      showToast(`History apply failed · ${error.message}`);
+      return false;
+    }
   }
 
   function restoreMapping(values) {
@@ -3388,7 +3491,7 @@
     $$(".slot", slotList).forEach(row => row.classList.remove("active"));
     slot.classList.add("active");
     mappingSlotSelect.value = String(slotIndex);
-    if (state.liveRouting) selectRoutingSlot(slotIndex);
+    if (state.routingSnapshot) selectRoutingSlot(slotIndex);
     $("#slot-heading").textContent = slot.dataset.slot;
     const slotNumber = $(".slot-number", slot).textContent;
     $("#slot-kicker").textContent = `Slot ${slotNumber} · ${slot.dataset.algorithm}`;
@@ -3439,12 +3542,15 @@
     item.dataset.parameterIndex = String(parameter.index);
     item.dataset.slotIndex = String(slotInfo.index);
     item.dataset.cc = draft ? "" : String(midi.cc);
+    item.dataset.enabled = String(!draft && Boolean(midi?.enabled));
+    item.dataset.mappingVersion = String(parameter.mapping?.version || 7);
     item.dataset.channel = String(midi?.channel || 1);
     item.dataset.type = midi?.type || "CC";
     item.dataset.min = String(midi?.min ?? parameter.min);
     item.dataset.max = String(midi?.max ?? parameter.max);
     item.dataset.relative = String(Boolean(midi?.relative));
     item.dataset.symmetric = String(Boolean(midi?.symmetric));
+    item.dataset.viewChange = String(Boolean(midi?.viewChange));
     item.dataset.draft = String(draft);
     const copy = document.createElement("span");
     const name = document.createElement("strong");
@@ -3492,7 +3598,7 @@
   async function loadPerformancePage() {
     if (!state.ntTransport || !state.liveIdentity) return;
     if (state.performanceReadPromise) return state.performanceReadPromise;
-    state.performanceReadPromise = (async () => {
+    state.performanceReadPromise = runHardwareOperation("performance-read", async () => {
       const items = await state.ntTransport.readPerformancePage();
       const enabledSlots = [...new Set(items.filter(item => item.enabled).map(item => item.slotIndex))];
       const parametersBySlot = new Map();
@@ -3528,7 +3634,7 @@
         } catch (_) {}
       }
       renderPerformanceControls();
-    })().catch(error => {
+    }).catch(error => {
       showToast(`Performance Page unavailable · ${error.message}`);
     }).finally(() => {
       state.performanceReadPromise = null;
@@ -3541,7 +3647,7 @@
     const requestedValue = Math.min(entry.parameter.max, Math.max(entry.parameter.min, Number(value)));
     const previousValue = entry.parameter.value;
     control.disabled = true;
-    const operation = state.parameterWriteQueue.catch(() => {}).then(async () => {
+    const operation = runHardwareOperation("performance-write", async () => {
       await state.ntTransport.writeParameter(entry.slotInfo.index, entry.parameter.index, requestedValue);
       entry.parameter.value = requestedValue;
       markWorkingEdit();
@@ -3559,7 +3665,6 @@
     }).finally(() => {
       control.disabled = false;
     });
-    state.parameterWriteQueue = operation;
     return operation;
   }
 
@@ -3569,7 +3674,7 @@
     entry.pendingPerformanceValue = requestedValue;
     if (entry.performanceWriteRunning || !state.ntTransport || !state.transportOnline) return;
     entry.performanceWriteRunning = true;
-    const operation = state.parameterWriteQueue.catch(() => {}).then(async () => {
+    const operation = runHardwareOperation("performance-stream", async () => {
       while (entry.pendingPerformanceValue != null) {
         const nextValue = entry.pendingPerformanceValue;
         entry.pendingPerformanceValue = null;
@@ -3610,17 +3715,16 @@
       if (entry.pendingPerformanceValue != null) queuePerformanceValueWrite(entry, entry.pendingPerformanceValue, control);
     });
     control?.setAttribute("aria-busy", "true");
-    state.parameterWriteQueue = operation;
   }
 
   async function setSlotBypass(slotIndex, bypassed, control) {
     if (!state.ntTransport || !state.transportOnline || control.dataset.busy === "true") return;
     control.dataset.busy = "true";
-    const operation = state.parameterWriteQueue.catch(() => {}).then(async () => {
+    const operation = runHardwareOperation("bypass-write", async () => {
       await state.ntTransport.writeParameter(slotIndex, 0, bypassed ? 1 : 0);
       const identitySlot = state.liveIdentity?.slots.find(slot => slot.index === slotIndex);
       if (identitySlot) identitySlot.bypassed = bypassed;
-      const routingSlot = state.liveRouting?.slots.find(slot => slot.index === slotIndex);
+      const routingSlot = state.routingSnapshot?.slots.find(slot => slot.index === slotIndex);
       if (routingSlot) routingSlot.bypassed = bypassed;
       const editorSlot = $(`.slot[data-index="${slotIndex}"]`, slotList);
       const routingNode = $(`.routing-node.slot[data-slot-index="${slotIndex}"]`, routingNodes);
@@ -3647,7 +3751,6 @@
     }).finally(() => {
       control.dataset.busy = "false";
     });
-    state.parameterWriteQueue = operation;
     return operation;
   }
 
@@ -3882,7 +3985,7 @@
             historyRouting: true,
             successMessage: `${entry.parameter.name} disconnected in NT working memory`,
             afterWrite: async () => {
-              if (state.liveRouting) await loadLiveRouting({ preserveView: true });
+              if (state.routingSnapshot) await loadLiveRouting({ preserveView: true, withinOperation: true });
             }
           });
           return;
@@ -3917,34 +4020,31 @@
   }
 
   function queueLiveParameterRead(slot) {
-    const pendingPoll = stopLivePolling();
     const token = ++state.parameterReadToken;
     const slotIndex = Number(slot.dataset.index);
     $("#parameter-list").classList.add("hidden");
     $("#parameter-fixture-note").classList.remove("hidden");
     $("#fixture-algorithm").textContent = `Reading ${slot.dataset.algorithm}…`;
     $("#parameter-fixture-note span").textContent = "Reading parameter pages, current values, and native MIDI mappings from the NT.";
-    state.parameterReadQueue = state.parameterReadQueue.catch(() => {}).then(async () => {
-      if (pendingPoll) await pendingPoll.catch(() => {});
+    const operation = runHardwareOperation("parameter-read", async () => {
       if (token !== state.parameterReadToken || !state.ntTransport) return;
-      try {
-        const editorState = await state.ntTransport.readSlotEditorState(slotIndex);
-        if (token !== state.parameterReadToken) return;
-        renderLiveParameters(editorState, {
-          index: slotIndex,
-          name: slot.dataset.slot,
-          algorithmName: slot.dataset.algorithm
-        });
-        const mappedCount = editorState.mappings.filter(mapping => mapping.midi.enabled).length;
-        // Selecting a slot is routine; the populated editor is sufficient feedback.
-        startLivePolling(slotIndex);
-      } catch (error) {
-        if (token !== state.parameterReadToken) return;
-        $("#fixture-algorithm").textContent = "Parameter read failed";
-        $("#parameter-fixture-note span").textContent = error.message;
-        showToast(error.message);
-      }
+      const editorState = await state.ntTransport.readSlotEditorState(slotIndex);
+      if (token !== state.parameterReadToken) return;
+      renderLiveParameters(editorState, {
+        index: slotIndex,
+        name: slot.dataset.slot,
+        algorithmName: slot.dataset.algorithm
+      });
+      // Selecting a slot is routine; the populated editor is sufficient feedback.
+      startLivePolling(slotIndex);
+    }).catch(error => {
+      if (token !== state.parameterReadToken) return;
+      $("#fixture-algorithm").textContent = "Parameter read failed";
+      $("#parameter-fixture-note span").textContent = error.message;
+      showToast(error.message);
     });
+    state.parameterReadInFlight = operation.catch(() => {});
+    return operation;
   }
 
   function clearLiveEditorSlot() {
@@ -4196,31 +4296,11 @@
   }
 
   function ntSupportsMemoryPreview() {
-    const version = String(state.liveIdentity?.version || "");
-    const parts = version.match(/\d+/g)?.map(Number) || [];
-    const [major = 0, minor = 0] = parts;
-    return major > 1 || (major === 1 && minor >= 19);
+    return deviceLogic.supportsMemoryReport(state.liveIdentity?.version);
   }
 
   async function readAlgorithmMemoryExclusively(algorithm) {
-    const previous = state.memoryReadTail;
-    let release;
-    state.memoryReadTail = new Promise(resolve => { release = resolve; });
-    await previous.catch(() => {});
-    const pendingPoll = stopLivePolling();
-    stopCpuPolling();
-    try {
-      if (pendingPoll) await pendingPoll.catch(() => {});
-      await state.cpuInFlight?.catch(() => {});
-      await state.parameterReadQueue.catch(() => {});
-      return await state.ntTransport.readMemoryUsage(algorithm);
-    } finally {
-      release();
-      if (state.ntTransport && state.transportOnline) {
-        startCpuPolling();
-        if (state.activeLiveSlotIndex != null && !state.slotMutationBusy) startLivePolling(state.activeLiveSlotIndex);
-      }
-    }
+    return runHardwareOperation("memory-read", () => state.ntTransport.readMemoryUsage(algorithm));
   }
 
   async function checkAlgorithmMemory(algorithm, { updateUi = true, notice = algorithmSpecNotice } = {}) {
@@ -4358,14 +4438,15 @@
   }
 
   async function refreshIdentityAfterSlotMutation({ selectSlot = null, refreshRouting = true } = {}) {
-    const identity = await state.ntTransport.readSnapshot();
+    const identity = await runSlotMutationTransportOperation(() =>
+      state.ntTransport.readSnapshot({ algorithms: state.liveIdentity?.algorithms }));
     state.liveIdentity = identity;
     state.performanceItems = [];
     state.performanceEntries.clear();
     showLiveIdentity(identity);
     const selected = selectSlot == null ? null : $(`.slot[data-index="${selectSlot}"]`, slotList);
     if (selected) displaySlot(selected);
-    if (refreshRouting && (state.liveRouting || state.view === "routing")) await loadLiveRouting({ preserveView: true });
+    if (refreshRouting && (state.routingSnapshot || state.view === "routing")) await loadLiveRouting({ preserveView: true });
     return identity;
   }
 
@@ -4396,11 +4477,7 @@
       return false;
     }
     const selected = selectedLiveSlot();
-    const targetSlot = Number.isInteger(placement)
-      ? Math.max(0, Math.min(slotCount, placement))
-      : placement === "before" && selected ? selected.index
-        : placement === "after" && selected ? selected.index + 1
-          : slotCount;
+    const targetSlot = deviceLogic.slotMutationTarget(slotCount, selected, placement);
     state.slotMutationBusy = true;
     renderAlgorithmBrowserPlacement();
     addAlgorithmButton.disabled = true;
@@ -4420,7 +4497,7 @@
             return candidate.guidKey === algorithm.guidKey;
           }, "The NT did not place the new algorithm at the requested position.");
         }
-        return await state.ntTransport.readSnapshot();
+        return await state.ntTransport.readSnapshot({ algorithms: before.algorithms });
       });
       const placedSlot = verified.slots[targetSlot];
       if (!placedSlot || placedSlot.guidKey !== algorithm.guidKey) throw new Error("The NT did not place the new algorithm at the requested position.");
@@ -4430,7 +4507,7 @@
       showLiveIdentity(verified);
       const newSlot = $(`.slot[data-index="${targetSlot}"]`, slotList);
       if (newSlot) displaySlot(newSlot);
-      if (state.liveRouting || state.view === "routing") await loadLiveRouting({ preserveView: true });
+      if (state.routingSnapshot || state.view === "routing") await loadLiveRouting({ preserveView: true });
       markWorkingEdit();
       if (record) recordHistory({ type: "slot-add", algorithm, targetSlot, label: `add ${algorithm.name}` });
       if (announce) showToast(`Added ${algorithm.name} at slot ${targetSlot + 1} and verified from the NT`);
@@ -4457,10 +4534,21 @@
     state.slotMutationBusy = true;
     try {
       const previousCount = state.liveIdentity.slots.length;
-      state.ntTransport.removeAlgorithm(action.targetSlot);
-      await new Promise(resolve => setTimeout(resolve, 130));
-      const verified = await refreshIdentityAfterSlotMutation({ selectSlot: Math.max(0, action.targetSlot - 1) });
+      const verified = await runSlotMutationTransportOperation(async () => {
+        state.ntTransport.removeAlgorithm(action.targetSlot);
+        await waitForSlotMutation(async () =>
+          await state.ntTransport.readSlotCount() === previousCount - 1,
+        "The NT did not remove the added algorithm.");
+        return state.ntTransport.readSnapshot({ algorithms: state.liveIdentity?.algorithms });
+      });
       if (verified.slots.length !== previousCount - 1) throw new Error("The NT did not remove the added algorithm.");
+      state.liveIdentity = verified;
+      state.performanceItems = [];
+      state.performanceEntries.clear();
+      showLiveIdentity(verified);
+      const selected = $(`.slot[data-index="${Math.max(0, action.targetSlot - 1)}"]`, slotList);
+      if (selected) displaySlot(selected);
+      if (state.routingSnapshot || state.view === "routing") await loadLiveRouting({ preserveView: true });
       markWorkingEdit();
       if (announce) showToast(`Removed ${action.algorithm.name} and verified from the NT`);
       return true;
@@ -4494,15 +4582,16 @@
       return false;
     }
     const previousCount = state.liveIdentity.slots.length;
-    const pendingPoll = stopLivePolling();
     state.slotMutationBusy = true;
     confirmAlgorithmRemove.disabled = true;
     try {
-      if (pendingPoll) await pendingPoll.catch(() => {});
-      await state.parameterReadQueue.catch(() => {});
-      state.ntTransport.removeAlgorithm(existing.index);
-      await new Promise(resolve => setTimeout(resolve, 160));
-      const verified = await state.ntTransport.readSnapshot();
+      const verified = await runSlotMutationTransportOperation(async () => {
+        state.ntTransport.removeAlgorithm(existing.index);
+        await waitForSlotMutation(async () =>
+          await state.ntTransport.readSlotCount() === previousCount - 1,
+        "The NT did not confirm removal of that slot.");
+        return state.ntTransport.readSnapshot({ algorithms: state.liveIdentity?.algorithms });
+      });
       if (verified.slots.length !== previousCount - 1) throw new Error("The NT did not confirm removal of that slot.");
       state.liveIdentity = verified;
       state.performanceItems = [];
@@ -4514,7 +4603,7 @@
       const nextSlot = verified.slots[Math.min(existing.index, verified.slots.length - 1)];
       const nextCard = nextSlot ? $(`.slot[data-index="${nextSlot.index}"]`, slotList) : null;
       if (nextCard) displaySlot(nextCard);
-      if (state.liveRouting || state.view === "routing") await loadLiveRouting({ preserveView: true });
+      if (state.routingSnapshot || state.view === "routing") await loadLiveRouting({ preserveView: true });
       markWorkingEdit();
       showToast(`Removed ${existing.name} and verified from the NT`);
       return true;
@@ -4557,20 +4646,27 @@
   }
 
   async function moveLiveSlot(fromSlot, toSlot, { record = true, announce = true } = {}) {
-    if (!state.ntTransport || !state.transportOnline || fromSlot === toSlot) return false;
-    const pendingPoll = stopLivePolling();
+    if (!state.ntTransport || !state.transportOnline || state.slotMutationBusy || fromSlot === toSlot) return false;
+    const moving = state.liveIdentity?.slots?.[fromSlot];
+    if (!moving) return false;
+    state.slotMutationBusy = true;
     slotList.classList.add("reordering");
     try {
-      if (pendingPoll) await pendingPoll.catch(() => {});
-      await state.ntTransport.moveAlgorithm(fromSlot, toSlot);
-      const identity = await state.ntTransport.readSnapshot();
+      const identity = await runSlotMutationTransportOperation(async () => {
+        await state.ntTransport.moveAlgorithm(fromSlot, toSlot);
+        await waitForSlotMutation(async () => {
+          const candidate = await state.ntTransport.readSlotAlgorithm(toSlot);
+          return candidate.guidKey === moving.guidKey;
+        }, "The NT did not move that algorithm.");
+        return state.ntTransport.readSnapshot({ algorithms: state.liveIdentity?.algorithms });
+      });
       state.liveIdentity = identity;
       state.performanceItems = [];
       state.performanceEntries.clear();
       showLiveIdentity(identity);
       const movedSlot = $(`.slot[data-index="${toSlot}"]`, slotList);
       if (movedSlot) displaySlot(movedSlot);
-      if (state.liveRouting || state.view === "routing") await loadLiveRouting({ preserveView: true });
+      if (state.routingSnapshot || state.view === "routing") await loadLiveRouting({ preserveView: true });
       markWorkingEdit();
       if (record) recordHistory({ type: "slot-move", fromSlot, toSlot, label: `move to slot ${toSlot + 1}` });
       if (announce) showToast(`Moved algorithm to slot ${toSlot + 1} and verified from the NT`);
@@ -4580,6 +4676,7 @@
       if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
       return false;
     } finally {
+      state.slotMutationBusy = false;
       slotList.classList.remove("reordering");
     }
   }
@@ -4616,6 +4713,7 @@
         : await addLiveAlgorithm(action.algorithm, action.targetSlot, { record: false, announce: false });
     }
     if (action.type === "parameter-batch") succeeded = await applyParameterHistory(action, direction);
+    if (action.type === "midi-mapping") succeeded = await applyMIDIMappingHistory(action, direction);
     if (succeeded) {
       destination.push(action);
       control.classList.add("confirmed");
@@ -4634,7 +4732,6 @@
   }
 
   function showLiveIdentity(identity) {
-    state.hasUnsavedWorkingEdits = false;
     updateWorkingState();
     const presetName = identity.presetName || "Unnamed preset";
     $("#preset-title").textContent = presetName;
@@ -4657,6 +4754,7 @@
   }
 
   function flushDisconnectedSession() {
+    stopMIDILearn();
     closeRoutingConnectionPanel();
     clearTimeout(state.routingReconcileTimer);
     state.routingReconcileTimer = null;
@@ -4667,7 +4765,6 @@
     state.parameterReadToken += 1;
     state.routingReadToken += 1;
     state.routingReadPromise = null;
-    state.liveRouting = null;
     state.routingSnapshot = null;
     state.routingSelection = null;
     state.routingBusSelection = null;
@@ -4710,6 +4807,7 @@
     stateBannerCopy.textContent = message;
     connectMIDI.textContent = "Reconnect";
     setHardwareStatus("Disconnected");
+    updateAssistantContext();
   }
 
   function scheduleTransportReconnect(delay = 600) {
@@ -4733,10 +4831,11 @@
     if (state.ntTransport) state.ntTransport.disconnect();
     state.ntTransport = null;
     state.liveIdentity = null;
-    state.liveRouting = null;
+    state.routingSnapshot = null;
     editorBusDock.classList.add("hidden");
     routingLoading.classList.add("hidden");
     if ($("#midi-monitor-status")) $("#midi-monitor-status").textContent = "Monitor paused · no NT endpoint";
+    updateAssistantContext();
   }
 
   async function readRealIdentity() {
@@ -4772,8 +4871,13 @@
           }
         });
       }
-      await state.ntTransport.connect();
-      const identity = await state.ntTransport.readSnapshot();
+      let identity;
+      if (state.transportOnline) {
+        identity = await runHardwareOperation("identity-refresh", () => state.ntTransport.readSnapshot());
+      } else {
+        await state.ntTransport.connect();
+        identity = await state.ntTransport.readSnapshot();
+      }
       if (state.reloadAfterReconnect) {
         try {
           sessionStorage.setItem("ntPilotRebootRecovery", JSON.stringify({ view: state.view, at: Date.now() }));
@@ -4845,7 +4949,29 @@
     setDeviceState("labWaiting");
   }
 
-  $$("[data-view]").forEach(button => button.addEventListener("click", () => setView(button.dataset.view)));
+  $$("[data-view]").forEach(button => button.addEventListener("click", () => {
+    const nextView = button.dataset.view;
+    if (state.assistantDocked) {
+      if (nextView === "assistant") {
+        setSidebarCollapsed(false);
+        setView("assistant");
+      }
+      else setView(nextView);
+      return;
+    }
+    if (state.view === nextView) {
+      if (nextView === "assistant") {
+        setSidebarCollapsed(true);
+        openAssistantDock();
+        return;
+      }
+      setSidebarCollapsed(!state.sidebarCollapsed);
+      return;
+    }
+    setSidebarCollapsed(false);
+    setView(nextView);
+  }));
+  sidebarEdgeToggle?.addEventListener("click", () => setSidebarCollapsed(!state.sidebarCollapsed));
   refreshPresets.addEventListener("click", () => loadPresetDirectory());
   newPresetFolder.addEventListener("click", () => openPresetFileDialog("new-folder"));
   presetUp.addEventListener("click", () => {
@@ -4895,6 +5021,10 @@
     guideSearch.focus();
   };
   $("#reference-guide-card").addEventListener("click", openReferenceGuide);
+  $("#mapping-routing-help").addEventListener("click", () => {
+    openReferenceGuide();
+    requestAnimationFrame(() => $("#wiki-mappings").scrollIntoView({ block: "start" }));
+  });
   $("#reference-guide-card").addEventListener("keydown", event => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -4925,8 +5055,10 @@
     savePreset.disabled = true;
     savePreset.textContent = "Saving…";
     try {
-      state.ntTransport.savePreset(2);
-      await new Promise(resolve => setTimeout(resolve, 350));
+      await runHardwareOperation("preset-save", async () => {
+        state.ntTransport.savePreset(2);
+        await wait(350);
+      });
       state.hasUnsavedWorkingEdits = false;
       updateWorkingState();
       showToast("Save command sent to the NT");
@@ -5437,7 +5569,7 @@
       historyRouting: true,
       successMessage: `${entry.parameter.name} assigned to ${descriptor.label} in NT working memory`,
       afterWrite: async () => {
-        if (state.liveRouting) await loadLiveRouting({ preserveView: true });
+        if (state.routingSnapshot) await loadLiveRouting({ preserveView: true, withinOperation: true });
       },
       onSuccess: () => {
         applyPilotAccentFromBus(descriptor.bus, state.liveIdentity);
@@ -5474,18 +5606,8 @@
       const liveTarget = state.liveParameters.get(button.dataset.mappingKey);
       draft = createMappingItem(liveTarget.parameter, liveTarget.slotInfo, { draft: true });
     } else {
-      const row = button.closest(".parameter-row");
-      const slider = $("input[type=range]", row);
-      const parameter = {
-        index: $$(".parameter-row", $("#parameter-list")).indexOf(row),
-        name: button.dataset.param || $(".parameter-name strong", row).textContent,
-        min: Number(slider.min),
-        max: Number(slider.max),
-        pageName: $(".parameter-section-heading strong", row.closest(".parameter-section"))?.textContent || $(".parameter-name span", row).textContent,
-        mapping: null
-      };
-      draft = createMappingItem(parameter, { index: 6, name: "WitchboardX", algorithmName: "Witchboard custom plug-in" }, { draft: true });
-      draft.dataset.mappingKey = "";
+      showToast("Refresh this slot before adding a mapping");
+      return;
     }
     $("#mapping-items").prepend(draft);
     updateMappingSummary();
@@ -5508,25 +5630,15 @@
 
   $("#learn-button").addEventListener("click", event => {
     const button = event.currentTarget;
-    clearTimeout(state.learnTimer);
     if (button.classList.contains("listening")) {
-      button.classList.remove("listening");
-      $("#learn-label").textContent = "Learn";
-      showToast("MIDI Learn cancelled");
+      stopMIDILearn("MIDI Learn cancelled");
       return;
     }
     button.classList.add("listening");
     $("#learn-label").textContent = "Listening…";
     state.learnTimer = setTimeout(() => {
-      button.classList.remove("listening");
-      $("#learn-label").textContent = "Learn";
-      mapChannel.value = "1";
-      mapType.value = "CC";
-      mapCC.value = "9";
-      mapEnabled.checked = true;
-      markMappingDirty();
-      showToast("Prototype captured Channel 1 · CC 9");
-    }, 1300);
+      stopMIDILearn("MIDI Learn timed out without a supported message");
+    }, 10000);
   });
 
   $$("[data-performance-page]").forEach(button => button.addEventListener("click", () => {
@@ -5546,55 +5658,695 @@
       showToast(`${name} mapping draft discarded`);
       return;
     }
-    if (state.undoMapping) {
-      const current = currentMappingValues();
-      restoreMapping(state.undoMapping);
-      applyMappingToItem(state.undoMapping);
-      state.mappingBaseline = currentMappingValues();
-      state.undoMapping = current;
-      state.mappingDirty = false;
-      resetMapping.textContent = "Undo last";
-      updateMappingState();
-      showToast(state.device === "offline" ? "Previous local mapping restored" : "Previous mapping restored and read back");
-      return;
-    }
     restoreMapping(state.mappingBaseline);
     state.mappingDirty = false;
     updateMappingState();
   });
 
-  mappingForm.addEventListener("submit", event => {
+  mappingForm.addEventListener("submit", async event => {
     event.preventDefault();
     if (!canMutate()) {
       showToast("Mapping is read-only until the NT is ready");
       return;
     }
     if (!state.mappingDirty) return;
-    const previous = state.mappingBaseline;
     const next = currentMappingValues();
-    if (state.device === "offline") {
-      applyMappingToItem(next);
-      state.mappingBaseline = next;
-      state.mappingDirty = false;
-      state.undoMapping = previous;
-      state.hasOfflineDraft = true;
-      resetMapping.textContent = "Undo last";
-      updateMappingState();
-      showToast(`${state.selectedMapping.dataset.name} mapping saved to offline draft`);
+    await writeSelectedMIDIMapping(next);
+  });
+
+  function closeAssistantPanels() {
+    assistantWorkspace?.classList.remove("sessions-open", "context-open");
+  }
+
+  async function assistantApi(path, options = {}) {
+    const response = await fetch(path, {
+      ...options,
+      credentials: "include",
+      headers: { "content-type": "application/json", ...(options.headers || {}) }
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Assistant Host returned ${response.status}.`);
+    return result;
+  }
+
+  function setAssistantProviderState(account, error = null) {
+    state.assistantAccount = account || null;
+    state.assistantHostAvailable = !error;
+    const connected = account?.type === "chatgpt";
+    assistantProviderStatus?.classList.toggle("connected", connected);
+    assistantProviderStatus?.classList.toggle("error", Boolean(error));
+    if (assistantProviderStatus) {
+      $("strong", assistantProviderStatus).textContent = error ? "Assistant service unavailable" : connected ? account.email : state.assistantLogin ? "Finish Codex sign-in" : "Codex is ready to connect";
+      $("small", assistantProviderStatus).textContent = error || (connected ? `${account.planType || "ChatGPT"} plan · NT Pilot session` : state.assistantLogin ? `Enter ${state.assistantLogin.userCode} at the opened Codex sign-in page.` : "Sign in with your ChatGPT account to use your Codex subscription.");
+    }
+    if (assistantAccountName) assistantAccountName.textContent = connected ? account.email : "No provider connected";
+    if (assistantAccountDetail) assistantAccountDetail.textContent = connected ? `Codex · ${account.planType || "ChatGPT"}` : error ? "Start NT Pilot with the local Host" : "Choose an account to begin";
+    if (assistantProviderReadiness) {
+      assistantProviderReadiness.classList.toggle("ready", connected);
+      $("i", assistantProviderReadiness).textContent = connected ? "✓" : "○";
+      $("small", assistantProviderReadiness).textContent = connected ? `Codex · ${account.planType || "ChatGPT"}` : "Account connection pending";
+    }
+    const connect = $("#assistant-codex-connect");
+    if (connect) {
+      $("small", connect).textContent = connected ? account.email : "Sign in with your ChatGPT account";
+      $("em", connect).textContent = connected ? "Connected" : "Connect";
+      connect.classList.toggle("connected", connected);
+    }
+    assistantModelSetting?.classList.toggle("hidden", !connected);
+    const providerLabel = $("#assistant-provider-button span:nth-child(2)");
+    if (providerLabel) providerLabel.textContent = connected ? (assistantModelSelect?.selectedOptions[0]?.textContent || "Codex") : "Choose model";
+    if (assistantComposeNote) assistantComposeNote.textContent = connected
+      ? "Read-only: the Assistant can inspect context and cited NT knowledge, but cannot edit or save."
+      : error ? "The NT Pilot Assistant Gateway has not been configured." : "Prompts and attachments stay local until a provider is connected.";
+  }
+
+  async function loadAssistantModels() {
+    if (!state.assistantAccount || !assistantModelSelect) return;
+    const result = await assistantApi("/api/assistant/models");
+    state.assistantModels = (result.data || []).filter(model => !model.hidden);
+    assistantModelSelect.replaceChildren();
+    state.assistantModels.forEach(model => {
+      const option = document.createElement("option");
+      option.value = model.model;
+      option.textContent = model.displayName;
+      option.selected = Boolean(model.isDefault);
+      assistantModelSelect.appendChild(option);
+    });
+    const providerLabel = $("#assistant-provider-button span:nth-child(2)");
+    if (providerLabel) providerLabel.textContent = assistantModelSelect.selectedOptions[0]?.textContent || "Codex";
+  }
+
+  function assistantThreadTitle(thread) {
+    return String(thread?.name || thread?.preview || "New conversation").replace(/\s+/g, " ").trim().slice(0, 80) || "New conversation";
+  }
+
+  function renderAssistantSessions() {
+    if (!assistantSessionList) return;
+    assistantSessionList.replaceChildren();
+    const threads = state.assistantThreads;
+    if (!threads.length) {
+      const empty = document.createElement("div");
+      empty.className = "assistant-history-empty";
+      empty.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM7 4h10v3"/></svg><p>Your conversations will appear here.</p>';
+      assistantSessionList.appendChild(empty);
       return;
     }
-    applyMapping.disabled = true;
-    mappingConfirmation.className = "confirmed-badge draft verifying";
-    mappingConfirmation.innerHTML = "<i></i> Reading back…";
-    setTimeout(() => {
-      applyMappingToItem(next);
-      state.mappingBaseline = next;
-      state.mappingDirty = false;
-      state.undoMapping = previous;
-      resetMapping.textContent = "Undo last";
-      updateMappingState();
-      showToast(`${state.selectedMapping.dataset.name} mapping preview updated`);
-    }, 950);
+    threads.forEach(thread => {
+      const button = document.createElement("button");
+      button.className = `assistant-session${thread.id === state.assistantThreadId ? " active" : ""}`;
+      button.type = "button";
+      button.dataset.threadId = thread.id;
+      const updated = new Date((thread.updatedAt || thread.createdAt) * 1000);
+      button.innerHTML = '<span class="assistant-session-icon"><svg viewBox="0 0 24 24"><path d="M5 6h14v10H9l-4 3V6Z"/></svg></span><span><strong></strong><small></small></span>';
+      $("strong", button).textContent = assistantThreadTitle(thread);
+      $("small", button).textContent = Number.isNaN(updated.valueOf()) ? "Saved session" : updated.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+      button.addEventListener("click", () => openAssistantThread(thread.id));
+      assistantSessionList.appendChild(button);
+    });
+  }
+
+  async function loadAssistantThreads() {
+    if (!state.assistantAccount) return;
+    const result = await assistantApi("/api/assistant/threads");
+    state.assistantThreads = result.data || [];
+    renderAssistantSessions();
+  }
+
+  function clearAssistantMessages() {
+    $$(".assistant-message", assistantThread).forEach(message => message.remove());
+    assistantThread?.classList.remove("has-messages");
+  }
+
+  function extractAssistantUserText(text) {
+    const match = String(text || "").match(/<user_request>\n?([\s\S]*?)\n?<\/user_request>/);
+    return (match?.[1] || text || "").trim();
+  }
+
+  function appendAssistantMessage(role, text = "", { pending = false } = {}) {
+    assistantThread?.classList.add("has-messages");
+    const article = document.createElement("article");
+    article.className = `assistant-message ${role}${pending ? " pending" : ""}`;
+    const label = document.createElement("span");
+    const body = document.createElement("div");
+    label.textContent = role === "user" ? "You" : "NT";
+    body.textContent = text;
+    article.append(label, body);
+    assistantThread?.appendChild(article);
+    assistantThread.scrollTop = assistantThread.scrollHeight;
+    return article;
+  }
+
+  function renderAssistantThread(thread) {
+    clearAssistantMessages();
+    for (const turn of thread.turns || []) {
+      for (const item of turn.items || []) {
+        if (item.type === "userMessage") {
+          const text = (item.content || []).filter(part => part.type === "text").map(part => part.text).join("\n");
+          appendAssistantMessage("user", extractAssistantUserText(text));
+        } else if (item.type === "agentMessage" && item.text) {
+          appendAssistantMessage("assistant", item.text);
+        }
+      }
+    }
+  }
+
+  async function openAssistantThread(threadId) {
+    try {
+      const result = await assistantApi(`/api/assistant/threads/${encodeURIComponent(threadId)}`);
+      state.assistantThreadId = threadId;
+      setAssistantConversationTitle(assistantThreadTitle(result.thread), { save: false });
+      renderAssistantThread(result.thread);
+      renderAssistantSessions();
+      closeAssistantPanels();
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  async function refreshAssistantStatus() {
+    try {
+      const result = await assistantApi("/api/assistant/status");
+      setAssistantProviderState(result.account);
+      if (result.account) {
+        const failures = await Promise.allSettled([loadAssistantModels(), loadAssistantThreads()]);
+        const failed = failures.find(result => result.status === "rejected");
+        if (failed) showToast(`Codex connected · ${failed.reason.message}`);
+      }
+    } catch (error) {
+      setAssistantProviderState(null, error.message);
+    }
+  }
+
+  function openAssistantProviderSheet() {
+    closeAssistantPanels();
+    const sheet = $("#assistant-provider-sheet");
+    const backdrop = $("#assistant-provider-backdrop");
+    const host = state.assistantDocked ? appMain : assistantWorkspace;
+    if (backdrop && backdrop.parentElement !== host) host.appendChild(backdrop);
+    if (sheet && sheet.parentElement !== host) host.appendChild(sheet);
+    sheet?.classList.remove("hidden");
+    backdrop?.classList.remove("hidden");
+    refreshAssistantStatus();
+  }
+
+  function closeAssistantProviderSheet() {
+    $("#assistant-provider-sheet")?.classList.add("hidden");
+    $("#assistant-provider-backdrop")?.classList.add("hidden");
+  }
+
+  function restoreAssistantSurface() {
+    if (!assistantConversation || !assistantThread || !assistantComposeArea) return;
+    assistantConversation.append(assistantThread, assistantComposeArea);
+    requestAnimationFrame(resizeAssistantInput);
+  }
+
+  function closeAssistantDock() {
+    state.assistantDocked = false;
+    restoreAssistantSurface();
+    assistantDock?.classList.add("hidden");
+    appMain.classList.remove("assistant-dock-open");
+    updateSidebarCompactState();
+  }
+
+  function openAssistantDock({ view = "editor" } = {}) {
+    if (!assistantDockContent || !assistantThread || !assistantComposeArea) return;
+    state.assistantDocked = true;
+    assistantDockContent.append(assistantThread, assistantComposeArea);
+    assistantDock.classList.remove("hidden");
+    appMain.classList.add("assistant-dock-open");
+    setView(view);
+    requestAnimationFrame(resizeAssistantInput);
+  }
+
+  function setAssistantConversationTitle(value, { save = true } = {}) {
+    const title = String(value || "").replace(/\s+/g, " ").trim().slice(0, 80) || "New conversation";
+    assistantHeading.textContent = title;
+    if (assistantSessionTitle) assistantSessionTitle.textContent = title;
+    if (assistantDockTitle) assistantDockTitle.textContent = title;
+    if (save) {
+      try {
+        localStorage.setItem("ntPilotAssistantConversationTitle", title);
+      } catch (_) {
+        // The title remains available for this session.
+      }
+      if (state.assistantThreadId && state.assistantHostAvailable) {
+        assistantApi(`/api/assistant/threads/${encodeURIComponent(state.assistantThreadId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ name: title })
+        }).then(loadAssistantThreads).catch(error => showToast(`Could not rename conversation · ${error.message}`));
+      }
+    }
+  }
+
+  if (assistantHeading) {
+    try {
+      setAssistantConversationTitle(localStorage.getItem("ntPilotAssistantConversationTitle"), { save: false });
+    } catch (_) {
+      setAssistantConversationTitle("New conversation", { save: false });
+    }
+    assistantHeading.addEventListener("focus", () => {
+      assistantHeading.dataset.previousTitle = assistantHeading.textContent;
+    });
+    assistantHeading.addEventListener("input", () => {
+      if (assistantHeading.textContent.length > 80) assistantHeading.textContent = assistantHeading.textContent.slice(0, 80);
+      if (assistantSessionTitle) assistantSessionTitle.textContent = assistantHeading.textContent.trim() || "New conversation";
+      if (assistantDockTitle) assistantDockTitle.textContent = assistantHeading.textContent.trim() || "New conversation";
+    });
+    assistantHeading.addEventListener("blur", () => setAssistantConversationTitle(assistantHeading.textContent));
+    assistantHeading.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        assistantHeading.blur();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setAssistantConversationTitle(assistantHeading.dataset.previousTitle, { save: false });
+        assistantHeading.blur();
+      }
+    });
+  }
+
+  $("#assistant-dock-close")?.addEventListener("click", closeAssistantDock);
+  $("#assistant-dock-expand")?.addEventListener("click", () => setView("assistant"));
+
+  try {
+    const savedDockWidth = Number(localStorage.getItem("ntPilotAssistantDockWidth"));
+    if (savedDockWidth >= 320 && savedDockWidth <= 620) deviceFrame.style.setProperty("--assistant-dock-width", `${savedDockWidth}px`);
+  } catch (_) {
+    // Use the default dock width.
+  }
+  let assistantDockResizing = false;
+  assistantDockResize?.addEventListener("pointerdown", event => {
+    assistantDockResizing = true;
+    assistantDockResize.classList.add("dragging");
+    assistantDockResize.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+  document.addEventListener("pointermove", event => {
+    if (!assistantDockResizing) return;
+    const bounds = appMain.getBoundingClientRect();
+    const maximum = Math.max(320, Math.min(620, bounds.width - 340));
+    const width = Math.max(320, Math.min(maximum, event.clientX - bounds.left));
+    deviceFrame.style.setProperty("--assistant-dock-width", `${Math.round(width)}px`);
+    resizeAssistantInput();
+  });
+  document.addEventListener("pointerup", () => {
+    if (!assistantDockResizing) return;
+    assistantDockResizing = false;
+    assistantDockResize.classList.remove("dragging");
+    try {
+      localStorage.setItem("ntPilotAssistantDockWidth", String(Math.round(assistantDock.getBoundingClientRect().width)));
+    } catch (_) {
+      // The resized dock remains available for this session.
+    }
+  });
+
+  function resizeAssistantInput() {
+    if (!assistantInput) return;
+    assistantInput.style.height = "auto";
+    assistantInput.style.height = `${Math.min(assistantInput.scrollHeight, 125)}px`;
+  }
+
+  function removeAssistantAttachment(attachmentId) {
+    assistantDraftAttachments.delete(attachmentId);
+    $$('[data-assistant-attachment-id]').find(chip => chip.dataset.assistantAttachmentId === attachmentId)?.remove();
+    renderAssistantAttachments();
+  }
+
+  function renderAssistantAttachments() {
+    if (!assistantAttachmentsCard || !assistantAttachmentList) return;
+    const attachments = [...assistantDraftAttachments.entries()];
+    assistantAttachmentsCard.classList.toggle("hidden", !attachments.length);
+    if (assistantAttachmentsSummary) assistantAttachmentsSummary.textContent = `${attachments.length} conversation attachment${attachments.length === 1 ? "" : "s"}`;
+    assistantAttachmentList.replaceChildren();
+    attachments.forEach(([attachmentId, attachment]) => {
+      const item = document.createElement("li");
+      const copy = document.createElement("span");
+      const name = document.createElement("b");
+      const detail = document.createElement("small");
+      const remove = document.createElement("button");
+      name.textContent = attachment.label;
+      detail.textContent = attachment.kind === "folder" ? attachment.detail : attachment.kind.toUpperCase();
+      remove.type = "button";
+      remove.textContent = "×";
+      remove.setAttribute("aria-label", `Remove ${attachment.label}`);
+      remove.addEventListener("click", () => removeAssistantAttachment(attachmentId));
+      copy.append(name, detail);
+      item.append(copy, remove);
+      assistantAttachmentList.appendChild(item);
+    });
+  }
+
+  function addAssistantAttachment(label, kind, detail = "Local draft context", payload = null) {
+    if (!assistantDraftContext || !label) return;
+    const attachmentId = globalThis.crypto?.randomUUID?.() || `attachment-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const chip = document.createElement("span");
+    chip.className = "assistant-context-chip attachment";
+    chip.dataset.assistantDraftAttachment = kind;
+    chip.dataset.assistantAttachmentId = attachmentId;
+    chip.title = detail;
+    const marker = document.createElement("i");
+    const name = document.createElement("b");
+    name.textContent = label;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.setAttribute("aria-label", `Remove ${label}`);
+    remove.textContent = "×";
+    remove.addEventListener("click", () => removeAssistantAttachment(attachmentId));
+    chip.append(marker, name, remove);
+    assistantDraftContext.appendChild(chip);
+    assistantDraftAttachments.set(attachmentId, { kind, label, detail, payload });
+    renderAssistantAttachments();
+  }
+
+  function addAssistantFiles(fileList) {
+    const files = [...(fileList || [])];
+    files.slice(0, 24).forEach((file, index) => {
+      const kind = file.type.startsWith("image/") ? "image" : file.type === "application/pdf" ? "pdf" : "file";
+      const label = file.name || (kind === "image" ? `Pasted image ${index + 1}` : `Pasted file ${index + 1}`);
+      addAssistantAttachment(label, kind, `${file.type || "File"} · ${file.size.toLocaleString()} bytes`, file);
+    });
+    if (files.length > 24) showToast(`Attached 24 files · ${files.length - 24} more were skipped`);
+  }
+
+  $("#assistant-sessions-toggle")?.addEventListener("click", () => {
+    assistantWorkspace.classList.remove("context-open");
+    assistantWorkspace.classList.toggle("sessions-open");
+  });
+  $("#assistant-context-toggle")?.addEventListener("click", () => {
+    assistantWorkspace.classList.remove("sessions-open");
+    assistantWorkspace.classList.toggle("context-open");
+  });
+  $("#assistant-panel-scrim")?.addEventListener("click", closeAssistantPanels);
+  $$('[data-assistant-close]').forEach(button => button.addEventListener("click", closeAssistantPanels));
+
+  [$("#assistant-provider-button"), $("#assistant-account-settings")].filter(Boolean).forEach(button => {
+    button.addEventListener("click", openAssistantProviderSheet);
+  });
+  $("#assistant-provider-close")?.addEventListener("click", closeAssistantProviderSheet);
+  $("#assistant-provider-backdrop")?.addEventListener("click", closeAssistantProviderSheet);
+  $$('[data-assistant-provider]').forEach(button => button.addEventListener("click", async () => {
+    const labels = { codex: "Codex account sign-in", openai: "OpenAI API setup", openrouter: "OpenRouter setup", anthropic: "Anthropic setup" };
+    if (button.dataset.assistantProvider !== "codex") {
+      showToast(`${labels[button.dataset.assistantProvider]} is planned after the Codex reliability slice`);
+      return;
+    }
+    if (state.assistantAccount) {
+      closeAssistantProviderSheet();
+      return;
+    }
+    let authWindow = null;
+    try {
+      button.disabled = true;
+      authWindow = window.open("about:blank", "ntpilot-codex-login");
+      const result = await assistantApi("/api/assistant/login", { method: "POST", body: JSON.stringify({ flow: "browser" }) });
+      state.assistantLogin = result.userCode ? { userCode: result.userCode, loginId: result.loginId } : { loginId: result.loginId };
+      setAssistantProviderState(null);
+      const url = result.authUrl || result.verificationUrl;
+      if (url && authWindow) {
+        authWindow.opener = null;
+        authWindow.location.replace(url);
+      } else if (url) {
+        await navigator.clipboard?.writeText(url).catch(() => {});
+        showToast("Your browser blocked the sign-in window · the sign-in link was copied");
+      } else {
+        authWindow?.close();
+      }
+      if (result.userCode) showToast(`Enter code ${result.userCode} in the sign-in window`);
+      const deadline = Date.now() + 180000;
+      const check = async () => {
+        await refreshAssistantStatus();
+        if (state.assistantAccount) {
+          state.assistantLogin = null;
+          closeAssistantProviderSheet();
+          showToast("Codex account connected");
+          return;
+        }
+        if (Date.now() < deadline) setTimeout(check, 1200);
+      };
+      setTimeout(check, 1200);
+    } catch (error) {
+      state.assistantLogin = null;
+      authWindow?.close();
+      showToast(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  }));
+
+  $("#assistant-codex-logout")?.addEventListener("click", async () => {
+    try {
+      await assistantApi("/api/assistant/logout", { method: "POST", body: "{}" });
+      state.assistantThreadId = null;
+      state.assistantLogin = null;
+      state.assistantThreads = [];
+      state.assistantModels = [];
+      assistantModelSelect?.replaceChildren();
+      setAssistantProviderState(null);
+      clearAssistantMessages();
+      renderAssistantSessions();
+      setAssistantConversationTitle("New conversation", { save: false });
+      showToast("Codex account signed out");
+    } catch (error) {
+      showToast(error.message);
+    }
+  });
+
+  assistantModelSelect?.addEventListener("change", () => {
+    const providerLabel = $("#assistant-provider-button span:nth-child(2)");
+    if (providerLabel) providerLabel.textContent = assistantModelSelect.selectedOptions[0]?.textContent || "Codex";
+  });
+
+  $("#assistant-new-session")?.addEventListener("click", () => {
+    state.assistantThreadId = null;
+    assistantInput.value = "";
+    setAssistantConversationTitle("New conversation", { save: false });
+    clearAssistantMessages();
+    renderAssistantSessions();
+    $$('[data-assistant-draft-attachment]').forEach(chip => chip.remove());
+    assistantDraftAttachments.clear();
+    renderAssistantAttachments();
+    resizeAssistantInput();
+    closeAssistantPanels();
+    assistantInput.focus();
+  });
+
+  $("#assistant-session-search")?.addEventListener("input", event => {
+    const query = event.target.value.trim().toLowerCase();
+    $$(".assistant-session").forEach(session => session.classList.toggle("hidden", !session.textContent.toLowerCase().includes(query)));
+  });
+
+  $$('[data-assistant-prompt]').forEach(button => button.addEventListener("click", () => {
+    assistantInput.value = button.dataset.assistantPrompt;
+    resizeAssistantInput();
+    assistantInput.focus();
+  }));
+
+  function fileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error(`Could not read ${file.name}.`));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function serializeAssistantAttachments() {
+    const serialized = [];
+    let totalBytes = 0;
+    for (const attachment of assistantDraftAttachments.values()) {
+      const files = attachment.kind === "folder" ? [...(attachment.payload || [])] : [attachment.payload];
+      for (const file of files.slice(0, 24 - serialized.length)) {
+        if (!(file instanceof File)) continue;
+        totalBytes += file.size;
+        if (totalBytes > 8 * 1024 * 1024) throw new Error("Attachments are limited to 8 MB per message for now.");
+        const record = {
+          name: file.webkitRelativePath || file.name,
+          kind: file.type.startsWith("image/") ? "image" : file.type === "application/pdf" ? "pdf" : "file",
+          type: file.type
+        };
+        if (record.kind === "image" || record.kind === "pdf") record.dataUrl = await fileAsDataUrl(file);
+        else record.text = await file.text();
+        serialized.push(record);
+      }
+      if (serialized.length >= 24) break;
+    }
+    return serialized;
+  }
+
+  function assistantLiveContext() {
+    const identity = state.liveIdentity;
+    return {
+      connected: Boolean(state.transportOnline && state.ntTransport && identity),
+      firmware: identity?.version || "unknown",
+      sysexId: identity?.sysexId,
+      presetName: identity?.presetName || "Unknown preset",
+      unsavedChanges: state.hasUnsavedWorkingEdits,
+      slots: (state.routingSnapshot?.slots || identity?.slots || []).map(slot => ({
+        index: slot.index,
+        name: slot.name,
+        guidKey: slot.guidKey,
+        bypassed: slot.bypassed
+      }))
+    };
+  }
+
+  assistantInput?.addEventListener("input", resizeAssistantInput);
+  assistantInput?.addEventListener("keydown", event => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
+  });
+  $("#chat-form")?.addEventListener("submit", async event => {
+    event.preventDefault();
+    const prompt = assistantInput.value.trim();
+    if (!prompt || state.assistantSending) return;
+    if (!state.assistantAccount) {
+      openAssistantProviderSheet();
+      return;
+    }
+    const sendButton = $(".assistant-send-button", event.currentTarget);
+    state.assistantSending = true;
+    sendButton.disabled = true;
+    appendAssistantMessage("user", prompt);
+    const reply = appendAssistantMessage("assistant", "Thinking…", { pending: true });
+    const replyBody = $("div", reply);
+    let receivedText = false;
+    try {
+      const attachments = await serializeAssistantAttachments();
+      const response = await fetch("/api/assistant/turns", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          threadId: state.assistantThreadId,
+          prompt,
+          model: assistantModelSelect?.value || null,
+          context: assistantLiveContext(),
+          attachments
+        })
+      });
+      if (!response.ok || !response.body) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || `Assistant Host returned ${response.status}.`);
+      }
+      assistantInput.value = "";
+      resizeAssistantInput();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = buffer.split("\n");
+        buffer = done ? "" : lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const message = JSON.parse(line);
+          if (message.type === "thread") state.assistantThreadId = message.threadId;
+          if (message.type === "delta") {
+            if (!receivedText) replyBody.textContent = "";
+            receivedText = true;
+            replyBody.textContent += message.delta;
+            assistantThread.scrollTop = assistantThread.scrollHeight;
+          }
+          if (message.type === "error") throw new Error(message.message);
+        }
+        if (done) break;
+      }
+      reply.classList.remove("pending");
+      if (!receivedText) replyBody.textContent = "No response was returned.";
+      $$('[data-assistant-draft-attachment]').forEach(chip => chip.remove());
+      assistantDraftAttachments.clear();
+      renderAssistantAttachments();
+      if (assistantHeading.textContent.trim() === "New conversation") setAssistantConversationTitle(prompt.slice(0, 58));
+      await loadAssistantThreads();
+    } catch (error) {
+      reply.classList.remove("pending");
+      reply.classList.add("error");
+      replyBody.textContent = error.message;
+    } finally {
+      state.assistantSending = false;
+      sendButton.disabled = false;
+    }
+  });
+
+  assistantAttachButton?.addEventListener("click", event => {
+    event.stopPropagation();
+    const open = assistantAttachmentOptions.classList.toggle("hidden") === false;
+    assistantAttachButton.setAttribute("aria-expanded", String(open));
+  });
+  $$('[data-assistant-attachment]').forEach(button => button.addEventListener("click", () => {
+    const inputs = { file: assistantFileInput, image: assistantImageInput, folder: assistantFolderInput };
+    assistantAttachmentOptions.classList.add("hidden");
+    assistantAttachButton.setAttribute("aria-expanded", "false");
+    inputs[button.dataset.assistantAttachment]?.click();
+  }));
+  [assistantFileInput, assistantImageInput].filter(Boolean).forEach(input => input.addEventListener("change", () => {
+    addAssistantFiles(input.files);
+    input.value = "";
+  }));
+  assistantFolderInput?.addEventListener("change", () => {
+    const files = [...assistantFolderInput.files];
+    const folderName = files[0]?.webkitRelativePath?.split("/")[0] || "Selected folder";
+    if (files.length) addAssistantAttachment(folderName, "folder", `${files.length} local file${files.length === 1 ? "" : "s"} selected`, files);
+    assistantFolderInput.value = "";
+  });
+  let assistantDragDepth = 0;
+  assistantWorkspace?.addEventListener("dragenter", event => {
+    if (![...(event.dataTransfer?.types || [])].includes("Files")) return;
+    event.preventDefault();
+    assistantDragDepth += 1;
+    assistantWorkspace.classList.add("drag-active");
+  });
+  assistantWorkspace?.addEventListener("dragover", event => {
+    if (![...(event.dataTransfer?.types || [])].includes("Files")) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  });
+  assistantWorkspace?.addEventListener("dragleave", () => {
+    assistantDragDepth = Math.max(0, assistantDragDepth - 1);
+    if (!assistantDragDepth) assistantWorkspace.classList.remove("drag-active");
+  });
+  assistantWorkspace?.addEventListener("drop", event => {
+    event.preventDefault();
+    assistantDragDepth = 0;
+    assistantWorkspace.classList.remove("drag-active");
+    addAssistantFiles(event.dataTransfer?.files);
+  });
+  assistantComposeArea?.addEventListener("paste", event => {
+    const clipboard = event.clipboardData;
+    const pastedFiles = [...(clipboard?.files || [])];
+    if (!pastedFiles.length) {
+      [...(clipboard?.items || [])].forEach(item => {
+        if (item.kind !== "file") return;
+        const file = item.getAsFile();
+        if (file) pastedFiles.push(file);
+      });
+    }
+    const pastedText = clipboard?.getData("text/plain") || "";
+    if (!pastedFiles.length && event.target === assistantInput) return;
+    event.preventDefault();
+    if (pastedFiles.length) addAssistantFiles(pastedFiles);
+    if (pastedText) {
+      const start = assistantInput.selectionStart ?? assistantInput.value.length;
+      const end = assistantInput.selectionEnd ?? start;
+      assistantInput.setRangeText(pastedText, start, end, "end");
+      resizeAssistantInput();
+    }
+    assistantInput.focus();
+  });
+  document.addEventListener("click", event => {
+    if (!event.target.closest(".assistant-attachment-menu")) {
+      assistantAttachmentOptions?.classList.add("hidden");
+      assistantAttachButton?.setAttribute("aria-expanded", "false");
+    }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      closeAssistantPanels();
+      closeAssistantProviderSheet();
+    }
   });
 
   const refreshButton = $(".refresh-button");
@@ -5612,60 +6364,8 @@
     readRealIdentity();
   });
 
-  $("#approve-change").addEventListener("click", event => {
-    if (!canApplyToHardware()) {
-      showToast("Approval is unavailable until the NT is ready");
-      return;
-    }
-    const button = event.currentTarget;
-    button.disabled = true;
-    button.textContent = "Applying…";
-    setTimeout(() => {
-      const card = $("#change-card");
-      card.classList.add("committed");
-      $(".change-kind", card).textContent = "Applied and verified";
-      $(".risk-pill", card).textContent = "Undo available";
-      button.textContent = "Committed";
-      showToast("Change read back and committed");
-    }, 1100);
-  });
-
-  $("#reject-change").addEventListener("click", () => {
-    $("#change-card").classList.add("hidden");
-    showToast("Proposal rejected · nothing changed");
-  });
-
-  $("#chat-form").addEventListener("submit", event => {
-    event.preventDefault();
-    const input = $("#chat-input");
-    const message = input.value.trim();
-    if (!message) return;
-    const article = document.createElement("article");
-    article.className = "message user-message";
-    const paragraph = document.createElement("p");
-    paragraph.textContent = message;
-    article.appendChild(paragraph);
-    $("#messages").appendChild(article);
-    input.value = "";
-    article.scrollIntoView({ behavior: "smooth", block: "end" });
-    setTimeout(() => {
-      const response = document.createElement("article");
-      response.className = "message assistant-message";
-      const avatar = document.createElement("div");
-      avatar.className = "assistant-avatar";
-      avatar.textContent = "AI";
-      const body = document.createElement("div");
-      body.className = "message-body";
-      const copy = document.createElement("p");
-      copy.textContent = "This visual prototype is using a canned response. The production assistant will inspect live state and cited NT documentation before proposing anything.";
-      body.appendChild(copy);
-      response.append(avatar, body);
-      $("#messages").appendChild(response);
-      response.scrollIntoView({ behavior: "smooth", block: "end" });
-    }, 650);
-  });
-
-  populateMapping($(".mapping-item.active"));
+  const initialMapping = $(".mapping-item.active");
+  if (initialMapping) populateMapping(initialMapping);
   updateMappingSummary();
   let savedInterfaceScale = 100;
   try {
@@ -5695,9 +6395,11 @@
   }
   setIpadMode(savedIpadMode, { save: false });
   resetEditorForConnection();
+  state.sidebarCollapsed = false;
   const recoveredView = ["editor", "routing", "mapping", "control", "status", "assistant"].includes(rebootRecovery?.view)
     ? rebootRecovery.view
     : "editor";
   setView(recoveredView);
+  refreshAssistantStatus();
   readRealIdentity();
 })();

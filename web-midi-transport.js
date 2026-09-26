@@ -162,6 +162,14 @@
     "Channel pressure"
   ];
 
+  function midiMappingTypeCode(type) {
+    const code = typeof type === "number" ? type : MIDI_MAPPING_TYPES.indexOf(type);
+    if (!Number.isInteger(code) || code < 0 || code >= MIDI_MAPPING_TYPES.length) {
+      throw new Error("Invalid NT MIDI mapping type.");
+    }
+    return code;
+  }
+
   function parseParameterPages(payload) {
     const data = payload.slice(1);
     const pageCount = data[0] ?? 0;
@@ -945,6 +953,58 @@
       return parseMappingPayload(payload);
     }
 
+    async writeMIDIMapping(slot, parameter, mapping) {
+      const version = Number(mapping?.version);
+      const channel = Number(mapping?.channel);
+      const cc = Number(mapping?.cc);
+      const min = Number(mapping?.min);
+      const max = Number(mapping?.max);
+      const typeCode = midiMappingTypeCode(mapping?.typeCode ?? mapping?.type);
+      if (!Number.isInteger(version) || version < 1 || version > 7) throw new Error("Invalid NT MIDI mapping version.");
+      if (!Number.isInteger(channel) || channel < 1 || channel > 16) throw new Error("MIDI mapping channels must be between 1 and 16.");
+      if (!Number.isInteger(cc) || cc < 0 || cc > 127) throw new Error("MIDI mapping controllers must be between 0 and 127.");
+      if (!Number.isInteger(min) || min < -32768 || min > 32767 || !Number.isInteger(max) || max < -32768 || max > 32767) {
+        throw new Error("MIDI mapping limits must be signed 16-bit values.");
+      }
+      const flags = (mapping.enabled ? 1 : 0)
+        | (mapping.symmetric ? 2 : 0)
+        | (((channel - 1) & 0x0F) << 3);
+      const flags2 = (mapping.relative ? 1 : 0)
+        | (mapping.viewChange ? 2 : 0)
+        | (typeCode << 2);
+      const payload = [
+        slot,
+        ...encodeUnsigned21(parameter),
+        version,
+        cc,
+        flags
+      ];
+      if (version >= 2) payload.push(flags2);
+      payload.push(...encodeSignedShort(min), ...encodeSignedShort(max));
+      this.send(0x4E, payload);
+      const expected = {
+        cc,
+        channel,
+        typeCode,
+        enabled: Boolean(mapping.enabled),
+        symmetric: Boolean(mapping.symmetric),
+        relative: Boolean(mapping.relative),
+        viewChange: Boolean(mapping.viewChange),
+        min,
+        max
+      };
+      let mismatch = null;
+      let confirmed = null;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, attempt ? 80 : 40));
+        confirmed = await this.readParameterMapping(slot, parameter);
+        mismatch = Object.entries(expected).find(([key, value]) => confirmed.midi[key] !== value) || null;
+        if (!mismatch) return confirmed;
+      }
+      const [key, value] = mismatch;
+      throw new Error(`NT MIDI mapping readback did not match for ${key} (expected ${value}, received ${confirmed.midi[key]}).`);
+    }
+
     async readOutputModeUsage(slot, parameter) {
       const encodedParameter = encodeUnsigned21(parameter);
       const payload = await this.request(
@@ -1043,9 +1103,9 @@
       return snapshot;
     }
 
-    async readSnapshot() {
+    async readSnapshot({ algorithms: cachedAlgorithms = null } = {}) {
       const identity = await this.readIdentity();
-      const algorithms = await this.readAlgorithmCatalog();
+      const algorithms = Array.isArray(cachedAlgorithms) ? cachedAlgorithms : await this.readAlgorithmCatalog();
       const slots = await this.readSlots(identity.slotCount, algorithms);
       for (const slot of slots) slot.bypassed = await this.readSlotBypass(slot.index);
       return { ...identity, algorithms, slots };

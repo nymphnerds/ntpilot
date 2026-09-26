@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-257">
+  <link rel="stylesheet" href="styles.css?v=20260926-260">
 </head>
 <body>
   <main class="stage">
@@ -40,7 +40,6 @@
           <button class="nav-item" data-view="assistant">
             <svg viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 5h8m-8 4h5"/></svg>
             <span>Assistant</span>
-            <span class="nav-badge">1</span>
           </button>
         </nav>
 
@@ -68,6 +67,7 @@
           <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12l2-1-2-4-2 .5L15 5l-.5-2h-5L9 5 7 7.5 5 7l-2 4 2 1v3l-2 1 2 4 2-.5L9 22h6l2-2.5 2 .5 2-4-2-1v-3Z"/></svg>
           <span>Status & setup</span>
         </button>
+        <button class="sidebar-edge-toggle" id="sidebar-edge-toggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar"><svg viewBox="0 0 24 24"><path d="m14 7-5 5 5 5"/></svg></button>
       </aside>
 
       <div class="app-main">
@@ -142,92 +142,24 @@
               <div class="editor-toolbar">
                 <span class="editor-heading-actions"><strong class="editor-section-heading">Algorithms</strong><button class="editor-add-algorithm" id="add-algorithm" type="button" aria-label="Add algorithm" title="Add algorithm" disabled>+</button></span>
                 <div class="editor-meta">
-                  <span id="editor-slot-count">10 slots</span><span id="editor-cpu-usage" title="Waiting for CPU usage from the NT"><span class="cpu-meter" id="audio-cpu-meter"><i></i>Audio <b>—</b></span><span class="cpu-separator">·</span><span class="cpu-meter" id="overall-cpu-meter"><i></i>Overall <b>—</b></span></span>
+                  <span id="editor-slot-count">0 / 40 slots</span><span id="editor-cpu-usage" title="Waiting for CPU usage from the NT"><span class="cpu-meter" id="audio-cpu-meter"><i></i>Audio <b>—</b></span><span class="cpu-separator">·</span><span class="cpu-meter" id="overall-cpu-meter"><i></i>Overall <b>—</b></span></span>
                   <span class="freshness"><i></i> Updated now</span>
                 </div>
               </div>
 
               <div class="editor-columns">
-                <div class="slot-list" aria-label="Algorithm slots">
-                  <button class="slot" data-slot="iPad USB Returns" data-algorithm="USB audio (from host)">
-                    <span class="slot-number">1</span><span><strong>iPad USB Returns</strong><small>USB audio (from host)</small></span><i class="slot-colour mint"></i>
-                  </button>
-                  <button class="slot" data-slot="Master Clocks" data-algorithm="Clock">
-                    <span class="slot-number">2</span><span><strong>Master Clocks</strong><small>Clock</small></span><i class="slot-colour yellow"></i>
-                  </button>
-                  <button class="slot" data-slot="Kick Snare Spare" data-algorithm="Sample Player">
-                    <span class="slot-number">3</span><span><strong>Kick Snare Spare</strong><small>Sample Player</small></span><i class="slot-colour lilac"></i>
-                  </button>
-                  <button class="slot" data-slot="Perc Poly" data-algorithm="Poly Multisample (legacy)">
-                    <span class="slot-number">4</span><span><strong>Perc Poly</strong><small>Poly Multisample (legacy)</small></span><i class="slot-colour blue"></i>
-                  </button>
-                  <button class="slot" data-slot="Chimera" data-algorithm="Chimera custom plug-in">
-                    <span class="slot-number">5</span><span><strong>Chimera</strong><small>Chimera custom plug-in</small></span><i class="slot-colour mint"></i>
-                  </button>
-                  <button class="slot" data-slot="Poly Res" data-algorithm="Poly Resonator">
-                    <span class="slot-number">6</span><span><strong>Poly Res</strong><small>Poly Resonator</small></span><i class="slot-colour yellow"></i>
-                  </button>
-                  <button class="slot active" data-slot="WitchboardX" data-algorithm="Witchboard custom plug-in">
-                    <span class="slot-number">7</span><span><strong>WitchboardX</strong><small>Witchboard custom plug-in</small></span><i class="slot-colour lilac"></i>
-                  </button>
-                  <button class="slot" data-slot="Kirbinator" data-algorithm="Kirbinator">
-                    <span class="slot-number">8</span><span><strong>Kirbinator</strong><small>Kirbinator</small></span><i class="slot-colour blue"></i>
-                  </button>
-                  <button class="slot" data-slot="LoopyDial" data-algorithm="LoopyDial custom plug-in">
-                    <span class="slot-number">9</span><span><strong>LoopyDial</strong><small>LoopyDial custom plug-in</small></span><i class="slot-colour mint"></i>
-                  </button>
-                  <button class="slot" data-slot="iPad USB Sends" data-algorithm="USB audio (to host)">
-                    <span class="slot-number">10</span><span><strong>iPad USB Sends</strong><small>USB audio (to host)</small></span><i class="slot-colour yellow"></i>
-                  </button>
-                </div>
+                <div class="slot-list" aria-label="Algorithm slots"></div>
 
                 <div class="parameter-panel">
                   <div class="parameter-title">
-                    <div><span id="slot-kicker">Slot 7 · Witchboard custom plug-in</span><h2 id="slot-heading">WitchboardX</h2></div>
+                    <div><span id="slot-kicker">No algorithm selected</span><h2 id="slot-heading">Connect to begin</h2></div>
                     <button class="ghost-button" data-jump="mapping">View mappings</button>
                   </div>
                   <div class="parameter-fixture-note hidden" id="parameter-fixture-note">
                     <strong id="fixture-algorithm">Algorithm</strong>
                     <span>Connect to read the selected slot's live parameter definitions and values.</span>
                   </div>
-                  <div class="parameter-list" id="parameter-list">
-                    <section class="parameter-section collapsed">
-                      <button class="parameter-section-heading" type="button" aria-expanded="false"><strong>Global</strong><span>1 parameter</span></button>
-                      <div class="parameter-row">
-                        <div class="parameter-name"><strong>Switch fade</strong><span>Parameter 1</span></div>
-                        <input type="range" min="0" max="100" value="0" aria-label="Switch fade">
-                        <output>0 ms</output>
-                        <button class="map-shortcut" title="Map Switch fade" data-param="Switch fade">+</button>
-                      </div>
-                    </section>
-                    <section class="parameter-section collapsed">
-                      <button class="parameter-section-heading" type="button" aria-expanded="false"><strong>Sidechain/Master</strong><span>4 sample parameters</span></button>
-                      <div class="parameter-row selected">
-                        <div class="parameter-name"><strong>Sidechain</strong><span>Parameter 2</span></div>
-                        <input type="range" min="0" max="1" value="1" aria-label="Sidechain">
-                        <output>On</output>
-                        <button class="map-shortcut mapped" title="MIDI channel 15 · CC 80" data-param="Sidechain">15:80</button>
-                      </div>
-                      <div class="parameter-row">
-                        <div class="parameter-name"><strong>SC Depth</strong><span>Parameter 3</span></div>
-                        <input type="range" min="0" max="100" value="9" aria-label="Sidechain depth">
-                        <output>9%</output>
-                        <button class="map-shortcut" title="Map SC Depth" data-param="SC Depth">+</button>
-                      </div>
-                      <div class="parameter-row">
-                        <div class="parameter-name"><strong>Filter sweep</strong><span>Parameter 4</span></div>
-                        <input type="range" min="-100" max="100" value="26" aria-label="Filter sweep">
-                        <output>+26</output>
-                        <button class="map-shortcut mapped" title="MIDI channel 16 · CC 9" data-param="Filter sweep">16:9</button>
-                      </div>
-                      <div class="parameter-row">
-                        <div class="parameter-name"><strong>Master Gain</strong><span>Parameter 5</span></div>
-                        <input type="range" min="-12" max="6" value="0" aria-label="Master Gain">
-                        <output>0 dB</output>
-                        <button class="map-shortcut" title="Map Master Gain" data-param="Master Gain">+</button>
-                      </div>
-                    </section>
-                  </div>
+                  <div class="parameter-list" id="parameter-list"></div>
                 </div>
               </div>
             </div>
@@ -315,27 +247,14 @@
                   <input id="mapping-search" type="search" placeholder="Find a parameter" aria-label="Find a parameter">
                 </div>
                 <div class="mapping-section-label"><span>Native MIDI mappings</span><span id="mapping-count">0 mappings</span></div>
-                <div class="mapping-items" id="mapping-items">
-                  <button class="mapping-item active" data-name="Sidechain" data-category="Master" data-cc="80" data-channel="15" data-min="0" data-max="1">
-                    <span><strong>Sidechain</strong><small>Master</small></span><em class="mapped-label">Ch 15 · CC 80</em>
-                  </button>
-                  <button class="mapping-item" data-name="Filter sweep" data-category="Master filter" data-cc="9" data-channel="16" data-min="-100" data-max="100">
-                    <span><strong>Filter sweep</strong><small>Master filter</small></span><em class="mapped-label">Ch 16 · CC 9</em>
-                  </button>
-                  <button class="mapping-item" data-name="Kick Gain" data-category="Channel 1 · Kick" data-cc="9" data-channel="1" data-min="-60" data-max="6">
-                    <span><strong>Kick Gain</strong><small>Channel 1</small></span><em class="mapped-label">Ch 1 · CC 9</em>
-                  </button>
-                  <button class="mapping-item" data-name="Kick Insert 1" data-category="Channel 1 · Kick" data-cc="80" data-channel="1" data-min="0" data-max="4">
-                    <span><strong>Kick Insert 1</strong><small>Channel 1</small></span><em class="mapped-label">Ch 1 · CC 80</em>
-                  </button>
-                </div>
-                <p class="mapping-empty hidden" id="mapping-empty">No MIDI mappings in this slot. Add one with a parameter’s + button in Editor.</p>
+                <div class="mapping-items" id="mapping-items"></div>
+                <p class="mapping-empty" id="mapping-empty">Connect and choose an algorithm to read its native MIDI mappings.</p>
               </div>
 
-              <form class="mapping-card" id="mapping-form">
+              <form class="mapping-card hidden" id="mapping-form">
                 <div class="mapping-card-title">
-                  <div><span id="mapping-path">Slot 7 · WitchboardX · Master</span><h2 id="mapping-param">Sidechain</h2></div>
-                  <span class="confirmed-badge" id="mapping-confirmation"><i></i> Confirmed</span>
+                  <div><span id="mapping-path">No algorithm selected</span><h2 id="mapping-param">No parameter selected</h2></div>
+                  <span class="confirmed-badge" id="mapping-confirmation"><i></i> Read from NT</span>
                 </div>
                 <div class="form-grid">
                   <label>Channel<select id="map-channel"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option><option>16</option></select></label>
@@ -354,7 +273,7 @@
                   <svg viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3Zm0 6v5m0 3v1"/></svg>
                   <div><strong>CC already used</strong><p id="mapping-warning-copy">This channel and CC already control another parameter. Continue only if you deliberately want both parameters to move together.</p></div>
                 </div>
-                <div class="mapping-route-note"><span class="info-icon">i</span><p>This edits the NT's own mapping. Your DAW must route controller MIDI to the disting NT.</p><button type="button">Routing help</button></div>
+                <div class="mapping-route-note"><span class="info-icon">i</span><p>This edits the NT's own mapping. Your DAW must route controller MIDI to the disting NT.</p><button id="mapping-routing-help" type="button">Routing help</button></div>
                 <div class="form-actions">
                   <button type="button" class="text-button" id="reset-mapping">Cancel</button>
                   <button type="submit" class="primary-button" id="apply-mapping" disabled>Apply to NT</button>
@@ -390,38 +309,107 @@
           </section>
 
           <section class="view assistant-view" data-panel="assistant" aria-labelledby="assistant-heading">
-            <div class="assistant-layout">
-              <div class="conversation">
-                <div class="assistant-header">
-                  <div><p class="eyebrow">Preview · not connected</p><h1 id="assistant-heading">Assistant</h1></div>
-                  <button class="model-button" disabled><span class="model-dot"></span> AI integration pending</button>
+            <div class="assistant-workspace" id="assistant-workspace">
+              <button class="assistant-panel-scrim" id="assistant-panel-scrim" type="button" aria-label="Close Assistant panel"></button>
+              <div class="assistant-drop-target" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V4m-5 5 5-5 5 5M5 14v6h14v-6"/></svg><strong>Drop anything here</strong><span>Documents, PDFs, images, presets, code or folders</span></div>
+              <button class="assistant-provider-backdrop hidden" id="assistant-provider-backdrop" type="button" aria-label="Close provider setup"></button>
+              <section class="assistant-provider-sheet hidden" id="assistant-provider-sheet" role="dialog" aria-modal="true" aria-labelledby="assistant-provider-title">
+                <header><div><span>Assistant account</span><h2 id="assistant-provider-title">Choose how to connect</h2></div><button class="assistant-icon-button" id="assistant-provider-close" type="button" aria-label="Close provider setup">×</button></header>
+                <p class="assistant-provider-intro">Sign in, sign out or switch accounts here without leaving NT Pilot.</p>
+                <div class="assistant-provider-status" id="assistant-provider-status" role="status"><i></i><span><strong>Checking Codex account…</strong><small>This NT Pilot login is independent of CLI and VS Code.</small></span></div>
+                <div class="assistant-provider-list">
+                  <button type="button" id="assistant-codex-connect" data-assistant-provider="codex"><span class="assistant-provider-mark codex">C</span><span><strong>Codex subscription</strong><small>Sign in with your ChatGPT account</small></span><em>Connect</em></button>
+                  <button type="button" data-assistant-provider="openai"><span class="assistant-provider-mark openai">O</span><span><strong>OpenAI API</strong><small>Use an API key and choose a model</small></span><em>Connect</em></button>
+                  <button type="button" data-assistant-provider="openrouter"><span class="assistant-provider-mark openrouter">OR</span><span><strong>OpenRouter</strong><small>Use one key across supported models</small></span><em>Connect</em></button>
+                  <button type="button" data-assistant-provider="anthropic"><span class="assistant-provider-mark anthropic">A</span><span><strong>Anthropic</strong><small>Connect Claude with an API key</small></span><em>Connect</em></button>
                 </div>
-                <div class="context-strip demo"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 0v8m8-4-8 4-8-4"/></svg><span><strong>Interface preview only.</strong> No model, preset context or write tools are connected.</span></div>
-                <div class="messages" id="messages">
-                  <article class="message user-message"><p>Make the Witchboard master filter movement a little gentler.</p></article>
-                  <article class="message assistant-message">
-                    <div class="assistant-avatar">AI</div>
-                    <div class="message-body"><p>I’d reduce the filter sweep and Q slightly while leaving routing and channel gains untouched. I’ve prepared two bounded changes.</p><div class="source-row"><span>Live preset</span><span>Witchboard definition</span></div></div>
-                  </article>
-                  <article class="change-card" id="change-card">
-                    <div class="change-card-head"><div><span class="change-kind">Proposed change</span><strong>Gentler master filter movement</strong></div><span class="risk-pill">2 parameters</span></div>
-                    <div class="change-list">
-                      <div><span><strong>Filter sweep</strong><small>Slot 7 · WitchboardX</small></span><span class="value-change"><del>+26</del><b>→</b><ins>+18</ins></span></div>
-                      <div><span><strong>Filter Q</strong><small>Slot 7 · WitchboardX</small></span><span class="value-change"><del>10</del><b>→</b><ins>8</ins></span></div>
+                <div class="assistant-model-setting hidden" id="assistant-model-setting"><label for="assistant-model-select">Model</label><select id="assistant-model-select"></select><button class="secondary-button" id="assistant-codex-logout" type="button">Sign out</button></div>
+                <footer><span>This milestone is read-only. It cannot edit or save a preset.</span></footer>
+              </section>
+
+              <aside class="assistant-sessions" id="assistant-sessions" aria-label="Assistant sessions">
+                <header class="assistant-sessions-header">
+                  <div><span>Workspace</span><strong>NT Assistant</strong></div>
+                  <button class="assistant-icon-button assistant-panel-close" data-assistant-close type="button" aria-label="Close sessions">×</button>
+                </header>
+                <button class="assistant-new-session" id="assistant-new-session" type="button"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New conversation</button>
+                <label class="assistant-session-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><input id="assistant-session-search" type="search" placeholder="Search sessions" aria-label="Search assistant sessions"></label>
+                <nav class="assistant-session-list" id="assistant-session-list" aria-label="Conversation history">
+                  <button class="assistant-session active" type="button"><span class="assistant-session-icon"><svg viewBox="0 0 24 24"><path d="M5 6h14v10H9l-4 3V6Z"/></svg></span><span><strong id="assistant-session-title">New conversation</strong><small>Not started</small></span></button>
+                </nav>
+                <footer class="assistant-account-card"><span class="assistant-account-mark">AI</span><span><strong id="assistant-account-name">No provider connected</strong><small id="assistant-account-detail">Choose an account to begin</small></span><button id="assistant-account-settings" type="button" aria-label="Open AI provider settings">›</button></footer>
+              </aside>
+
+              <main class="assistant-conversation">
+                <header class="assistant-topbar">
+                  <div class="assistant-topbar-leading">
+                    <button class="assistant-icon-button assistant-mobile-control" id="assistant-sessions-toggle" type="button" aria-label="Open sessions"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+                    <div class="assistant-title"><h1 id="assistant-heading" contenteditable="plaintext-only" role="textbox" aria-label="Conversation title" title="Tap to rename" spellcheck="false">New conversation</h1></div>
+                  </div>
+                  <div class="assistant-topbar-actions">
+                    <button class="assistant-icon-button assistant-mobile-control" id="assistant-context-toggle" type="button" aria-label="Open current context"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Zm0 0v8m8-4-8 4-8-4"/></svg></button>
+                  </div>
+                </header>
+
+                <div class="assistant-thread" id="messages" aria-live="polite">
+                  <section class="assistant-welcome">
+                    <div class="assistant-welcome-mark"><span>NT</span><i></i></div>
+                    <h2><span class="assistant-full-welcome">What do you want to do with your NT?</span><span class="assistant-dock-welcome">What would you like to build?</span></h2>
+                    <p>Ask about the current patch, the manual, or a change you are planning.</p>
+                  </section>
+                  <section class="assistant-readiness" aria-label="Assistant readiness">
+                    <header><span>Assistant status</span><strong>Not connected</strong></header>
+                    <div class="assistant-readiness-grid">
+                      <article class="ready"><i>✓</i><span><strong>NT knowledge</strong><small>438 cited manual pages</small></span></article>
+                      <article id="assistant-device-readiness"><i>○</i><span><strong>Live NT context</strong><small>Connect the module to inspect it</small></span></article>
+                      <article id="assistant-provider-readiness"><i>○</i><span><strong>AI provider</strong><small>Account connection pending</small></span></article>
                     </div>
-                    <div class="change-safety"><svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7"/></svg><span>Validated against the current snapshot · read-back and undo available</span></div>
-                    <div class="change-actions"><button class="secondary-button" id="reject-change" disabled>Reject</button><button class="secondary-button" disabled>Edit proposal</button><button class="primary-button" id="approve-change" disabled>Demo only</button></div>
-                  </article>
+                  </section>
+                  <section class="assistant-starters" aria-labelledby="assistant-starters-title">
+                    <div><span>Suggestions</span><h2 id="assistant-starters-title">Try one</h2></div>
+                    <div class="assistant-starter-grid">
+                      <button type="button" data-assistant-prompt="Explain the signal flow in my current preset."><svg viewBox="0 0 24 24"><path d="M4 12h5l2-5 3 10 2-5h4"/></svg><span><strong>Explain this patch</strong><small>Trace algorithms, buses and signal flow</small></span></button>
+                      <button type="button" data-assistant-prompt="Find the relevant manual guidance for this preset."><svg viewBox="0 0 24 24"><path d="M5 4h6v16H5zM13 4h6v16h-6"/></svg><span><strong>Search the manual</strong><small>Return firmware-scoped sources</small></span></button>
+                      <button type="button" data-assistant-prompt="Check my current preset for routing problems."><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h4a4 4 0 0 1 4 4v6"/></svg><span><strong>Review routing</strong><small>Inspect without changing anything</small></span></button>
+                    </div>
+                  </section>
                 </div>
-                <form class="composer" id="chat-form">
-                  <textarea id="chat-input" rows="1" placeholder="Assistant integration is not connected yet" aria-label="Assistant unavailable" disabled></textarea>
-                  <button type="submit" aria-label="Assistant unavailable" disabled><svg viewBox="0 0 24 24"><path d="m4 12 16-8-6 16-2-6-8-2Zm8 2 3-3"/></svg></button>
-                </form>
-              </div>
-              <aside class="assistant-context">
-                <div class="context-card"><span class="context-label">Status</span><h3>Not connected</h3><p>This page demonstrates the intended approval workflow only.</p></div>
-                <div class="context-card"><span class="context-label">Planned context</span><ul><li>Live preset state</li><li>Algorithm documentation</li><li>NT API and mapping guide</li><li>Routing reference</li></ul></div>
-                <p class="privacy-note"><svg viewBox="0 0 24 24"><path d="M6 10V7a6 6 0 0 1 12 0v3m-14 0h16v11H4V10Z"/></svg>No preset data is currently sent to an AI provider.</p>
+
+                <footer class="assistant-compose-area">
+                  <div class="assistant-draft-context" id="assistant-draft-context"><span class="assistant-context-chip locked"><svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/></svg><b>NT manual 1.18</b></span><span class="assistant-context-chip" id="assistant-live-context-chip"><i></i><b>No live NT</b></span></div>
+                  <form class="assistant-composer" id="chat-form">
+                    <div class="assistant-attachment-menu">
+                      <button class="assistant-attach-button" id="assistant-attach-button" type="button" aria-label="Attach context" aria-expanded="false">+</button>
+                      <div class="assistant-attachment-options hidden" id="assistant-attachment-options">
+                        <button type="button" data-assistant-attachment="file"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h5"/></svg><span><strong>Document or PDF</strong><small>Also presets, notes and code</small></span></button>
+                        <button type="button" data-assistant-attachment="image"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m5 18 5-5 3 3 2-2 4 4"/></svg><span><strong>Image</strong><small>Patch photo or screenshot</small></span></button>
+                        <button type="button" data-assistant-attachment="folder"><svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/></svg><span><strong>Folder</strong><small>Local project context</small></span></button>
+                      </div>
+                    </div>
+                    <textarea id="chat-input" rows="1" placeholder="Ask anything, paste an image, or drop files here…" aria-label="Message the NT Assistant"></textarea>
+                    <button class="assistant-provider-button" id="assistant-provider-button" type="button"><span class="model-dot"></span><span>Choose model</span><b>⌄</b></button>
+                    <button class="assistant-send-button primary-button" type="submit">Send</button>
+                  </form>
+                  <p class="assistant-compose-note" id="assistant-compose-note">Prompts and attachments stay local until a provider is connected.</p>
+                  <input class="sr-only" id="assistant-file-input" type="file" multiple>
+                  <input class="sr-only" id="assistant-image-input" type="file" accept="image/*" multiple>
+                  <input class="sr-only" id="assistant-folder-input" type="file" webkitdirectory multiple>
+                </footer>
+              </main>
+
+              <aside class="assistant-context" id="assistant-context" aria-label="Current Assistant context">
+                <header class="assistant-context-header"><div><span>Current context</span><strong>What the Assistant can see</strong></div><button class="assistant-icon-button assistant-panel-close" data-assistant-close type="button" aria-label="Close context">×</button></header>
+                <section class="assistant-context-card device-card"><div class="assistant-context-card-heading"><span class="assistant-card-icon device"><svg viewBox="0 0 24 24"><path d="M6 3h12v18H6zM9 7h6m-6 4h6m-6 4h3"/></svg></span><span><small>Hardware</small><strong id="assistant-device-status">No NT connected</strong></span><i id="assistant-device-indicator"></i></div><p id="assistant-device-detail">Connect the module to add live firmware and device state.</p></section>
+                <section class="assistant-context-card preset-card"><div class="assistant-context-card-heading"><span class="assistant-card-icon preset"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h5"/></svg></span><span><small>Working preset</small><strong id="assistant-preset-name">Unavailable</strong></span></div><p id="assistant-preset-detail">No live preset has been read.</p><span class="assistant-working-status" id="assistant-working-status">Read-only context</span></section>
+                <section class="assistant-context-card source-card">
+                  <div class="assistant-context-card-heading"><span class="assistant-card-icon knowledge"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zm9 0h7v14h-7"/></svg></span><span><small>Knowledge</small><strong>NT 1.18 baseline</strong></span></div>
+                  <ul class="assistant-source-list"><li><span><b>Manual 1.18</b><small>Primary semantic authority</small></span><em>438 pages</em></li><li><span><b>Official NT API</b><small>C++ API v13</small></span><em>Indexed</em></li><li><span><b>Official editor</b><small>Protocol evidence</small></span><em>Indexed</em></li></ul>
+                </section>
+                <section class="assistant-context-card assistant-attachments-card hidden" id="assistant-attachments-card">
+                  <div class="assistant-context-card-heading"><span class="assistant-card-icon attachments"><svg viewBox="0 0 24 24"><path d="M8 12.5 14.5 6a3 3 0 0 1 4 4L10 18.5a5 5 0 0 1-7-7L12 3"/></svg></span><span><small>Attachments</small><strong id="assistant-attachments-summary">Conversation files</strong></span></div>
+                  <ul class="assistant-attachment-list" id="assistant-attachment-list"></ul>
+                </section>
+                <section class="assistant-safety-card"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 5 3 8 7 10 4-2 7-5 7-10V6l-7-3Zm-3 9 2 2 4-5"/></svg><div><strong>You stay in control</strong><p>The Assistant prepares changes for review. Only you can approve and save a preset.</p></div></section>
               </aside>
             </div>
           </section>
@@ -432,7 +420,7 @@
               <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 8h6m-6 4h6m-6 4h3"/></svg></div><div><span>Hardware</span><h2 id="hardware-title">disting NT</h2><p id="hardware-detail">Waiting for MIDI connection</p></div><span class="settings-status" id="hardware-status">Not connected</span></article>
               <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 8h14M5 16h14"/></svg></div><div><span>Advanced connection</span><h2>SysEx device ID</h2><p>Leave at 0 unless your NT uses another ID.</p></div><label class="settings-select"><select id="sysex-id" aria-label="SysEx device ID"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option></select></label></article>
               <article class="settings-card"><div class="settings-icon sync"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18 9a7 7 0 0 0-12-2l-2 4m16 2-2 4a7 7 0 0 1-12-2"/></svg></div><div><span>Synchronization</span><h2 id="sync-mode-label">Fast</h2><p id="sync-mode-detail">Immediate MIDI feedback · 100 ms polling</p></div></article>
-              <article class="settings-card"><div class="settings-icon ai"><svg viewBox="0 0 24 24"><path d="M5 6h14v11H9l-4 3V6Zm4 4h6m-6 3h4"/></svg></div><div><span>AI provider</span><h2>Not configured</h2><p>Assistant is currently an interface preview.</p></div><button class="secondary-button" disabled>Unavailable</button></article>
+              <article class="settings-card"><div class="settings-icon ai"><svg viewBox="0 0 24 24"><path d="M5 6h14v11H9l-4 3V6Zm4 4h6m-6 3h4"/></svg></div><div><span>AI provider</span><h2>Not configured</h2><p>Connect or switch accounts from the Assistant.</p></div><button class="secondary-button" disabled>Not connected</button></article>
               <article class="settings-card settings-card-action" id="reference-guide-card" role="button" tabindex="0"><div class="settings-icon knowledge"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zm9 0h7v14h-7M7 9h1m8 0h1"/></svg></div><div><span>Knowledge</span><h2>NT wiki</h2><p>Browse practical guides for firmware 1.18</p></div><button class="secondary-button" id="open-reference-guide" type="button">Open wiki</button></article>
             </div>
             <article class="midi-monitor real-midi-control hidden" aria-labelledby="midi-monitor-title">
@@ -464,6 +452,15 @@
             </article>
           </section>
         </div>
+
+        <aside class="assistant-dock hidden" id="assistant-dock" aria-label="Docked NT Assistant">
+          <div class="assistant-dock-resize" id="assistant-dock-resize" role="separator" aria-orientation="vertical" aria-label="Resize Assistant"></div>
+          <header class="assistant-dock-header">
+            <div><span>NT Assistant</span><strong id="assistant-dock-title">New conversation</strong></div>
+            <div><button id="assistant-dock-expand" type="button" aria-label="Open full Assistant" title="Open full Assistant"><svg viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M8 21H3v-5m13 5h5v-5"/></svg></button><button id="assistant-dock-close" type="button" aria-label="Close Assistant">×</button></div>
+          </header>
+          <div class="assistant-dock-content" id="assistant-dock-content"></div>
+        </aside>
 
         <div class="toast" id="toast" role="status" aria-live="polite"><span></span></div>
       </div>
@@ -595,12 +592,23 @@
 
   <dialog class="preset-json-dialog" id="preset-json-dialog" aria-labelledby="preset-json-dialog-title">
     <header><div><span>Preset document</span><h2 id="preset-json-dialog-title">Edit preset JSON</h2></div><button id="close-preset-json-dialog" type="button" aria-label="Close preset JSON editor">×</button></header>
-    <div class="preset-json-dialog-copy"><strong id="preset-json-dialog-name"></strong><p>Edit this preset exactly as it is stored on the NT microSD card. The filename stays unchanged; save writes the validated JSON back to this selected file.</p><label class="preset-json-name-field" id="preset-json-name-field" for="preset-json-name-input">Preset name<input id="preset-json-name-input" type="text" maxlength="31" autocomplete="off"></label><label for="preset-json-dialog-input">JSON document</label><textarea id="preset-json-dialog-input" spellcheck="false" autocomplete="off" wrap="off" aria-describedby="preset-json-dialog-status"></textarea><p class="preset-json-dialog-status" id="preset-json-dialog-status" role="status"></p></div>
+    <div class="preset-json-dialog-copy">
+      <div class="preset-json-summary">
+        <div><strong id="preset-json-dialog-name"></strong><p>Edit the document exactly as it is stored on the NT microSD card. Saving validates the JSON and writes it back to this file; the filename stays unchanged.</p></div>
+        <label class="preset-json-name-field" id="preset-json-name-field" for="preset-json-name-input">Preset name<input id="preset-json-name-input" type="text" maxlength="31" autocomplete="off"></label>
+      </div>
+      <label class="preset-json-document-label" for="preset-json-dialog-input">JSON document</label>
+      <textarea id="preset-json-dialog-input" spellcheck="false" autocomplete="off" wrap="off" aria-describedby="preset-json-dialog-status"></textarea>
+      <p class="preset-json-dialog-status" id="preset-json-dialog-status" role="status"></p>
+    </div>
     <footer><button id="cancel-preset-json-dialog" type="button">Cancel</button><button id="confirm-preset-json-dialog" type="button">Save JSON</button></footer>
   </dialog>
 
-  <script src="web-midi-transport.js?v=20260926-58"></script>
-  <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-197"></script>
+  <script src="web-midi-transport.js?v=20260926-59"></script>
+  <script src="routing-logic.js?v=20260926-4"></script>
+  <script src="storage-logic.js?v=20260926-1"></script>
+  <script src="operation-scheduler.js?v=20260926-1"></script>
+  <script src="device-logic.js?v=20260926-1"></script>
+  <script src="app.js?v=20260926-200"></script>
 </body>
 </html>

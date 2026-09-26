@@ -30,6 +30,11 @@ function encodeShort(value) {
   return [(unsigned >> 14) & 0x03, (unsigned >> 7) & 0x7F, unsigned & 0x7F];
 }
 
+function decodeShort(bytes) {
+  const unsigned = ((bytes[0] & 0x03) << 14) | ((bytes[1] & 0x7F) << 7) | (bytes[2] & 0x7F);
+  return unsigned & 0x8000 ? unsigned - 0x10000 : unsigned;
+}
+
 function encodeUnsigned35(value) {
   const bytes = [0, 0, 0, 0, 0];
   let remaining = value;
@@ -69,6 +74,16 @@ let removeCommand = null;
 let loadPresetCommand = null;
 let wakeCommand = null;
 let setPresetNameCommand = null;
+let midiMappingCommand = null;
+let algorithmInfoRequests = 0;
+const midiMappings = new Map([[0, {
+  version: 7,
+  cc: 74,
+  flags: 17,
+  flags2: 0,
+  min: parameters[0].min,
+  max: parameters[0].max
+}]]);
 let directoryCommand = null;
 let fileDownloadCommand = null;
 const fileUploadCommands = [];
@@ -121,8 +136,24 @@ const output = {
       setPresetNameCommand = [...bytes];
       return;
     }
+    if (bytes[6] === 0x4E) {
+      midiMappingCommand = [...bytes];
+      const parameter = ((bytes[8] & 0x7F) << 14) | ((bytes[9] & 0x7F) << 7) | (bytes[10] & 0x7F);
+      const version = bytes[11];
+      const limitsOffset = version >= 2 ? 15 : 14;
+      midiMappings.set(parameter, {
+        version,
+        cc: bytes[12],
+        flags: bytes[13],
+        flags2: version >= 2 ? bytes[14] : 0,
+        min: decodeShort(bytes.slice(limitsOffset, limitsOffset + 3)),
+        max: decodeShort(bytes.slice(limitsOffset + 3, limitsOffset + 6))
+      });
+      return;
+    }
     let reply = replies.get(bytes[6]);
     if (bytes[6] === 0x31) {
+      algorithmInfoRequests += 1;
       const index = bytes[9];
       const algorithm = algorithms[index];
       const specifications = algorithm.specifications || [];
@@ -205,12 +236,19 @@ const output = {
     if (bytes[6] === 0x4B) {
       const slot = bytes[7];
       const index = bytes[10];
-      const enabled = index === 0;
+      const mapping = midiMappings.get(index) || {
+        version: 7,
+        cc: 0,
+        flags: 0,
+        flags2: 0,
+        min: parameters[index].min,
+        max: parameters[index].max
+      };
       reply = [
-        ...header, 0x4B, slot, ...encodeShort(index), 7,
+        ...header, 0x4B, slot, ...encodeShort(index), mapping.version,
         0, 0, 0, 0, ...encodeShort(0),
-        enabled ? 74 : 0, enabled ? 17 : 0, 0,
-        ...encodeShort(parameters[index].min), ...encodeShort(parameters[index].max),
+        mapping.cc, mapping.flags, ...(mapping.version >= 2 ? [mapping.flags2] : []),
+        ...encodeShort(mapping.min), ...encodeShort(mapping.max),
         0xF7
       ];
     }
@@ -336,7 +374,8 @@ global.navigator = { requestMIDIAccess: async options => {
   const ports = await transport.connect();
   assert.equal(ports.input, input.name);
   assert.equal(ports.output, output.name);
-  assert.deepEqual(await transport.readSnapshot(), {
+  const initialSnapshot = await transport.readSnapshot();
+  assert.deepEqual(initialSnapshot, {
     version: "1.20.0",
     presetName: "Hardware Test",
     slotCount: 2,
@@ -355,6 +394,10 @@ global.navigator = { requestMIDIAccess: async options => {
       { index: 1, guid: [5, 6, 7, 8], guidKey: "05060708", name: "Kick Snare", algorithmName: "KickSnare", algorithmFactoryName: "Custom plug-in", isPlugin: true, pluginFilename: "KickSnare.lua", bypassed: true }
     ]
   });
+  assert.equal(algorithmInfoRequests, algorithms.length);
+  const cachedSnapshot = await transport.readSnapshot({ algorithms: initialSnapshot.algorithms });
+  assert.equal(cachedSnapshot.slots.length, slots.length);
+  assert.equal(algorithmInfoRequests, algorithms.length);
   assert.deepEqual(await transport.readSlotParameters(0), [
     {
       index: 0,
@@ -396,6 +439,37 @@ global.navigator = { requestMIDIAccess: async options => {
   assert.equal(editorState.parameters[0].mapping.midi.cc, 74);
   assert.equal(editorState.parameters[0].mapping.midi.type, "CC");
   assert.equal(editorState.parameters[1].mapping.midi.enabled, false);
+  const confirmedMapping = await transport.writeMIDIMapping(0, 0, {
+    version: 7,
+    channel: 16,
+    type: "Pitch bend",
+    cc: 9,
+    min: -12,
+    max: 34,
+    enabled: true,
+    relative: true,
+    symmetric: true,
+    viewChange: true
+  });
+  assert.deepEqual(confirmedMapping.midi, {
+    cc: 9,
+    channel: 16,
+    typeCode: 5,
+    type: "Pitch bend",
+    enabled: true,
+    symmetric: true,
+    relative: true,
+    viewChange: true,
+    min: -12,
+    max: 34
+  });
+  assert.deepEqual(midiMappingCommand.slice(6, -1), [
+    0x4E, 0, 0, 0, 0, 7, 9, 123, 23,
+    ...encodeShort(-12), ...encodeShort(34)
+  ]);
+  await assert.rejects(() => transport.writeMIDIMapping(0, 0, {
+    version: 7, channel: 0, type: "CC", cc: 1, min: 0, max: 1
+  }), /channels must be between 1 and 16/i);
   assert.deepEqual(await transport.readOutputModeUsage(0, 1), {
     parameterIndex: 1,
     outputParameterIndices: [3, 4]

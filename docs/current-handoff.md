@@ -4,7 +4,8 @@ Last updated: 26 September 2026
 
 ## Tomorrow: start here
 
-- Current UI milestone: pushed commit `fd738fa` (`Add live CPU risk spectrum`).
+- Current code baseline before the 26 September audit changes: commit `80bdc0c` (`Open preset JSON editor at document start`).
+- Read `docs/baseline-audit-2026-09-26.md` for the official-source protocol inventory, fixes made during the audit and the ordered cleanup path.
 - Standalone-only recovery snapshot: `/home/nymph/DistingNT/ntpilot-standalone-snapshot-ui-milestone-20260926-120311` at UI commit `fd738fa`, including this refreshed handoff and no VS Code extension files.
 - **Hard scope boundary:** the VS Code extension is abandoned/out of scope. Do not inspect, edit, sync, port to, test, package or document `vscode-webmidi/**`. Its existing uncommitted files belong to the user and must remain untouched. All future work targets only the standalone browser app.
 - The user has hardware-tested the shared Editor/Routing connection popup, iPad routing list, popup retargeting, immediate verified routing writes, dark mode and reconnect flow. The routing interaction is now substantially usable on the real NT and iPad Web MIDI browser.
@@ -19,27 +20,116 @@ Last updated: 26 September 2026
 - An algorithm add is represented as one Undo/Redo history action; Undo removes only the exact verified newly-added slot, and Redo recreates it at the original target position.
 - The standalone app now has a **Presets** page between Performance and Assistant. It is a preset library rooted at `/presets/`, never a general SD-card browser: it shows preset JSON files and folders only. The official browser and NT Helper's SD-card preset scanner both enter that directory as `/presets/`. It sends the official fire-and-forget Wake command (`0x07`) before each card operation, then uses the official `0x7A` directory operation with a dedicated, operation-matched ten-second transaction while live parameter and CPU polling are paused. The Web MIDI receiver reassembles fragmented `F0…F7` input before matching replies, following NT Helper's scheduler: large directory listings must not be discarded merely because the browser splits them across MIDI input events. Preset-library failures display the actual NT response or timeout rather than a generic error. It supports folder navigation, new-folder, **Rename preset**, **Edit JSON**, and delete actions, and lets a selected `.json` preset either replace the working preset (`0x34 append=0`) or append after its final algorithm (`0x34 append=1`). **Rename preset** updates both the selected document’s fixed-width root `name` field and its matching `.json` filename: it writes and byte-verifies the new file first, then deletes the old file. **Edit JSON** downloads the selected file using `0x7A/02`, validates its UTF-8 JSON, and writes it back with the documented `0x7A/04` 512-byte chunks; it rereads and byte-verifies the saved document. Loading has no native ACK, so the UI waits for the NT to become readable and then refreshes its snapshot before returning control. The API has no native insert-in-the-middle preset operation; do not imply one in future UI.
 
+## Assistant product decisions — preserve these
+
+The Assistant is a central product goal, not a decorative chat page. It must improve
+on NT Helper's failure modes: partially completed edits, stalled algorithm insertion,
+confusion around names/GUIDs, destructive live mutation, loss of context after an NT
+reboot, and no durable conversation history.
+
+- Keep three responsibilities distinct. **NT Pilot** owns the live device model,
+  deterministic operations, verification, Undo/Redo and the explicit save control.
+  **The Assistant** understands the request, consults cited knowledge and proposes
+  high-level intents. **The NT** remains the authority for actual connected state.
+- Never let a model invent raw SysEx or directly improvise a hardware mutation. A
+  future write-capable Assistant must call typed NT Core intents which validate,
+  preview, serialize, read back and report every step.
+- The current Assistant milestone is deliberately read-only. The later editing flow
+  must prepare a visible in-memory change plan, allow review/approval, and leave the
+  final **Save preset** action to the user. Assistant activity must never silently save
+  a preset to the card.
+- Reboots and disconnects are normal workflow events. Conversation and pending-plan
+  state must survive them. After reconnection, reread the NT, compare actual state
+  with the last verified checkpoint, then resume or re-plan; never assume a command
+  completed merely because it was sent.
+- Build reusable, platform-neutral TypeScript **NT Core** around the canonical
+  device/preset model, intents and transactions. The browser/Web MIDI app is the
+  current implementation; an iOS AUv3 wrapper and native transport come last, after
+  those boundaries are stable. Do not port browser UI or Web MIDI code directly into
+  the AUv3.
+- Knowledge order is: live device metadata; matching official user manual; firmware
+  notes; official C++/Lua API; official editor protocol evidence; verified plug-in
+  docs; explicitly labelled community evidence. Manual 1.18 is the present semantic
+  baseline (438 pages), while firmware 1.19 is the release target. Never silently
+  treat a 1.18 fact as proven for 1.19.
+- The sibling `ntpilot-knowledge` repository already builds the cited knowledge pack
+  and exposes the read-only `knowledge_search`, `knowledge_open` and
+  `algorithm_reference_resolve` contracts. Exact identifiers and writable values
+  must still resolve against the live NT before any later mutation.
+
+### Assistant experience agreed in this session
+
+- Full Assistant page first; a resizable left dock beside the collapsed app sidebar
+  while editing so the patch and chat remain visible together. The composer must
+  always remain usable in the dock.
+- Clicking a selected category a second time is the compact-sidebar gesture for all
+  categories. Do not add a large labelled “Collapse sidebar” row or a large “Dock in
+  Editor” control. Keep the small bottom-edge arrow and the Assistant navigation
+  interaction.
+- Conversations are persistent and renameable. Provider/account setup happens in an
+  overlay on the Assistant page, not by navigating to Settings.
+- The composer follows the existing NT Pilot visual language: roomy text area with a
+  compact lower action row, aligned attachment/model/send controls, Enter to send and
+  Shift+Enter for a newline. Do not copy NT Helper's send-button treatment.
+- Accept text paste, pasted images, drag/drop, documents, images, presets, code and
+  selected folders. Show attached items in both the draft and the visible context
+  list. Current client limits are 24 files and 8 MB per message.
+- The provider menu is designed for Codex subscription, OpenAI API, OpenRouter and
+  Anthropic. Only Codex subscription is functional today; the other three are honest
+  placeholders and must not appear connected.
+
+### Codex account boundary and current implementation
+
+- The user must sign in, sign out and switch ChatGPT/Codex subscription accounts from
+  **inside NT Pilot**. This must not depend on their personal Codex CLI, VS Code login,
+  shell configuration or desktop account state.
+- The NT Pilot Assistant service packages its own Codex runtime. Each browser/native
+  client receives an opaque HTTP-only cookie and an isolated server-side account
+  directory, conversation store and App Server process. Models are read dynamically
+  from the signed-in account; do not maintain a hard-coded model list.
+- Local browser sign-in works now. The remote/iPad deployment uses device
+  authorization through the same NT Pilot UI. This service is still a development
+  deployment, not a finished public service; production needs HTTPS, private
+  persistent credential storage, rate limiting, idle-session cleanup and deployment.
+- A 404 on `/api/assistant/status` was caused by old static Python servers on ports
+  `4173` and `8767`. `host/ntpilot-host.mjs` now supports alias ports so all current
+  local tabs can use the real API from one process. Start tomorrow with:
+
+  ```bash
+  NTPILOT_ALIAS_PORTS=4173,8767 node host/ntpilot-host.mjs
+  ```
+
+  Canonical URL: `http://localhost:8766`. The alias URLs are development convenience
+  only. At handoff, all three status endpoints returned HTTP 200 and a clean signed-out
+  session successfully started a new Codex device-login flow.
+- Important unfinished attachment work: images and text files reach the model, but PDF
+  extraction is not restored in the rewritten service yet. A PDF currently arrives as
+  a binary attachment marker. Add bounded server-side extraction and container support
+  before claiming that the Assistant can read PDFs.
+- Full service/deployment notes are in `docs/assistant-service.md`; knowledge rules are
+  in the sibling `ntpilot-knowledge/AGENTS.md` and `README.md`.
+
 ### Audit findings
 
-1. Routing still has two transaction implementations: `finishRoutingConnection()` and `assignRoutingPort()`. Both perform mode writes, route removal, rollback, history, full refresh, polling restart and notifications. They must converge on one transaction executor.
+1. `finishRoutingConnection()`, `assignRoutingPort()` and direct output-mode changes now use the tested `executeRoutingTransaction()` for ordered mode/removal/application writes and rollback. History, polling, refresh and notifications are still UI-level concerns and should move behind a full controller next.
 2. The routing latency problem is mitigated, not architecturally finished. Assignments now update the verified parameter locally and debounce a full reconciliation, but snapshot mutation, targeted DOM updates and reconciliation policy still live inside UI-heavy `app.js` functions.
-3. Editor, Performance, routing, bypass and history have separate parameter-write pipelines. They share `state.parameterWriteQueue`, but duplicate mutation, error, history and UI synchronization policy.
-4. `state.liveRouting` and `state.routingSnapshot` are competing owners of effectively the same routing model. Consolidate to one canonical routing state.
-5. Some routing decisions are reconstructed from DOM elements. Routing selections and port metadata must be model objects independent of whether desktop graph or iPad list has rendered.
+3. Editor, Performance, routing, bypass, history, mapping, slot and preset operations now share one `OperationScheduler`. Their UI update, error-copy and history policies remain separate and should converge gradually.
+4. Routing now has one canonical `state.routingSnapshot`; the duplicate `state.liveRouting` owner has been removed.
+5. Direct/algorithm connection planning is now DOM-independent in `routing-logic.js`, but some selection construction still begins from rendered port datasets. Complete model-owned port metadata remains the next routing-store step.
 6. Popup rendering, connection policy, NT mutation, rollback and notification copy are interleaved. The popup should render a pure connection plan; one controller should validate and execute that plan.
-7. `app.js` is now over 4,100 lines and contains unrelated Editor, Routing, Performance, history, polling, reconnect, notification and layout behaviour.
-8. There is no routing transaction test suite. Existing automated coverage is primarily the Web MIDI transport.
+7. `app.js` remains about 5,600 lines and still contains unrelated Editor, Routing, Performance, history, reconnect, notification and layout behaviour. Domain rules and scheduling have begun moving into modules, but view/controller splitting remains.
+8. Routing transaction and connection-plan tests now cover ordered writes, partial failure, rollback and free-Aux planning. Compound history and rendered Editor/Routing intent equivalence still need browser/controller coverage.
 
 ### Safe refactor order
 
-1. Add behaviour-locking tests for input reassignment, output Add/Replace, keep/disconnect other routes, rollback after partial failure, undo of compound changes, and identical Editor/Routing intents.
-2. Introduce canonical DOM-independent `RoutingSelection`, `ConnectionIntent` and `ConnectionPlan` data shapes without changing the UI.
-3. Extract one routing transaction executor responsible for validation, serialized writes, rollback, history and refresh policy.
-4. Move `assignRoutingPort()` onto it, verify, then move `finishRoutingConnection()` onto it and delete the duplicate transaction code.
+1. Extend the current tests to cover output Add/Replace, keep/disconnect, compound history and identical rendered Editor/Routing intents.
+2. Complete model-owned `RoutingSelection` metadata so DOM datasets are only view bindings; `ConnectionPlan` is now pure and tested.
+3. Extend the transaction controller boundary to own history and refresh policy; serialization, ordered writes and rollback are now shared.
+4. Keep all three migrated routing entry points on `executeRoutingTransaction()` while moving their remaining shared UI-side policy behind the controller.
 5. Make both Editor and Routing produce the same `ConnectionIntent`; neither page should own routing policy.
-6. Replace `liveRouting`/`routingSnapshot` with one canonical store after both paths use the controller.
-7. Consolidate general parameter mutation only after routing is stable.
-8. Split modules last. Avoid a large file move while behaviour is still changing.
+6. Keep `state.routingSnapshot` as the sole routing owner and remove any new parallel caches during later extraction.
+7. Move common post-write model/history updates behind the scheduler without degrading continuous slider coalescing.
+8. Split view/controller modules incrementally now that domain planning and scheduling are behaviour-locked.
 
 Do not claim zero regression risk. Keep every stage testable and reversible, do not redesign visuals during the refactor, and do not delete an old path until tests prove the replacement has equivalent behaviour.
 
@@ -124,7 +214,9 @@ The central model is the NT bus universe:
 - Moving a Performance slider writes the exact same live parameter as its Editor row; polling keeps both representations synchronized.
 - String-valued and binary parameters show their real labels instead of streams of raw numbers. Continuous controls coalesce writes while dragging.
 - Performance assignments remain global when a different Editor algorithm is selected.
-- Assistant remains intentionally unimplemented. Its page is visibly marked as an interface preview, all write/chat actions are disabled, and Status no longer claims an AI provider is connected.
+- Assistant now has a platform-neutral HTTP contract for status, login/logout, models, threads and streamed turns. Each browser/native client receives an opaque HTTP-only session whose provider account, conversations and App Server process are isolated on the NT Pilot service.
+- **Hard boundary:** NT Pilot never reads or alters a user’s workstation Codex CLI, VS Code configuration or login. The deployable service carries its own runtime and owns provider credentials, cited knowledge tools and enforcement of the no-MIDI/no-preset-save safety policy. Remote deployments use device authorization so sign-in does not depend on a desktop localhost callback.
+- Start the local UI/service with `node host/ntpilot-host.mjs` and use `http://localhost:8766`. The same container can be hosted for desktop, iPad and later AUv3 clients; see `docs/assistant-service.md`.
 
 ## Status, reference and visual identity
 
@@ -208,15 +300,28 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-257`
-- `web-midi-transport.js?v=20260926-58`
-- `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-197`
+- `styles.css?v=20260926-260`
+- `web-midi-transport.js?v=20260926-59`
+- `routing-logic.js?v=20260926-4`
+- `storage-logic.js?v=20260926-1`
+- `operation-scheduler.js?v=20260926-1`
+- `device-logic.js?v=20260926-1`
+- `app.js?v=20260926-200`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
 ## Verified in this session
 
+- The Assistant UI now provides a full-page workspace, renameable/persistent sessions,
+  live NT and knowledge context, an in-Editor resizable left dock, attachment controls,
+  paste/drop handling, model selection and Enter-to-send.
+- Codex subscription sign-in, sign-out and account switching run through NT Pilot's
+  own isolated service/runtime rather than the workstation CLI or VS Code account.
+- A clean signed-out browser session returned the complete dynamic model catalogue and
+  successfully started a new Codex device-login flow.
+- The real Assistant API now serves local development ports `4173`, `8766` and `8767`
+  from one process; `/api/assistant/status` returned HTTP 200 on all three after the
+  stale static-server 404 was fixed.
 - The user hardware-tested the unified connection popup from both Routing and Editor, including retargeting an open popup to another bus.
 - The user confirmed that removing the blocking complete post-write scan made connection completion substantially faster.
 - The user confirmed automatic NT reconnection/reload after a hardware reboot works.
@@ -224,6 +329,11 @@ Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 - The user supplied screenshots confirming the Add/Replace popover appears for output connections and that derived Pitch CV routing is understandable in the iPad list.
 - Physical input/output labels now show numbers only; Aux retains `A`.
 - JavaScript syntax checks pass.
+- `routing-logic.test.cjs` passes, including success ordering, partial failure, compound rollback and rollback-error reporting.
+- `storage-logic.test.cjs` passes, including successful replacement, rollback after an ambiguously successful rename and retained-backup reporting.
+- `operation-scheduler.test.cjs` passes, including strict serialization, failure isolation and queue recovery.
+- `device-logic.test.cjs` passes, including firmware 1.19 capability gating and slot-placement policy.
+- Headless Chrome loads every cache-versioned asset and reaches the honest disconnected startup state without a startup exception.
 - `web-midi-transport.test.cjs` passes, including SysEx `0x55` parsing.
 - `git diff --check` passes.
 - Native Performance Page string/value queries, dual CPU meter parsing, bypass writes, slot reordering and firmware-reported bus counts have automated transport coverage.
@@ -231,13 +341,16 @@ Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
 ## Hardware tests still needed
 
-1. Choose both Add and Replace on a known mode-capable output, then confirm the output chip and NT parameter retain the selected mode after refresh.
-2. Assign the same output to an occupied Aux bus in both modes and confirm audible/graph behaviour.
-3. Confirm a controller shared by multiple outputs updates every affected chip.
-4. Confirm Mod-only filtering shows the known modulation route with Input, Output and Aux disabled and Signals enabled.
-5. Confirm the new explicit touch radio handling actually changes Add/Replace and Keep/Disconnect choices in the iPad Web MIDI browser.
-6. Test physical-input and physical-output popup accent colours and retargeting after the latest cache-bumped build.
-7. Test USB Audio From Host and USB Audio To Host placement in a blank patch containing those factory algorithms.
+1. Apply, disable, Undo and Redo a native MIDI mapping; refresh and confirm channel, type, controller, flags and limits remain identical on the NT.
+2. Run MIDI Learn with CC, note, pitch bend and channel pressure messages from the actual controller path.
+3. Edit an existing preset JSON file in place, then confirm the NT can load it and no `.ntpilot-*` backup remains after a successful write.
+4. Choose both Add and Replace on a known mode-capable output, then confirm the output chip and NT parameter retain the selected mode after refresh.
+5. Assign the same output to an occupied Aux bus in both modes and confirm audible/graph behaviour.
+6. Confirm a controller shared by multiple outputs updates every affected chip.
+7. Confirm Mod-only filtering shows the known modulation route with Input, Output and Aux disabled and Signals enabled.
+8. Confirm the new explicit touch radio handling actually changes Add/Replace and Keep/Disconnect choices in the iPad Web MIDI browser.
+9. Test physical-input and physical-output popup accent colours and retargeting after the latest cache-bumped build.
+10. Test USB Audio From Host and USB Audio To Host placement in a blank patch containing those factory algorithms.
 
 ## Known boundaries and risks
 
@@ -252,10 +365,24 @@ Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 ```bash
 node --check app.js
 node --check web-midi-transport.js
+node device-logic.test.cjs
+node operation-scheduler.test.cjs
+node routing-logic.test.cjs
+node storage-logic.test.cjs
 node web-midi-transport.test.cjs
 git diff --check
 ```
 
 ## Next recommended step
 
-Begin the test-first routing consolidation described at the top of this document. Lock down current hardware semantics for input reassignment, Add/Replace, Keep/Disconnect, rollback and compound Undo before extracting a canonical `ConnectionIntent`/transaction executor. Once both Editor and Routing use that controller and one routing store, research the latest official SysEx/API contract for algorithm and plug-in discovery plus add/replace/remove, then build the slot lifecycle on the canonical mutation layer rather than directly in either page.
+Stabilize the read-only Assistant end to end before granting it any write authority:
+add automated service/API tests, restore bounded PDF text extraction, test persistent
+session history and account switching, add idle-process cleanup/rate limiting, and
+exercise an NT reboot while a conversation remains open. Then define the first typed,
+preview-only NT Core intents for explaining and planning patch changes. Do not expose
+Assistant-driven mutation until those intents share NT Pilot's scheduler, readback,
+rollback and reconnect rules and the user-facing review flow is proven.
+
+Continue the test-first routing consolidation in parallel only when it supports that
+same NT Core boundary: lock down Add/Replace, Keep/Disconnect, rollback and compound
+Undo, then make Editor and Routing produce one canonical `ConnectionIntent`.

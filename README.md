@@ -15,11 +15,15 @@ NT Pilot is a browser-based editor and routing workspace for the Expert Sleepers
 - Supports direct routing edits and explicit Add/Replace selection for algorithm outputs whose controller is reported by NT metadata.
 - Supports bidirectional port-first or Aux-first routing assignment, algorithm bypass from Editor and Routing, and animated bypass indicators.
 - Supports verified drag-and-drop algorithm reordering with Undo/Redo history and keyboard shortcuts.
+- Browses the NT algorithm catalogue, loads installed plug-ins, and adds or removes algorithms with targeted device verification.
+- Browses the NT `/presets/` library and supports load, append, rename, byte-verified JSON editing, folders and delete operations.
+- Edits native NT MIDI mappings with real `0x4E` writes, `0x4B` readback, incoming-message MIDI Learn and Undo/Redo.
 - Uses the selected Aux bus colour as the interface accent while keeping an unassigned state neutral.
 - Includes a searchable, text-first NT wiki condensed from the official firmware 1.18 manual, with page-specific source links.
 - Handles NT USB MIDI disconnects and retries connection after a module reboot.
 - Keeps working-memory edits separate from the explicit **Save preset** action.
-- Labels the future AI Assistant honestly as an inactive interface preview until a real provider and approval backend exist.
+- Provides the UI and client contract for a read-only Assistant: provider sign-in, model choice, persistent/renameable sessions, streamed replies, live NT context and attachments.
+- Uses a deployable Assistant service with per-device, isolated Codex accounts. Its packaged server runtime is independent of a user’s workstation CLI, VS Code and login state.
 
 ## How NT Pilot improves on the NT Helper workflow
 
@@ -42,13 +46,21 @@ These differences are product choices, not a fork of NT Helper's presentation. W
 
 ## Running locally
 
-Serve this directory over HTTP and open it in desktop Chrome or Edge. The current development server is normally available at:
+Start the local NT Pilot Host, then open it in desktop Chrome or Edge:
+
+```bash
+node host/ntpilot-host.mjs
+```
+
+The Host serves the UI at:
 
 ```text
 http://localhost:8766
 ```
 
 Grant SysEx access when prompted, connect the disting NT MIDI input/output pair, and use **Refresh** to reread the device.
+
+Open **Assistant → Choose model → Codex subscription** to sign this NT Pilot session in or out. The hosted build uses the same API and UI from desktop, iPad and later AUv3; see [the Assistant service deployment notes](docs/assistant-service.md). OpenAI API, OpenRouter and Anthropic support belong behind the same service contract.
 
 The browser may cache JavaScript aggressively during development. If the version query shown at the bottom of `index.html` changes, use a hard refresh.
 
@@ -58,17 +70,21 @@ Parameter and routing changes are applied immediately to the loaded preset's wor
 
 ## Development
 
-Run the transport checks with:
+Run the baseline checks with:
 
 ```bash
 node --check app.js
 node --check web-midi-transport.js
+node device-logic.test.cjs
+node operation-scheduler.test.cjs
+node routing-logic.test.cjs
+node storage-logic.test.cjs
 node web-midi-transport.test.cjs
 git diff --check
 ```
 
 The standalone browser implementation is the current source of truth. The VS Code Web MIDI bridge is intentionally deferred until the Chrome UX and hardware behaviour are approved.
 
-See [the current handoff](docs/current-handoff.md) for architecture, test state and remaining work.
+See [the current handoff](docs/current-handoff.md) and [the baseline audit](docs/baseline-audit-2026-09-26.md) for architecture, protocol sources, test state and remaining work.
 
 The built-in wiki is a concise operational guide, not a replacement for Expert Sleepers' documentation. It links to the [official firmware 1.18 manual](https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf) and the [firmware/manual archive](https://www.expert-sleepers.co.uk/distingNTfirmwareupdates.html).
