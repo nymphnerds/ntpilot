@@ -355,6 +355,7 @@ input[type="range"]:disabled { opacity: .48; cursor: wait; }
 .routing-aux-chip { min-width: 0; width: 100%; height: 27px; padding: 0; border: 1px solid var(--aux-colour); border-radius: 6px; color: white; background: var(--aux-colour); box-shadow: inset 0 -5px 8px rgba(0,0,0,.12); font-size: 7px; font-weight: 950; letter-spacing: -.04em; cursor: pointer; opacity: .5; transition: opacity .12s, transform .12s, box-shadow .12s; }
 .routing-aux-chip.used { opacity: 1; }.routing-aux-chip:hover, .routing-aux-chip.selected { opacity: 1; transform: translateY(-1px); box-shadow: 0 0 0 3px rgba(22,39,55,.16), inset 0 -7px 12px rgba(0,0,0,.12); }
 .routing-aux-chip.none { border-color: #aebac3; color: #4e606b; background: #eef2f4; box-shadow: none; opacity: 1; letter-spacing: 0; }
+.routing-ipad-list { display: none; }
 .device-frame.ipad-mode > .routing-aux-palette { position: absolute; z-index: 20; left: 0; right: 0; bottom: 0; width: 100%; min-height: 0; padding: 7px var(--chrome-gutter); grid-template-columns: repeat(22, minmax(0, 1fr)); grid-auto-rows: 27px; gap: 5px 3px; overflow: visible; border-top: 1px solid var(--line); border-bottom: 0; box-shadow: 0 -8px 24px rgba(34,58,69,.09); }
 .device-frame.ipad-mode > .routing-aux-palette .routing-aux-chip { height: 27px; font-size: 15px; letter-spacing: 0; opacity: .72; }
 .device-frame.ipad-mode > .routing-aux-palette .routing-aux-chip.used,
@@ -364,6 +365,39 @@ input[type="range"]:disabled { opacity: .48; cursor: wait; }
 .device-frame.ipad-mode > .routing-aux-palette .routing-aux-chip.physical.output { border-color: #e57b7d; background: #e57b7d; }
 .device-frame.bus-dock-bottom:has(> .routing-aux-palette:not(.hidden)) .app-main,
 .device-frame.bus-dock-bottom:has(> .routing-aux-palette:not(.hidden)) .app-sidebar { padding-bottom: var(--bottom-bus-dock-height, 92px); }
+.device-frame.ipad-mode .routing-shell { grid-template-rows: minmax(0, 1fr) 0; }
+.device-frame.ipad-mode .routing-shell > .routing-toolbar,
+.device-frame.ipad-mode .routing-shell > .routing-viewport { display: none; }
+.device-frame.ipad-mode .routing-ipad-list { padding: 12px; display: flex; min-height: 0; flex-direction: column; gap: 10px; overflow-y: auto; background: #f1f5f6; }
+.device-frame.ipad-mode .routing-ipad-card.routing-node.slot { position: relative; left: auto; top: auto; width: 100%; height: auto; min-height: 0; flex: 0 0 auto; overflow: hidden; border: 1px solid #cbd8dc; border-radius: 15px; background: white; box-shadow: 0 4px 14px rgba(43,66,76,.08); }
+.device-frame.ipad-mode .routing-ipad-card.routing-node.slot.selected { border-color: #a98ce9; box-shadow: 0 0 0 3px rgba(169,140,233,.15), 0 5px 16px rgba(43,66,76,.1); }
+.device-frame.ipad-mode .routing-ipad-card .routing-node-head { position: relative; height: 68px; padding: 10px 13px; border-radius: 0; border-bottom: 1px solid #dce5e8; background: #f8fafb; }
+.device-frame.ipad-mode .routing-ipad-card .routing-slot-number { flex-basis: 42px; width: 42px; height: 42px; border-radius: 10px; font-size: 15px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-node-title > strong { font-size: 18px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-algorithm-name { margin-top: 4px; font-size: 12px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-algorithm-name b { padding: 2px 5px; font-size: 8px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-bypass-toggle { padding: 6px 9px; border-radius: 7px; font-size: 10px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-node-ports { position: relative; left: auto; top: auto; min-height: 0; padding: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; border: 0; border-radius: 0; background: white; box-shadow: none; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port-column { gap: 7px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port-column::before { padding: 0 3px 4px; color: #71858e; font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .08em; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port-column.input::before { content: "Inputs"; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port-column.output::before { content: "Outputs"; text-align: right; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port { width: 100%; height: 40px; margin: 0; padding: 0 8px; gap: 7px; border: 1px solid #dce5e8; border-radius: 9px; background: #f7fafb; font-size: 12px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port[data-routing-side="input"] { justify-content: flex-start; text-align: left; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port[data-routing-side="output"] { justify-content: flex-end; text-align: right; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port i { flex-basis: 14px; width: 14px; height: 14px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port span:not(.routing-mode-toggle) { padding: 0; background: transparent; font-size: 12px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port b { min-width: 40px; padding: 5px 7px; font-size: 11px; text-align: center; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port .routing-bus-badge.input::before { content: "IN "; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port .routing-bus-badge.output::before { content: "OUT "; }
+.device-frame.ipad-mode .routing-ipad-card .routing-mode-toggle { padding: 4px 6px; border-radius: 5px; font-size: 9px; line-height: 15px; }
+.device-frame.ipad-mode .routing-ipad-card.bypassed { opacity: .62; background: repeating-linear-gradient(135deg, rgba(226,232,235,.5) 0 10px, rgba(248,250,251,.72) 10px 20px); }
+.device-frame.ipad-mode .routing-ipad-modulation { padding: 0 12px 12px; display: flex; align-items: center; gap: 10px; }
+.device-frame.ipad-mode .routing-ipad-modulation > strong { color: #856300; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.device-frame.ipad-mode .routing-ipad-modulation > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.device-frame.ipad-mode .routing-ipad-modulation span { min-width: 38px; padding: 5px 7px; border-radius: 7px; color: #725300; background: #f4dda0; font-size: 11px; font-weight: 900; text-align: center; }
+.device-frame.ipad-mode .routing-inspector { min-height: 0; height: 0; padding: 0; border: 0; }
+.device-frame.ipad-mode .routing-inspector-default { display: none; }
 .routing-viewport { position: relative; min-height: 0; overflow: auto; background-color: #f6f8fc; background-image: linear-gradient(rgba(77,107,157,.10) 1px, transparent 1px), linear-gradient(90deg, rgba(77,107,157,.10) 1px, transparent 1px), linear-gradient(rgba(77,107,157,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(77,107,157,.035) 1px, transparent 1px); background-size: 48px 48px, 48px 48px, 12px 12px, 12px 12px; cursor: grab; overscroll-behavior: contain; scrollbar-color: #9eafc4 #e8edf4; scrollbar-width: thin; }
 .device-frame.ipad-mode .routing-viewport { touch-action: none; }
 .routing-viewport::-webkit-scrollbar { width: 12px; height: 12px; }.routing-viewport::-webkit-scrollbar-track { background: #e8edf4; }.routing-viewport::-webkit-scrollbar-thumb { border: 3px solid #e8edf4; border-radius: 10px; background: #9eafc4; }.routing-viewport::-webkit-scrollbar-thumb:hover { background: #7f94ad; }.routing-viewport::-webkit-scrollbar-corner { background: #e8edf4; }

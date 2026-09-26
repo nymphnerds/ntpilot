@@ -54,6 +54,7 @@
   const midiMonitorLog = $("#midi-monitor-log");
   const midiMonitorFilter = $("#midi-monitor-filter");
   const routingViewport = $("#routing-viewport");
+  const routingIpadList = $("#routing-ipad-list");
   const routingZoomLayer = $("#routing-zoom-layer");
   const routingCanvas = $("#routing-canvas");
   const routingWires = $("#routing-wires");
@@ -1041,6 +1042,30 @@
     return node;
   }
 
+  function makeIpadRoutingCard(definition) {
+    const card = makeRoutingNode(definition);
+    card.classList.add("routing-ipad-card");
+    card.style.removeProperty("left");
+    card.style.removeProperty("top");
+    card.style.removeProperty("width");
+    card.style.removeProperty("height");
+    if (definition.mappings.length) {
+      const modulation = document.createElement("div");
+      modulation.className = "routing-ipad-modulation";
+      const label = document.createElement("strong");
+      label.textContent = "Modulation";
+      const buses = document.createElement("div");
+      definition.mappings.forEach(busLabel => {
+        const badge = document.createElement("span");
+        badge.textContent = busLabel;
+        buses.appendChild(badge);
+      });
+      modulation.append(label, buses);
+      card.appendChild(modulation);
+    }
+    return card;
+  }
+
   function routingModeDetails(selection) {
     if (selection?.side !== "output") return null;
     const control = selection.element.querySelector(".routing-mode-toggle");
@@ -1068,7 +1093,7 @@
     if (!match) return null;
     const parameterIndex = Number(match[0]);
     const modeParameter = (slot.parameters || []).find(parameter => parameter.index === parameterIndex);
-    const livePort = $$(".routing-port.output", routingNodes).find(element => Number(element.dataset.slotIndex) === selection.slotIndex
+    const livePort = [...$$(".routing-port.output", routingNodes), ...$$(".routing-port.output", routingIpadList)].find(element => Number(element.dataset.slotIndex) === selection.slotIndex
       && Number(element.dataset.parameterIndex) === selection.parameterIndex);
     return {
       control: livePort?.querySelector(".routing-mode-toggle") || livePort || selection.element,
@@ -1422,6 +1447,11 @@
     addEndpointBank("source", snapshot.inputBusCount, inputBankTop);
     addEndpointBank("sink", snapshot.outputBusCount, outputBankTop);
 
+    routingIpadList.replaceChildren(...[...nodeDefinitions.values()]
+      .filter(definition => definition.kind === "slot")
+      .sort((first, second) => first.slotIndex - second.slotIndex)
+      .map(makeIpadRoutingCard));
+
     state.routingCanvasSize = { width, height };
     routingCanvas.style.width = `${width}px`;
     routingCanvas.style.height = `${height}px`;
@@ -1445,7 +1475,7 @@
     } else if (previousBusSelection != null) {
       state.routingBusSelection = previousBusSelection;
       $$(".routing-aux-chip", routingAuxPalette).forEach(chip => chip.classList.toggle("selected", Number(chip.dataset.bus) === previousBusSelection));
-      $$(".routing-port", routingNodes).forEach(port => port.classList.toggle("bus-match", Number(port.dataset.bus) === previousBusSelection));
+      [routingNodes, routingIpadList].forEach(surface => $$(".routing-port", surface).forEach(port => port.classList.toggle("bus-match", Number(port.dataset.bus) === previousBusSelection)));
     }
     routingWires.replaceChildren();
     const svgNS = "http://www.w3.org/2000/svg";
@@ -1510,7 +1540,7 @@
     if (state.routingBusSelection != null && selection.parameterIndex == null) {
       state.routingBusSelection = null;
       $$(".routing-aux-chip", routingAuxPalette).forEach(chip => chip.classList.remove("selected"));
-      $$(".routing-port", routingNodes).forEach(candidate => candidate.classList.remove("bus-match"));
+      [routingNodes, routingIpadList].forEach(surface => $$(".routing-port", surface).forEach(candidate => candidate.classList.remove("bus-match")));
       showToast("An Aux bus cannot connect directly to a physical socket; choose a writable algorithm port.");
       return true;
     }
@@ -1788,7 +1818,7 @@
     }
     state.routingBusSelection = bus;
     $$(".routing-aux-chip", routingAuxPalette).forEach(item => item.classList.toggle("selected", item === chip));
-    $$(".routing-port", routingNodes).forEach(port => port.classList.toggle("bus-match", Number(port.dataset.bus) === bus));
+    [routingNodes, routingIpadList].forEach(surface => $$(".routing-port", surface).forEach(port => port.classList.toggle("bus-match", Number(port.dataset.bus) === bus)));
     showToast(bus < 0 ? "Now choose a port to disconnect" : `Now choose a port for ${routingBusLabel(bus, state.routingSnapshot)}`);
     return true;
   }
@@ -1860,7 +1890,7 @@
 
   function selectRoutingSlot(slotIndex, snapshot = state.liveRouting) {
     if (!snapshot) return;
-    $$(".routing-node.slot", routingNodes).forEach(node => node.classList.toggle("selected", Number(node.dataset.slotIndex) === slotIndex));
+    [routingNodes, routingIpadList].forEach(surface => $$(".routing-node.slot", surface).forEach(node => node.classList.toggle("selected", Number(node.dataset.slotIndex) === slotIndex)));
     $$(".routing-wire", routingWires).forEach(wire => {
       const related = slotIndex == null || Number(wire.dataset.fromSlot) === slotIndex || Number(wire.dataset.toSlot) === slotIndex;
       wire.classList.toggle("dimmed", !related);
@@ -2413,8 +2443,10 @@
       if (routingSlot) routingSlot.bypassed = bypassed;
       const editorSlot = $(`.slot[data-index="${slotIndex}"]`, slotList);
       const routingNode = $(`.routing-node.slot[data-slot-index="${slotIndex}"]`, routingNodes);
+      const ipadRoutingNode = $(`.routing-node.slot[data-slot-index="${slotIndex}"]`, routingIpadList);
       editorSlot?.classList.toggle("bypassed", bypassed);
       routingNode?.classList.toggle("bypassed", bypassed);
+      ipadRoutingNode?.classList.toggle("bypassed", bypassed);
       $$(`[data-bypass-slot="${slotIndex}"]`).forEach(item => setBypassToggleContent(item, bypassed));
       const liveEntry = state.liveParameters.get(mappingKey(slotIndex, 0));
       if (liveEntry) updateLiveParameterEntry(liveEntry, bypassed ? 1 : 0, "midi-feedback");
@@ -2852,6 +2884,7 @@
     state.redoHistory.length = 0;
     state.historyBusy = false;
     routingNodes.replaceChildren();
+    routingIpadList.replaceChildren();
     routingWires.replaceChildren();
     routingAuxPalette.replaceChildren();
     routingLoading.classList.add("hidden");
@@ -3053,7 +3086,7 @@
       updateWorkingState();
     }
   });
-  routingNodes.addEventListener("click", async event => {
+  const handleRoutingSurfaceClick = async event => {
     if (activateBypassToggle(event.target)) return;
     if (await handleRoutingModeClick(event.target)) return;
     if (await handleRoutingConnectionClick(event.target)) return;
@@ -3067,7 +3100,9 @@
         if (slot) displaySlot(slot);
       }
     }
-  });
+  };
+  routingNodes.addEventListener("click", handleRoutingSurfaceClick);
+  routingIpadList.addEventListener("click", handleRoutingSurfaceClick);
   routingViewport.addEventListener("click", event => {
     if (!event.target.closest(".routing-node, .routing-port, button, input, label")) selectRoutingSlot(null);
   });
@@ -3368,7 +3403,7 @@
     moveLiveSlot(fromSlot, toSlot);
   });
   slotList.addEventListener("dragend", clearSlotDragState);
-  [slotList, routingNodes].forEach(container => container.addEventListener("keydown", event => {
+  [slotList, routingNodes, routingIpadList].forEach(container => container.addEventListener("keydown", event => {
     if ((event.key === "Enter" || event.key === " ") && event.target.matches("[data-bypass-slot]")) {
       event.preventDefault();
       event.stopPropagation();
