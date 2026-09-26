@@ -1129,7 +1129,7 @@
 
   async function openRoutingConnectionPanel({ source, destination, output, destinationBus, onApply, title = "New connection", submitLabel = "Connect", allowRouteChanges = true }) {
     routingConnectionPanel.classList.toggle("ipad-panel", state.ipadMode);
-    const details = output?.parameterIndex != null ? await resolveRoutingModeDetails(output) : null;
+    const details = output?.parameterIndex != null ? routingModeDetails(output) : null;
     const existing = allowRouteChanges && output?.parameterIndex != null && destinationBus >= 0
       ? existingWritableOutputRoutes(destinationBus, output)
       : [];
@@ -2814,8 +2814,13 @@
     const destination = direction === "undo" ? state.redoHistory : state.undoHistory;
     const action = source.pop();
     if (!action) return;
+    const control = direction === "undo" ? undoEdit : redoEdit;
+    const idleLabel = direction === "undo" ? "Undo" : "Redo";
     state.historyBusy = true;
     updateHistoryControls();
+    control.classList.add("working");
+    control.textContent = direction === "undo" ? "Undoing…" : "Redoing…";
+    showToast(`${direction === "undo" ? "Undoing" : "Redoing"} ${action.label}…`);
     let succeeded = false;
     if (action.type === "slot-move") {
       succeeded = direction === "undo"
@@ -2824,12 +2829,19 @@
     }
     if (succeeded) {
       destination.push(action);
+      control.classList.add("confirmed");
+      control.textContent = direction === "undo" ? "Undone" : "Redone";
       showToast(`${direction === "undo" ? "Undid" : "Redid"} ${action.label} and verified from the NT`);
     } else {
       source.push(action);
+      control.textContent = "Not changed";
     }
     state.historyBusy = false;
     updateHistoryControls();
+    window.setTimeout(() => {
+      control.classList.remove("working", "confirmed");
+      control.textContent = idleLabel;
+    }, succeeded ? 1100 : 1500);
   }
 
   function showLiveIdentity(identity) {

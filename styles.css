@@ -122,7 +122,14 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .history-actions { display: inline-flex; align-items: center; gap: 8px; }
 .history-actions button { padding: 2px 0; border: 0; color: #344f5b; background: transparent; font: inherit; font-size: 11px; font-weight: 850; cursor: pointer; }
 .history-actions button:hover:not(:disabled) { color: var(--pilot-deep); }
-.history-actions button:disabled { opacity: .58; cursor: default; }
+.history-actions button:disabled { opacity: .32; cursor: default; }
+.history-actions button:not(:disabled) { color: var(--pilot-deep); }
+.history-actions button.working { opacity: 1; color: #755700; }
+.history-actions button.confirmed { opacity: 1; color: #087965; }
+.device-frame.ipad-mode .history-actions button { min-width: 66px; padding: 6px 8px; border-radius: 8px; font-size: 13px; transition: color .15s, background .15s, opacity .15s; }
+.device-frame.ipad-mode .history-actions button:not(:disabled) { background: color-mix(in srgb, var(--pilot) 10%, white); }
+.device-frame.ipad-mode .history-actions button.working { background: #fff0c8; }
+.device-frame.ipad-mode .history-actions button.confirmed { background: #dff4ee; }
 .status-read-action { white-space: nowrap; }
 .status-sync { height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 4px 0 9px; border: 1px solid var(--line); border-radius: 10px; color: #71818a; background: #f7fafb; font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .05em; }
 .status-sync select { height: 26px; padding: 0 21px 0 5px; border: 0; outline: 0; color: #284550; background-color: #f7fafb; color-scheme: light; font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer; }
