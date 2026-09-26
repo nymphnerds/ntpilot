@@ -105,6 +105,11 @@
   const algorithmSpecNotice = $("#algorithm-spec-notice");
   const cancelAlgorithmSpec = $("#cancel-algorithm-spec");
   const confirmAlgorithmSpec = $("#confirm-algorithm-spec");
+  const algorithmLoadDialog = $("#algorithm-load-dialog");
+  const closeAlgorithmLoad = $("#close-algorithm-load");
+  const algorithmLoadName = $("#algorithm-load-name");
+  const cancelAlgorithmLoad = $("#cancel-algorithm-load");
+  const confirmAlgorithmLoad = $("#confirm-algorithm-load");
   const algorithmRemoveDialog = $("#algorithm-remove-dialog");
   const closeAlgorithmRemove = $("#close-algorithm-remove");
   const algorithmRemoveName = $("#algorithm-remove-name");
@@ -119,6 +124,7 @@
     rebootRecovery = null;
   }
 
+  const MAX_ALGORITHM_SLOTS = 40;
   const state = {
     ntTransport: null,
     transportOnline: false,
@@ -178,7 +184,9 @@
     pendingAlgorithm: null,
     pendingAlgorithmPlacement: null,
     pendingSlotRemoval: null,
+    pendingPluginLoad: null,
     slotMutationBusy: false,
+    memoryReadTail: Promise.resolve(),
   };
   let algorithmMemoryCheckToken = 0;
   let algorithmMemoryCheckTimer = null;
@@ -3360,10 +3368,11 @@
     const algorithm = state.pendingAlgorithm;
     const slot = selectedLiveSlot();
     const used = state.liveIdentity?.slots?.length || 0;
-    const capacity = `${used} of 10 slots used`;
-    if (!algorithm) return { kicker: capacity, detail: used >= 10 ? "Remove an algorithm before adding another." : `${10 - used} slot${10 - used === 1 ? "" : "s"} available. Select an algorithm, then choose where it goes.` };
+    const capacity = `${used} of ${MAX_ALGORITHM_SLOTS} slots used`;
+    if (!algorithm) return { kicker: capacity, detail: used >= MAX_ALGORITHM_SLOTS ? "Remove an algorithm before adding another." : `${MAX_ALGORITHM_SLOTS - used} slot${MAX_ALGORITHM_SLOTS - used === 1 ? "" : "s"} available. Select an algorithm, then choose where it goes.` };
+    if (algorithm.isPlugin && !algorithm.isLoaded) return { kicker: `${algorithm.name} · needs load`, detail: "Load this plug-in into the NT before its settings and memory fit can be checked. Loading may reserve memory until reboot." };
     if (!slot) return { kicker: `${algorithm.name} · ${capacity}`, detail: "This will become slot 1." };
-    return { kicker: `${algorithm.name} · ${capacity}`, detail: used >= 10 ? "No free slot: remove an algorithm before adding another." : `Choose where to add it around ${slot.name}.` };
+    return { kicker: `${algorithm.name} · ${capacity}`, detail: used >= MAX_ALGORITHM_SLOTS ? "No free slot: remove an algorithm before adding another." : `Choose where to add it around ${slot.name}.` };
   }
 
   function renderAlgorithmBrowserPlacement() {
@@ -3378,7 +3387,17 @@
     algorithmBrowserPlacementActions.replaceChildren();
     const algorithm = state.pendingAlgorithm;
     const slot = selectedLiveSlot();
-    if (!algorithm || state.slotMutationBusy || (state.liveIdentity?.slots?.length || 0) >= 10) return;
+    if (!algorithm || state.slotMutationBusy) return;
+    if (algorithm.isPlugin && !algorithm.isLoaded) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.loadSelectedPlugin = "true";
+      button.classList.add("primary");
+      button.textContent = "Load into NT";
+      algorithmBrowserPlacementActions.appendChild(button);
+      return;
+    }
+    if ((state.liveIdentity?.slots?.length || 0) >= MAX_ALGORITHM_SLOTS) return;
     const actions = slot
       ? [["before", "Add before"], ["after", "Add after"], ["end", "Add at end"]]
       : [["end", "Add first algorithm"]];
@@ -3416,22 +3435,15 @@
       const title = document.createElement("strong");
       title.textContent = algorithm.name;
       const detail = document.createElement("small");
+      const usedInPreset = (state.liveIdentity?.slots || []).some(slot => slot.guidKey === algorithm.guidKey);
       detail.textContent = algorithm.isPlugin
-        ? `${algorithm.isLoaded ? "Loaded plug-in · ready to add" : "Installed plug-in · load into NT before adding"}${algorithm.filename ? ` · ${algorithm.filename.split(/[\\/]/).pop()}` : ""}`
+        ? `${algorithm.isLoaded ? (usedInPreset ? "Loaded plug-in · in preset" : "Loaded in NT · not in preset") : "Installed plug-in · needs load"}${algorithm.filename ? ` · ${algorithm.filename.split(/[\\/]/).pop()}` : ""}`
         : "Built-in algorithm";
       copy.append(title, detail);
-      if (algorithm.isPlugin && !algorithm.isLoaded) {
-        item.dataset.loadPlugin = algorithm.guidKey;
-        const load = document.createElement("span");
-        load.className = "algorithm-load";
-        load.textContent = "Load into NT";
-        item.append(copy, load);
-      } else {
-        const kind = document.createElement("span");
-        kind.className = "algorithm-browser-kind";
-        kind.textContent = algorithm.isPlugin ? "Plug-in" : "Built-in";
-        item.append(copy, kind);
-      }
+      const kind = document.createElement("span");
+      kind.className = algorithm.isPlugin && !algorithm.isLoaded ? "algorithm-load" : "algorithm-browser-kind";
+      kind.textContent = algorithm.isPlugin ? (algorithm.isLoaded ? "Plug-in" : "Needs load") : "Built-in";
+      item.append(copy, kind);
       algorithmBrowserList.appendChild(item);
     });
     $$("[data-algorithm-filter]").forEach(button => button.classList.toggle("active", button.dataset.algorithmFilter === filter));
@@ -3443,6 +3455,18 @@
     state.pendingAlgorithmPlacement = null;
     algorithmMemoryCheckToken += 1;
     clearTimeout(algorithmMemoryCheckTimer);
+  }
+
+  function closeAlgorithmLoadDialog() {
+    if (algorithmLoadDialog.open) algorithmLoadDialog.close();
+    state.pendingPluginLoad = null;
+  }
+
+  function openAlgorithmLoadDialog(algorithm) {
+    if (!algorithm?.isPlugin || algorithm.isLoaded || state.slotMutationBusy) return;
+    state.pendingPluginLoad = algorithm;
+    algorithmLoadName.textContent = algorithm.name;
+    algorithmLoadDialog.showModal();
   }
 
   function formatMemoryBytes(bytes) {
@@ -3464,6 +3488,26 @@
     return major > 1 || (major === 1 && minor >= 19);
   }
 
+  async function readAlgorithmMemoryExclusively(algorithm) {
+    const previous = state.memoryReadTail;
+    let release;
+    state.memoryReadTail = new Promise(resolve => { release = resolve; });
+    await previous.catch(() => {});
+    const pendingPoll = stopLivePolling();
+    stopCpuPolling();
+    try {
+      if (pendingPoll) await pendingPoll.catch(() => {});
+      await state.parameterReadQueue.catch(() => {});
+      return await state.ntTransport.readMemoryUsage(algorithm);
+    } finally {
+      release();
+      if (state.ntTransport && state.transportOnline) {
+        startCpuPolling();
+        if (state.activeLiveSlotIndex != null && !state.slotMutationBusy) startLivePolling(state.activeLiveSlotIndex);
+      }
+    }
+  }
+
   async function checkAlgorithmMemory(algorithm, { updateUi = true } = {}) {
     if (!state.ntTransport) return { allowed: true, available: false };
     if (!ntSupportsMemoryPreview()) {
@@ -3473,7 +3517,7 @@
     const token = ++algorithmMemoryCheckToken;
     if (updateUi) showAlgorithmMemoryNotice("Checking NT memory for these starting settings…", "checking");
     try {
-      const report = await state.ntTransport.readMemoryUsage(algorithm);
+      const report = await readAlgorithmMemoryExclusively(algorithm);
       if (token !== algorithmMemoryCheckToken) return { allowed: false, stale: true };
       if (!report.available) {
         if (updateUi) showAlgorithmMemoryNotice(report.reason, "blocked");
@@ -3581,8 +3625,8 @@
     if (!state.ntTransport || !state.transportOnline || state.slotMutationBusy) return false;
     const before = state.liveIdentity;
     const slotCount = before?.slots?.length || 0;
-    if (slotCount >= 10) {
-      showToast("All 10 algorithm slots are occupied. Remove an algorithm before adding another.");
+    if (slotCount >= MAX_ALGORITHM_SLOTS) {
+      showToast(`All ${MAX_ALGORITHM_SLOTS} algorithm slots are occupied. Remove an algorithm before adding another.`);
       return false;
     }
     const selected = selectedLiveSlot();
@@ -3731,7 +3775,7 @@
         loaded = candidate;
         if (loaded?.isLoaded) break;
       }
-      if (!loaded?.isLoaded) throw new Error("The NT did not report it loaded after 5 seconds. It may be too large, unsupported, or need more free NT memory.");
+      if (!loaded?.isLoaded) throw new Error("The NT did not report it loaded after 5 seconds. SysEx does not expose the exact load error; reboot to clear resident plug-ins, then try again and check the NT screen for its native message.");
       state.liveIdentity = { ...state.liveIdentity, algorithms: state.liveIdentity.algorithms.map(item => item.index === loaded.index ? loaded : item) };
       state.pendingAlgorithm = loaded;
       showToast(`${loaded.name} loaded and ready to add`);
@@ -3826,7 +3870,7 @@
     const presetName = identity.presetName || "Unnamed preset";
     $("#preset-title").textContent = presetName;
     $("#editor-heading").textContent = presetName;
-    $("#editor-slot-count").textContent = `${identity.slotCount} slots`;
+    $("#editor-slot-count").textContent = `${identity.slotCount} / ${MAX_ALGORITHM_SLOTS} slots`;
     $("#hardware-title").textContent = "disting NT · live";
     $("#hardware-detail").textContent = `${identity.version || "Unknown firmware"} · SysEx ID ${identity.sysexId}`;
     setHardwareStatus("Connected", true);
@@ -4388,19 +4432,16 @@
     if (!item) return;
     const algorithm = state.liveIdentity?.algorithms?.find(entry => entry.guidKey === item.dataset.guidKey);
     if (!algorithm) return;
-    if (item.dataset.loadPlugin) {
-      loadPluginFromBrowser(algorithm);
-      return;
-    }
-    if (algorithm.isPlugin && !algorithm.isLoaded) {
-      showToast("Load this plug-in before adding it");
-      return;
-    }
     state.pendingAlgorithm = algorithm;
     state.pendingAlgorithmPlacement = null;
     renderAlgorithmBrowser();
   });
   algorithmBrowserPlacementActions.addEventListener("click", async event => {
+    const load = event.target.closest("[data-load-selected-plugin]");
+    if (load && state.pendingAlgorithm) {
+      openAlgorithmLoadDialog(state.pendingAlgorithm);
+      return;
+    }
     const action = event.target.closest("[data-algorithm-placement]");
     if (!action || !state.pendingAlgorithm) return;
     openAlgorithmSpecDialog(state.pendingAlgorithm, action.dataset.algorithmPlacement);
@@ -4408,6 +4449,17 @@
   closeAlgorithmSpec.addEventListener("click", closeAlgorithmSpecDialog);
   cancelAlgorithmSpec.addEventListener("click", closeAlgorithmSpecDialog);
   algorithmSpecDialog.addEventListener("close", () => { state.pendingAlgorithmPlacement = null; });
+  closeAlgorithmLoad.addEventListener("click", closeAlgorithmLoadDialog);
+  cancelAlgorithmLoad.addEventListener("click", closeAlgorithmLoadDialog);
+  algorithmLoadDialog.addEventListener("close", () => { state.pendingPluginLoad = null; });
+  confirmAlgorithmLoad.addEventListener("click", async () => {
+    const algorithm = state.pendingPluginLoad;
+    if (!algorithm) return;
+    confirmAlgorithmLoad.disabled = true;
+    await loadPluginFromBrowser(algorithm);
+    confirmAlgorithmLoad.disabled = false;
+    if (state.pendingAlgorithm?.guidKey === algorithm.guidKey && state.pendingAlgorithm.isLoaded) closeAlgorithmLoadDialog();
+  });
   confirmAlgorithmSpec.addEventListener("click", async () => {
     const algorithm = state.pendingAlgorithm;
     const placement = state.pendingAlgorithmPlacement;

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-243">
+  <link rel="stylesheet" href="styles.css?v=20260926-244">
 </head>
 <body>
   <main class="stage">
@@ -516,6 +516,22 @@
     </footer>
   </dialog>
 
+  <dialog class="algorithm-load-dialog" id="algorithm-load-dialog" aria-labelledby="algorithm-load-title">
+    <header>
+      <div><span>Plug-in runtime</span><h2 id="algorithm-load-title">Load plug-in into NT?</h2></div>
+      <button id="close-algorithm-load" type="button" aria-label="Close plug-in load confirmation">×</button>
+    </header>
+    <div class="algorithm-load-copy">
+      <strong id="algorithm-load-name"></strong>
+      <p>This loads the plug-in code into the NT so its starting settings and memory fit can be checked.</p>
+      <p class="algorithm-load-warning">Loading can reserve NT program memory for this boot. Removing its preset slot does not guarantee that memory is released; reboot the NT to start with a clean runtime.</p>
+    </div>
+    <footer>
+      <button id="cancel-algorithm-load" type="button">Cancel</button>
+      <button id="confirm-algorithm-load" type="button">Load into NT</button>
+    </footer>
+  </dialog>
+
   <dialog class="algorithm-remove-dialog" id="algorithm-remove-dialog" aria-labelledby="algorithm-remove-title">
     <header>
       <div><span>Algorithm management</span><h2 id="algorithm-remove-title">Remove algorithm?</h2></div>
@@ -531,8 +547,8 @@
     </footer>
   </dialog>
 
-  <script src="web-midi-transport.js?v=20260926-47"></script>
+  <script src="web-midi-transport.js?v=20260926-48"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-178"></script>
+  <script src="app.js?v=20260926-179"></script>
 </body>
 </html>

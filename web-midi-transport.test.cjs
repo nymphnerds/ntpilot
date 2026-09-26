@@ -99,6 +99,7 @@ const output = {
         ...[4096, 8192, 2048, 1024].flatMap(encodeUnsigned35),
         ...[1024, 7000, 512, 800].flatMap(encodeUnsigned35),
         ...[512, 1600, 2048, 100].flatMap(encodeUnsigned35),
+        ...[0, 0, 0, 0].flatMap(encodeUnsigned35),
         0xF7
       ];
     }

@@ -199,17 +199,18 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Algorithm add limits and plug-ins
 
-- The add browser shows the preset capacity directly: **x of 10 slots used**. With all ten occupied, placement actions are unavailable and the user must remove an algorithm first.
-- Built-ins are immediately available. Installed plug-ins which are not loaded show **Load into NT** rather than a mysterious greyed-out state. NT Pilot sends SysEx `0x38` and polls that exact catalogue entry for up to five seconds; this matters for slower C++ plug-ins.
-- On firmware 1.19+, the starting-settings dialog queries the NT's SysEx `0x39` memory report with the selected first three specification values. It shows all four hardware pools—SRAM, DRAM, DTC and ITC—as projected `used / total` values, and blocks an add with the precise pool and shortage when it will not fit. Earlier firmware is never sent this unsupported request; the dialog plainly says the NT will verify the add.
-- A load timeout is not silently described as a generic add failure: the UI says that the plug-in did not report loaded and may be too large, unsupported or unable to load with the NT's current free memory. The device remains authoritative; successful add is still reread and verified from the NT.
+- The 1.19 target supports **40 slots**. The add browser always shows `used / 40`; placement is unavailable only when all 40 are occupied.
+- Built-ins are immediately available. An installed plug-in that is not resident is selectable but does nothing until the user chooses **Load into NT** from the footer. The confirmation states that code may remain resident until a reboot. It then sends `0x38` and polls only that catalogue record for up to five seconds—important for slower C++ plug-ins.
+- `isLoaded` is treated as device truth. A loaded plug-in used by a slot reads **in preset**; a loaded plug-in with no matching slot reads **Loaded in NT · not in preset**. Removing a slot (`0x33`) never claims to free code memory because the API has no unload command.
+- On firmware 1.19+, the starting-settings dialog serializes a SysEx `0x39` query with the selected first three specification values. It accepts the documented three- or four-row response, shows SRAM/DRAM/DTC/ITC projected `used / total`, and blocks only a validated pool shortfall. Timeouts and malformed replies are neutral “preflight unavailable” states, never false memory warnings.
+- A load timeout says that the device did not report the plug-in loaded; SysEx does not supply a precise cause. It advises a reboot to clear resident plug-ins and checking the native NT screen rather than guessing it is a memory failure.
 
 ## Current asset versions
 
-- `styles.css?v=20260926-243`
-- `web-midi-transport.js?v=20260926-47`
+- `styles.css?v=20260926-244`
+- `web-midi-transport.js?v=20260926-48`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-178`
+- `app.js?v=20260926-179`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

@@ -236,6 +236,7 @@
       this.input = null;
       this.output = null;
       this.pending = null;
+      this.requestTail = Promise.resolve();
       this.outputModeUsageCache = new Map();
       this.handleMessage = this.handleMessage.bind(this);
       this.handleStateChange = this.handleStateChange.bind(this);
@@ -340,17 +341,21 @@
 
     request(requestCommand, responseCommand, payload = [], match = null, timeoutMs = this.timeoutMs) {
       if (!this.output) return Promise.reject(new Error("No disting NT MIDI output is selected."));
-      if (this.pending) return Promise.reject(new Error("A read request is already active."));
-      const bytes = [...PRODUCT_HEADER, this.sysexId, requestCommand, ...payload, 0xF7];
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          this.pending = null;
-          reject(new Error(`Timed out waiting for NT response 0x${responseCommand.toString(16)}.`));
-        }, timeoutMs);
-        this.pending = { responseCommand, match, resolve, reject, timer };
-        this.output.send(bytes);
-        this.onEvent({ type: "sent", command: requestCommand, byteLength: bytes.length });
+      const operation = this.requestTail.catch(() => {}).then(() => {
+        if (!this.output) throw new Error("No disting NT MIDI output is selected.");
+        const bytes = [...PRODUCT_HEADER, this.sysexId, requestCommand, ...payload, 0xF7];
+        return new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            this.pending = null;
+            reject(new Error(`Timed out waiting for NT response 0x${responseCommand.toString(16)}.`));
+          }, timeoutMs);
+          this.pending = { responseCommand, match, resolve, reject, timer };
+          this.output.send(bytes);
+          this.onEvent({ type: "sent", command: requestCommand, byteLength: bytes.length });
+        });
       });
+      this.requestTail = operation.catch(() => {});
+      return operation;
     }
 
     send(command, payload = []) {
@@ -584,12 +589,19 @@
       const payload = await this.request(0x39, 0x39, [...algorithm.guid, ...values.flatMap(encodeSignedShort)]);
       const status = payload[0] ?? 0;
       if (status !== 3) {
+        const reason = status === 0
+          ? "The NT could not find this algorithm. Refresh the catalogue and try again."
+          : status === 1
+            ? "This plug-in is not loaded into NT memory."
+            : status === 2
+              ? "The NT reported an invalid plug-in memory state. Refresh the catalogue and try again."
+              : `The NT rejected this memory query (status ${status}).`;
         return {
           available: false,
-          reason: !(status & 1) ? "The NT could not find this algorithm." : "This plug-in is not loaded into NT memory."
+          reason
         };
       }
-      if (payload.length < 61) throw new Error("NT returned an incomplete memory report.");
+      if (payload.length !== 61 && payload.length !== 81) throw new Error("NT returned an invalid memory report.");
       const pools = ["SRAM", "DRAM", "DTC", "ITC"].map((name, index) => ({
         name,
         total: decodeUnsigned35(payload.slice(1 + (index * 5), 6 + (index * 5))),
