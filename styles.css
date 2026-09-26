@@ -89,8 +89,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .settings-link { margin-top: auto; }
 
 .app-main { min-width: 0; min-height: 0; background: var(--surface); position: relative; display: flex; flex-direction: column; }
-.status-bar { height: 54px; flex: 0 0 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--chrome-gutter); background: var(--surface); border-bottom: 0; z-index: 8; }
-.status-leading { gap: 14px; min-width: 0; }
+.status-bar { height: var(--scaled-header-height, 54px); flex: 0 0 var(--scaled-header-height, 54px); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--chrome-gutter); background: var(--surface); border-bottom: 0; z-index: 8; }
+.status-leading { gap: 14px; min-width: 0; zoom: var(--interface-scale, 1); }
 .connection-pill { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 11px; border-radius: 16px; background: var(--pilot-soft); color: var(--pilot-deep); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .055em; white-space: nowrap; }
 .connection-pill .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pilot); box-shadow: 0 0 0 4px color-mix(in srgb, var(--pilot) 14%, transparent); }
 .connection-pill.syncing { color: #7e5a0b; background: #fff2cb; }
@@ -109,7 +109,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-title span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .device-title.disconnected .divider, .device-title.disconnected #preset-title { display: none; }
 .divider { width: 1px; height: 15px; background: var(--line); }
-.status-actions { gap: 12px; }
+.status-actions { gap: 12px; zoom: var(--interface-scale, 1); }
+.interface-scale { display: inline-flex; align-items: center; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: #f7fafb; }
+.interface-scale button { width: 25px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #60727c; background: transparent; font-size: 11px; font-weight: 900; cursor: pointer; }.interface-scale button:hover:not(:disabled) { color: var(--pilot-deep); background: var(--pilot-soft); }.interface-scale button:disabled { opacity: .35; cursor: default; }
+.interface-scale output { min-width: 36px; color: #536872; font-size: 8px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; cursor: default; }
 .history-actions { display: inline-flex; align-items: center; gap: 8px; }
 .history-actions button { padding: 2px 0; border: 0; color: #344f5b; background: transparent; font: inherit; font-size: 11px; font-weight: 850; cursor: pointer; }
 .history-actions button:hover:not(:disabled) { color: var(--pilot-deep); }
@@ -138,7 +141,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 
 .view-stack { flex: 1; min-height: 0; position: relative; overflow: auto; background: var(--surface); }
 .view-stack.editor-mode { overflow: hidden; }
-.view { display: none; padding: var(--chrome-gutter); min-height: 100%; }
+.view { display: none; padding: var(--chrome-gutter); min-height: 100%; zoom: var(--interface-scale, 1); }
 .view.active { display: block; }
 .editor-view { padding-top: 8px; }
 .editor-view.active { height: 100%; min-height: 0; overflow: hidden; }
@@ -396,7 +399,7 @@ button.routing-node { padding: 0; text-align: left; }
 .routing-empty-tag { color: #66758d; font-size: 8px; }
 .routing-inspector { min-height: 61px; padding: 11px 14px; border-top: 1px solid #dbe4e7; background: #f8fafb; }
 .routing-inspector-default { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 18px; }.routing-inspector-default > div { display: flex; flex-direction: column; }.routing-inspector span, .routing-connection-panel legend { color: var(--pilot-deep); font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }.routing-inspector strong { margin-top: 3px; color: #354a54; font-size: 11px; }.routing-inspector p { max-width: 520px; margin: 0; color: #7c8d95; font-size: 9px; line-height: 1.4; text-align: right; }
-.routing-connection-panel { position: fixed; z-index: 80; width: 230px; max-width: calc(100vw - 20px); padding: 9px; display: grid; gap: 6px; border: 1px solid #cddadd; border-radius: 10px; background: rgba(255,255,255,.985); box-shadow: 0 10px 26px rgba(21,40,53,.22); }
+.routing-connection-panel { position: fixed; z-index: 80; width: 230px; max-width: calc(100vw - 20px); padding: 9px; display: grid; gap: 6px; border: 1px solid #cddadd; border-radius: 10px; background: rgba(255,255,255,.985); box-shadow: 0 10px 26px rgba(21,40,53,.22); zoom: var(--interface-scale, 1); }
 .routing-connection-heading { min-width: 0; display: flex; flex-direction: column; }.routing-connection-heading span { color: var(--pilot-deep); font-size: 7px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }.routing-connection-heading strong { margin-top: 2px; color: #354a54; font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .routing-connection-decisions { min-width: 0; display: grid; grid-template-columns: 1fr; gap: 5px; }
 .routing-connection-panel fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }.routing-connection-panel fieldset > div { margin-top: 3px; display: flex; gap: 4px; }

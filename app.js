@@ -38,6 +38,9 @@
   const undoEdit = $("#undo-edit");
   const redoEdit = $("#redo-edit");
   const workingState = $("#working-state");
+  const interfaceScaleDown = $("#interface-scale-down");
+  const interfaceScaleValue = $("#interface-scale-value");
+  const interfaceScaleUp = $("#interface-scale-up");
   const syncModeControl = $("#sync-mode");
   const syncModeLabel = $("#sync-mode-label");
   const syncModeDetail = $("#sync-mode-detail");
@@ -95,6 +98,7 @@
     routingModeHydrationPromise: null,
     routingReadToken: 0,
     routingZoom: 1,
+    interfaceScale: 100,
     routingCanvasSize: { width: 1180, height: 760 },
     routingSnapshot: null,
     routingSelection: null,
@@ -1839,6 +1843,24 @@
     }
   }
 
+  function setInterfaceScale(value, { save = true } = {}) {
+    const next = Math.max(90, Math.min(150, Math.round(Number(value) / 10) * 10));
+    state.interfaceScale = next;
+    document.documentElement.style.setProperty("--interface-scale", String(next / 100));
+    document.documentElement.style.setProperty("--scaled-header-height", `${Math.round(54 * next / 100)}px`);
+    interfaceScaleValue.textContent = `${next}%`;
+    interfaceScaleDown.disabled = next <= 90;
+    interfaceScaleUp.disabled = next >= 150;
+    if (save) {
+      try {
+        localStorage.setItem("ntPilotInterfaceScale", String(next));
+      } catch (_) {
+        // Scaling still works for this session when local storage is unavailable.
+      }
+    }
+    if (state.view === "routing" && state.routingSnapshot) requestAnimationFrame(() => fitRoutingGraph("auto"));
+  }
+
   function canMutate() {
     return state.device === "ready" || state.device === "offline";
   }
@@ -2922,6 +2944,9 @@
     if (nextActive && !routingShowSignals.checked) routingShowSignals.checked = true;
     updateRoutingLayers();
   }));
+  interfaceScaleDown.addEventListener("click", () => setInterfaceScale(state.interfaceScale - 10));
+  interfaceScaleUp.addEventListener("click", () => setInterfaceScale(state.interfaceScale + 10));
+  interfaceScaleValue.addEventListener("dblclick", () => setInterfaceScale(100));
   $("#routing-zoom-out").addEventListener("click", () => {
     state.routingZoom = Math.max(.2, Number((state.routingZoom - .1).toFixed(2)));
     applyRoutingZoom();
@@ -3303,6 +3328,13 @@
 
   populateMapping($(".mapping-item.active"));
   updateMappingSummary();
+  let savedInterfaceScale = 100;
+  try {
+    savedInterfaceScale = Number(localStorage.getItem("ntPilotInterfaceScale")) || 100;
+  } catch (_) {
+    savedInterfaceScale = 100;
+  }
+  setInterfaceScale(savedInterfaceScale, { save: false });
   resetEditorForConnection();
   const recoveredView = ["editor", "routing", "mapping", "control", "status", "assistant"].includes(rebootRecovery?.view)
     ? rebootRecovery.view
