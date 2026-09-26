@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-184">
+  <link rel="stylesheet" href="styles.css?v=20260926-185">
 </head>
 <body>
   <main class="stage">
@@ -40,6 +40,12 @@
           </button>
         </nav>
 
+        <div class="interface-scale sidebar-scale" aria-label="Interface scale">
+          <button id="interface-scale-down" type="button" aria-label="Decrease interface scale">−</button>
+          <output id="interface-scale-value" title="Double-click to reset interface scale">100%</output>
+          <button id="interface-scale-up" type="button" aria-label="Increase interface scale">+</button>
+        </div>
+
         <button class="nav-item settings-link" data-view="status">
           <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12l2-1-2-4-2 .5L15 5l-.5-2h-5L9 5 7 7.5 5 7l-2 4 2 1v3l-2 1 2 4 2-.5L9 22h6l2-2.5 2 .5 2-4-2-1v-3Z"/></svg>
           <span>Status & setup</span>
@@ -60,11 +66,6 @@
             </div>
           </div>
           <div class="status-actions">
-            <div class="interface-scale" aria-label="Interface scale">
-              <button id="interface-scale-down" type="button" aria-label="Decrease interface scale">−</button>
-              <output id="interface-scale-value" title="Double-click to reset interface scale">100%</output>
-              <button id="interface-scale-up" type="button" aria-label="Increase interface scale">+</button>
-            </div>
             <div class="history-actions" aria-label="Edit history">
               <button id="undo-edit" type="button" disabled aria-label="Undo last edit" title="Undo (Ctrl/Cmd+Z)">Undo</button>
               <button id="redo-edit" type="button" disabled aria-label="Redo last edit" title="Redo (Ctrl/Cmd+Shift+Z)">Redo</button>
@@ -468,6 +469,6 @@
 
   <script src="web-midi-transport.js?v=20260925-44"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-119"></script>
+  <script src="app.js?v=20260926-120"></script>
 </body>
 </html>

@@ -86,7 +86,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .nav-item:hover { color: var(--ink); background: rgba(255,255,255,.74); }
 .nav-item.active { color: var(--pilot-deep); background: var(--pilot-soft); box-shadow: inset 3px 0 var(--pilot), 0 3px 12px rgba(35,60,70,.06); }
 .nav-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 10px; display: grid; place-items: center; background: #d16661; color: white; font-size: 10px; }
-.settings-link { margin-top: auto; }
+.settings-link { margin-top: 6px; }
 
 .app-main { min-width: 0; min-height: 0; background: var(--surface); position: relative; display: flex; flex-direction: column; }
 .status-bar { height: var(--scaled-header-height, 54px); flex: 0 0 var(--scaled-header-height, 54px); display: flex; align-items: center; justify-content: space-between; padding: 0 var(--chrome-gutter); background: var(--surface); border-bottom: 0; z-index: 8; }
@@ -113,6 +113,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .interface-scale { display: inline-flex; align-items: center; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: #f7fafb; }
 .interface-scale button { width: 25px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #60727c; background: transparent; font-size: 11px; font-weight: 900; cursor: pointer; }.interface-scale button:hover:not(:disabled) { color: var(--pilot-deep); background: var(--pilot-soft); }.interface-scale button:disabled { opacity: .35; cursor: default; }
 .interface-scale output { min-width: 36px; color: #536872; font-size: 8px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; cursor: default; }
+.sidebar-scale { width: 100%; margin-top: auto; justify-content: space-between; }
 .history-actions { display: inline-flex; align-items: center; gap: 8px; }
 .history-actions button { padding: 2px 0; border: 0; color: #344f5b; background: transparent; font: inherit; font-size: 11px; font-weight: 850; cursor: pointer; }
 .history-actions button:hover:not(:disabled) { color: var(--pilot-deep); }
@@ -545,7 +546,7 @@ button.routing-node { padding: 0; text-align: left; }
 @media (max-width: 900px) {
   :root { --sidebar-width: 76px; }
   .device-frame { grid-template-columns: 76px minmax(0,1fr); }
-  .app-mark { justify-content: center; padding-inline: 0; }.mark-copy, .nav-item span:not(.nav-badge) { display: none; }.nav-item { justify-content: center; padding-inline: 8px; }.nav-badge { position: absolute; margin: 0 0 21px 22px; }.settings-link { position: relative; }
+  .app-mark { justify-content: center; padding-inline: 0; }.mark-copy, .nav-item span:not(.nav-badge) { display: none; }.nav-item { justify-content: center; padding-inline: 8px; }.nav-badge { position: absolute; margin: 0 0 21px 22px; }.settings-link { position: relative; }.sidebar-scale { padding-inline: 1px; }.sidebar-scale button { width: 16px; }.sidebar-scale output { min-width: 22px; font-size: 7px; }
   .control-grid { grid-template-columns: repeat(2, 1fr); }
   .mapping-layout { grid-template-columns: 210px minmax(370px, 1fr); }
   .form-grid { grid-template-columns: repeat(2, 1fr); }

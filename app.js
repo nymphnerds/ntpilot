@@ -1844,13 +1844,13 @@
   }
 
   function setInterfaceScale(value, { save = true } = {}) {
-    const next = Math.max(90, Math.min(150, Math.round(Number(value) / 10) * 10));
+    const next = Math.max(90, Math.min(170, Math.round(Number(value) / 10) * 10));
     state.interfaceScale = next;
     document.documentElement.style.setProperty("--interface-scale", String(next / 100));
     document.documentElement.style.setProperty("--scaled-header-height", `${Math.round(54 * next / 100)}px`);
     interfaceScaleValue.textContent = `${next}%`;
     interfaceScaleDown.disabled = next <= 90;
-    interfaceScaleUp.disabled = next >= 150;
+    interfaceScaleUp.disabled = next >= 170;
     if (save) {
       try {
         localStorage.setItem("ntPilotInterfaceScale", String(next));
