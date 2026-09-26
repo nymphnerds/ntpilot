@@ -44,6 +44,11 @@
     return bytes;
   }
 
+  function sdDirectoryPath(path) {
+    if (path === "/") return path;
+    return path.endsWith("/") ? path : `${path}/`;
+  }
+
   function sdChecksum(payload) {
     return (-payload.reduce((sum, byte) => sum + (byte & 0x7F), 0)) & 0x7F;
   }
@@ -744,7 +749,7 @@
 
     async readSDDirectory(path = "/") {
       const operation = 1;
-      const data = [operation, ...sdPathBytes(path)];
+      const data = [operation, ...sdPathBytes(sdDirectoryPath(path))];
       const payload = await this.requestSDOperation(operation, data);
       return parseSDDirectoryEntries(payload);
     }

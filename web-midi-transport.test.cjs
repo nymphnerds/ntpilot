@@ -68,6 +68,7 @@ let loadPluginCommand = null;
 let removeCommand = null;
 let loadPresetCommand = null;
 let wakeCommand = null;
+let directoryCommand = null;
 let sendWrongSDOperationOnce = false;
 const output = {
   id: "out",
@@ -205,6 +206,7 @@ const output = {
     if (bytes[6] === 0x7A) {
       const operation = bytes[7];
       if (operation === 1) {
+        directoryCommand = [...bytes];
         const listing = [
           0x10, 0, 0, 0, 0, 0, 0, ...encodeUnsigned70(0), ...Buffer.from("presets"), 0,
           0, 0, 0, 0, 0, 0, 0, ...encodeUnsigned70(1536), ...Buffer.from("Live Set.json"), 0
@@ -404,6 +406,7 @@ global.navigator = { requestMIDIAccess: async options => {
   assert.deepEqual(wakeCommand.slice(6, 8), [0x07, 0xF7]);
   const directory = await transport.readSDDirectory("/presets");
   assert.deepEqual(directory.map(entry => [entry.name, entry.isDirectory, entry.size]), [["presets", true, 0], ["Live Set.json", false, 1536]]);
+  assert.deepEqual(directoryCommand.slice(6, -1), [0x7A, 1, ...Buffer.from("/presets/"), 27]);
   sendWrongSDOperationOnce = true;
   const matchedDirectory = await transport.readSDDirectory("/presets");
   assert.deepEqual(matchedDirectory.map(entry => entry.name), ["presets", "Live Set.json"]);

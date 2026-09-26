@@ -158,7 +158,10 @@
   }
 
   const MAX_ALGORITHM_SLOTS = 40;
-  const PRESET_LIBRARY_ROOT = "/presets";
+  // The official SD tool and NT Helper both preserve a trailing slash for
+  // directory listing requests (for example `/presets/`). The NT firmware
+  // distinguishes that directory form from a bare path on some cards.
+  const PRESET_LIBRARY_ROOT = "/presets/";
   const state = {
     ntTransport: null,
     transportOnline: false,
