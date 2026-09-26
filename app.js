@@ -105,6 +105,7 @@
     liveIdentity: null,
     liveRouting: null,
     routingReadPromise: null,
+    routingReconcileTimer: null,
     routingModeHydrationPromise: null,
     routingReadToken: 0,
     routingZoom: 1,
@@ -1334,7 +1335,38 @@
   }
 
   async function chooseRoutingOutputMode(details, mode) {
-    await state.ntTransport.writeParameter(details.slotIndex, details.parameterIndex, mode === "replace" ? 1 : 0);
+    const value = mode === "replace" ? 1 : 0;
+    await state.ntTransport.writeParameter(details.slotIndex, details.parameterIndex, value);
+    updateRoutingSnapshotParameter(details.slotIndex, details.parameterIndex, value);
+  }
+
+  function updateRoutingSnapshotParameter(slotIndex, parameterIndex, value) {
+    const snapshots = [...new Set([state.routingSnapshot, state.liveRouting].filter(Boolean))];
+    snapshots.forEach(snapshot => {
+      const slot = snapshot.slots?.find(item => item.index === slotIndex);
+      if (!slot) return;
+      [slot.parameters, slot.ioParameters].forEach(parameters => {
+        const parameter = parameters?.find(item => item.index === parameterIndex);
+        if (parameter) parameter.value = value;
+      });
+    });
+  }
+
+  function renderVerifiedRoutingSnapshot() {
+    if (state.routingSnapshot) renderRoutingGraph(state.routingSnapshot, { live: true, preserveView: true });
+  }
+
+  function scheduleRoutingReconciliation(delay = 900) {
+    clearTimeout(state.routingReconcileTimer);
+    state.routingReconcileTimer = setTimeout(() => {
+      state.routingReconcileTimer = null;
+      if (!state.ntTransport || !state.liveIdentity) return;
+      if (state.routingReadPromise) {
+        scheduleRoutingReconciliation(500);
+        return;
+      }
+      loadLiveRouting({ preserveView: true, background: true });
+    }, delay);
   }
 
   let routingConnectionAction = null;
@@ -1933,12 +1965,13 @@
         removedRoutes.push(route);
       }
       await connectRoutingSelections(first, second);
-      await loadLiveRouting({ preserveView: true });
+      renderVerifiedRoutingSnapshot();
       markWorkingEdit();
       recordRoutingHistory(historyBefore, `change routing for ${routingSelectionLabel(connectingOutput || first)}`);
       const routeCopy = routesToRemove.length ? ` · removed ${routesToRemove.length} previous route${routesToRemove.length === 1 ? "" : "s"}` : "";
       const modeCopy = modeChoice ? ` · ${modeChoice.mode === "replace" ? "Replace" : "Add"} mode` : "";
       showToast(`Routing changed${routeCopy}${modeCopy} and verified from the NT`);
+      scheduleRoutingReconciliation();
     } catch (error) {
       if (removedRoutes.length) {
         try {
@@ -1993,6 +2026,7 @@
       throw new Error(`${routingBusLabel(bus, state.routingSnapshot)} is outside this port's permitted bus range.`);
     }
     await state.ntTransport.writeParameter(selection.slotIndex, selection.parameterIndex, bus + 1);
+    updateRoutingSnapshotParameter(selection.slotIndex, selection.parameterIndex, bus + 1);
   }
 
   async function connectRoutingSelections(first, second) {
@@ -2075,10 +2109,11 @@
         removedRoutes.push(route);
       }
       await writeRoutingSelection(selection, bus);
-      await loadLiveRouting({ preserveView: true });
+      renderVerifiedRoutingSnapshot();
       markWorkingEdit();
       recordRoutingHistory(historyBefore, `route ${routingSelectionLabel(selection)} to ${bus < 0 ? "None" : routingBusLabel(bus, state.routingSnapshot)}`);
       showToast(`${bus < 0 ? "Disconnected" : `Assigned ${routingBusLabel(bus, state.routingSnapshot)}`} and verified from the NT`);
+      scheduleRoutingReconciliation();
     } catch (error) {
       if (removedRoutes.length) {
         try {
@@ -2312,10 +2347,10 @@
     routingCanvas.classList.toggle("hide-modulation", !routingShowMod.matches("[aria-pressed=true]"));
   }
 
-  async function loadLiveRouting({ preserveView = false } = {}) {
+  async function loadLiveRouting({ preserveView = false, background = false } = {}) {
     if (!state.ntTransport || !state.liveIdentity || state.routingReadPromise) return state.routingReadPromise;
     const token = ++state.routingReadToken;
-    routingLoading.classList.remove("hidden");
+    if (!background) routingLoading.classList.remove("hidden");
     state.routingReadPromise = (async () => {
       const pendingPoll = stopLivePolling();
       if (pendingPoll) await pendingPoll.catch(() => {});
@@ -2324,20 +2359,22 @@
       if (token !== state.routingReadToken) return;
       state.liveRouting = snapshot;
       renderRoutingGraph(snapshot, { live: true, preserveView });
-      routingLoading.classList.add("hidden");
-      showToast(`Read NT routing · discovering Add/Replace controls…`);
+      if (!background) {
+        routingLoading.classList.add("hidden");
+        showToast(`Read NT routing · discovering Add/Replace controls…`);
+      }
       state.routingModeHydrationPromise = state.ntTransport.hydrateRoutingOutputModes(snapshot);
       await state.routingModeHydrationPromise;
       if (token !== state.routingReadToken) return;
       renderRoutingGraph(snapshot, { live: true, preserveView: true });
-      showToast(`Read complete NT routing · ${snapshot.slots.length} slots`);
+      if (!background) showToast(`Read complete NT routing · ${snapshot.slots.length} slots`);
     })().catch(error => {
       if (token === state.routingReadToken) {
-        showToast(error.message);
+        showToast(background ? `Routing reconciliation failed · ${error.message}` : error.message);
       }
     }).finally(() => {
       if (token === state.routingReadToken) {
-        routingLoading.classList.add("hidden");
+        if (!background) routingLoading.classList.add("hidden");
         if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
       }
       state.routingReadPromise = null;
@@ -3263,6 +3300,8 @@
 
   function flushDisconnectedSession() {
     closeRoutingConnectionPanel();
+    clearTimeout(state.routingReconcileTimer);
+    state.routingReconcileTimer = null;
     stopLivePolling();
     stopCpuPolling();
     clearSmartFeedback();
