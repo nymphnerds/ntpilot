@@ -219,17 +219,21 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.bus-dock-bottom:has(.editor-bus-dock:not(.hidden)) .app-sidebar { padding-bottom: var(--bottom-bus-dock-height, 92px); }
 .device-frame.bus-dock-bottom .editor-bus-dock-row,
 .device-frame.bus-dock-bottom .editor-physical-bus-row { padding-inline: var(--chrome-gutter); }
-.device-frame.ipad-mode { grid-template-columns: 190px minmax(0, 1fr); }
-.device-frame.ipad-mode .app-sidebar { display: flex; padding-inline: 16px 10px; }
-.device-frame.ipad-mode .app-mark { justify-content: flex-start; gap: 11px; padding-bottom: 38px; }
-.device-frame.ipad-mode .mark-glyph, .device-frame.ipad-mode .mark-glyph img { flex-basis: 56px; width: 56px; height: 56px; }
+.device-frame.ipad-mode { grid-template-columns: 230px minmax(0, 1fr); }
+.device-frame.ipad-mode .app-sidebar { display: flex; padding: 18px 14px 18px 20px; }
+.device-frame.ipad-mode .app-mark { justify-content: flex-start; gap: 13px; padding-bottom: 42px; }
+.device-frame.ipad-mode .mark-glyph, .device-frame.ipad-mode .mark-glyph img { flex-basis: 68px; width: 68px; height: 68px; }
 .device-frame.ipad-mode .mark-copy { display: flex; }
-.device-frame.ipad-mode .mark-copy strong { font-size: 21px; }
-.device-frame.ipad-mode .mark-copy small { font-size: 13px; }
-.device-frame.ipad-mode .nav-item { justify-content: flex-start; gap: 10px; padding: 14px 7px; font-size: 17px; }
-.device-frame.ipad-mode .nav-item svg { width: 26px; height: 26px; }
+.device-frame.ipad-mode .mark-copy strong { font-size: 24px; }
+.device-frame.ipad-mode .mark-copy small { font-size: 15px; }
+.device-frame.ipad-mode .nav-item { justify-content: flex-start; gap: 12px; padding: 16px 9px; font-size: 20px; }
+.device-frame.ipad-mode .nav-item svg { width: 30px; height: 30px; }
 .device-frame.ipad-mode .nav-item span:not(.nav-badge) { display: inline; }
-.device-frame.ipad-mode .ipad-mode-control { font-size: 13px; }
+.device-frame.ipad-mode .interface-scale { height: 44px; padding: 3px; border-radius: 11px; }
+.device-frame.ipad-mode .interface-scale button { width: 38px; height: 36px; font-size: 19px; }
+.device-frame.ipad-mode .interface-scale output { min-width: 64px; font-size: 14px; }
+.device-frame.ipad-mode .ipad-mode-control { padding: 12px 8px; font-size: 16px; }
+.device-frame.ipad-mode .ipad-mode-control i { flex-basis: 38px; width: 38px; height: 23px; border-radius: 13px; }.device-frame.ipad-mode .ipad-mode-control i::after { width: 19px; height: 19px; }.device-frame.ipad-mode .ipad-mode-control input:checked + i::after { transform: translateX(15px); }
 .editor-bus-dock-row { overflow: hidden; }
 .editor-physical-bus-row { overflow: visible; }
 .editor-aux-bus-row { min-height: 41px; padding: 7px var(--chrome-gutter); display: grid; grid-template-columns: repeat(var(--bus-grid-columns, 44), minmax(0, 1fr)); align-items: center; gap: 2px; border-bottom: 0; }
