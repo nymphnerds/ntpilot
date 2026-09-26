@@ -403,6 +403,14 @@
       this.onEvent({ type: "sent", command, byteLength: bytes.length });
     }
 
+    async wake() {
+      // Wake is fire-and-forget, but it must follow any active read before a
+      // card request is sent.  NT Helper performs this before every SD task.
+      await this.requestTail.catch(() => {});
+      this.send(0x07);
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+
     async readIdentity() {
       const versionBytes = await this.request(0x22, 0x32);
       const presetBytes = await this.request(0x41, 0x41);

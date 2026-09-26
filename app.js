@@ -2606,6 +2606,8 @@
         await state.routingReadPromise?.catch(() => {});
         await state.performanceReadPromise?.catch(() => {});
         if (!state.ntTransport || !state.transportOnline) throw new Error("The NT is no longer connected.");
+        await state.ntTransport.wake();
+        await wait(80);
         return await task();
       } finally {
         state.presetTransportBusy = false;
