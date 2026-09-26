@@ -1338,9 +1338,11 @@
   }
 
   let routingConnectionAction = null;
+  let routingConnectionRetarget = null;
 
   function closeRoutingConnectionPanel() {
     routingConnectionAction = null;
+    routingConnectionRetarget = null;
     routingConnectionPanel.classList.add("hidden");
   }
 
@@ -1382,7 +1384,7 @@
     return `${slot?.name || `Slot ${selection.slotIndex + 1}`} · ${parameter?.name || `Parameter ${selection.parameterIndex + 1}`}`;
   }
 
-  async function openRoutingConnectionPanel({ source, destination, output, destinationBus, onApply, title = "New connection", submitLabel = "Connect", allowRouteChanges = true }) {
+  async function openRoutingConnectionPanel({ source, destination, output, destinationBus, onApply, onRetarget = null, title = "New connection", submitLabel = "Connect", allowRouteChanges = true }) {
     applyPilotAccentFromAux(destinationBus, state.routingSnapshot || state.liveIdentity);
     routingConnectionPanel.classList.toggle("ipad-panel", state.ipadMode);
     const isInputAssignment = !output && source?.side === "input";
@@ -1430,6 +1432,7 @@
       const routeChoice = $('input[name="routing-existing-routes"]:checked', routingConnectionPanel)?.value || "keep";
       return onApply(details ? { details, mode: selectedMode } : null, routeChoice === "disconnect" ? existing : []);
     };
+    routingConnectionRetarget = onRetarget;
     routingConnectionPanel.classList.remove("hidden");
     positionRoutingConnectionPanel(destination.element);
   }
@@ -2053,6 +2056,7 @@
         output: selection.side === "output" ? selection : null,
         destinationBus: bus,
         allowRouteChanges: selection.side === "output",
+        onRetarget: (nextBus, nextAnchor) => assignRoutingPort(selection, nextBus, null, [], false, nextAnchor),
         onApply: (nextModeChoice, nextRoutesToRemove) => assignRoutingPort(selection, bus, nextModeChoice, nextRoutesToRemove, true, anchorElement)
       });
       return true;
@@ -2133,6 +2137,13 @@
     if (!chip || !state.routingSnapshot) return false;
     const bus = Number(chip.dataset.bus);
     applyPilotAccentFromAux(bus, state.routingSnapshot);
+    if (routingConnectionRetarget && bus >= 0) {
+      const retarget = routingConnectionRetarget;
+      closeRoutingConnectionPanel();
+      $$(".routing-aux-chip", routingAuxPalette).forEach(item => item.classList.toggle("selected", item === chip));
+      await retarget(bus, chip);
+      return true;
+    }
     if (state.routingSelection?.parameterIndex != null) {
       const selection = state.routingSelection;
       selection.element.classList.remove("routing-selected-source");
