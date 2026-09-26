@@ -385,6 +385,8 @@ input[type="range"]:disabled { opacity: .48; cursor: wait; }
 .device-frame.ipad-mode .routing-ipad-card .routing-algorithm-name b { padding: 2px 5px; font-size: 8px; }
 .device-frame.ipad-mode .routing-ipad-card .routing-bypass-toggle { padding: 6px 9px; border-radius: 7px; font-size: 10px; }
 .device-frame.ipad-mode .routing-ipad-card .routing-node-ports { position: relative; left: auto; top: auto; min-height: 0; padding: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; border: 0; border-radius: 0; background: white; box-shadow: none; }
+.device-frame.ipad-mode .routing-ipad-card.routing-node.side-slot .routing-node-ports { grid-template-columns: minmax(0, 1fr); background: white; }
+.device-frame.ipad-mode .routing-ipad-card.routing-node.side-slot .routing-port-column { grid-column: 1 / -1; }
 .device-frame.ipad-mode .routing-ipad-card .routing-port-column { gap: 7px; }
 .device-frame.ipad-mode .routing-ipad-card .routing-port-column::before { padding: 0 3px 4px; color: #71858e; font-size: 10px; font-weight: 950; text-transform: uppercase; letter-spacing: .08em; }
 .device-frame.ipad-mode .routing-ipad-card .routing-port-column.input::before { content: "Inputs"; }
