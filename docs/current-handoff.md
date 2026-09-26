@@ -1,6 +1,40 @@
 # NT Pilot development handoff
 
-Last updated: 25 September 2026
+Last updated: 26 September 2026
+
+## Tomorrow: start here
+
+- Current pushed commit: `b042f13` (`Use routing assignment flow directly from editor`).
+- The user stopped for the night immediately after requesting an architecture audit. Do **not** resume feature work or apply another routing UI patch first.
+- The immediate bug was that Editor had acquired its own routing-popup adapter. It performed a full routing scan before showing a reduced popup, making iOS slow and inconsistent with Routing.
+- Commit `b042f13` removed that adapter. Editor now creates a routing selection and hands it directly to the same `assignRoutingPort()` path used by Routing.
+- The user has not yet hardware-tested `b042f13`. First confirm on the iPad that an Editor bus choice opens promptly and presents the same appropriate decision UI as the Routing page.
+- The user explicitly wants structural correction rather than more band-aids. Discuss and perform the refactor incrementally, with behaviour-locking tests first and small reversible commits.
+- During the audit no application files were changed or pushed. This handoff is the only subsequent local edit.
+
+### Audit findings
+
+1. Routing still has two transaction implementations: `finishRoutingConnection()` and `assignRoutingPort()`. Both perform mode writes, route removal, rollback, history, full refresh, polling restart and notifications. They must converge on one transaction executor.
+2. A single routing assignment currently calls `loadLiveRouting()`, which rereads all slots and output-mode metadata. This is a major source of iOS latency. Use targeted local/readback updates where correctness permits; reserve a complete snapshot rebuild for entry, explicit refresh and recovery.
+3. Editor, Performance, routing, bypass and history have separate parameter-write pipelines. They share `state.parameterWriteQueue`, but duplicate mutation, error, history and UI synchronization policy.
+4. `state.liveRouting` and `state.routingSnapshot` are competing owners of effectively the same routing model. Consolidate to one canonical routing state.
+5. Some routing decisions are reconstructed from DOM elements. Routing selections and port metadata must be model objects independent of whether desktop graph or iPad list has rendered.
+6. Popup rendering, connection policy, NT mutation, rollback and notification copy are interleaved. The popup should render a pure connection plan; one controller should validate and execute that plan.
+7. `app.js` is approximately 3,900 lines and contains unrelated Editor, Routing, Performance, history, polling, reconnect and layout behaviour.
+8. There is no routing transaction test suite. Existing automated coverage is primarily the Web MIDI transport.
+
+### Safe refactor order
+
+1. Add behaviour-locking tests for input reassignment, output Add/Replace, keep/disconnect other routes, rollback after partial failure, undo of compound changes, and identical Editor/Routing intents.
+2. Introduce canonical DOM-independent `RoutingSelection`, `ConnectionIntent` and `ConnectionPlan` data shapes without changing the UI.
+3. Extract one routing transaction executor responsible for validation, serialized writes, rollback, history and refresh policy.
+4. Move `assignRoutingPort()` onto it, verify, then move `finishRoutingConnection()` onto it and delete the duplicate transaction code.
+5. Make both Editor and Routing produce the same `ConnectionIntent`; neither page should own routing policy.
+6. Replace `liveRouting`/`routingSnapshot` with one canonical store after both paths use the controller.
+7. Consolidate general parameter mutation only after routing is stable.
+8. Split modules last. Avoid a large file move while behaviour is still changing.
+
+Do not claim zero regression risk. Keep every stage testable and reversible, do not redesign visuals during the refactor, and do not delete an old path until tests prove the replacement has equivalent behaviour.
 
 ## Repository and runtime
 
@@ -64,6 +98,8 @@ The central model is the NT bus universe:
 
 ## Current Routing behaviour
 
+- In iPad mode, Routing uses a full-width vertical algorithm list with large named input/output rows and explicit coloured bus badges rather than the desktop cable matrix. The fixed bottom bus dock matches Editor.
+
 - Routing shows the complete graph by default while retaining the compact sidebar.
 - Clicking empty graph space clears algorithm focus and restores the complete view.
 - The master Signals switch controls all cable types. Input, Output, Aux and Mod buttons independently filter categories.
@@ -73,11 +109,11 @@ The central model is the NT bus universe:
 - Side stacks are centred against the total central algorithm list.
 - Add/Replace chips are always visible on output rows. Editable chips are backed by a real NT mode-controller parameter; fixed or unresolved chips are read-only.
 - Output-mode chips explicitly distinguish editable Add/Replace, known fixed mode, disconnected fixed mode, metadata loading and metadata failure. A missing `0x55` association never fabricates an editable Replace option.
-- New physical-output and Aux assignments are confirmed in a compact popup positioned beside the pointer. It keeps NT Add/Replace mode visibly separate from “Keep existing”/“Disconnect other routes”; all four choices and their explanations remain visible until Connect or Cancel.
+- New assignments are confirmed in a compact popup positioned beside the pointer/touch target. Outputs keep NT Add/Replace visibly separate from “Keep existing”/“Disconnect other routes.” Inputs show the selected new source versus retaining the current source, because Add/Replace does not apply to reads.
 - Replace has repeatedly confused users because it sounds like a routing replacement. It is not: no parameter assignment is disconnected. Replace overwrites the signal accumulated on that bus at the algorithm's ordered slot position. Writes from earlier slots remain configured but are inaudible downstream of that Replace; writes from later slots still contribute.
 - The graph makes that signal-order result explicit. A route whose contribution is masked by a later Replace remains present as a faded dashed cable, the effective Replace writer is emphasized, and its native SVG hover text explains the state. A truly disconnected route has no cable. Apply this consistently to physical-output and Aux-bus paths.
-- Assigning a supported algorithm output to a physical or Aux bus opens the persistent bottom-inspector decision panel before writing.
-- Direct output-mode edits also use the bottom inspector rather than a transient popup.
+- Assigning a supported algorithm output to a physical or Aux bus opens the shared connection popup before writing.
+- Direct output-mode edits also use the shared popup.
 - A route can be created in either interaction order: choose the port then Aux, or Aux then port.
 - Physical outputs accept algorithm outputs in both click orders. Add/Replace applies to the algorithm's bus write regardless of whether the destination bus feeds a physical output or is an Aux bus; fixed-mode outputs connect without requiring a mode controller.
 - Physical input/output direction is validated before writes, and routing selections survive the background `0x55` mode-metadata hydration redraw.
@@ -119,10 +155,10 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260925-183`
+- `styles.css?v=20260926-217`
 - `web-midi-transport.js?v=20260925-44`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260925-118`
+- `app.js?v=20260926-150`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
@@ -165,4 +201,4 @@ git diff --check
 
 ## Next recommended step
 
-Start with the hardware checks above, then exercise drag/drop Undo/Redo, bypass CPU response, binary/string Performance controls and NTX-8CV discovery on a physical module. If Add/Replace persistence fails, inspect the received `0x55` association and subsequent `0x46`/`0x45` write/readback for the selected slot and parameter; do not add another heuristic fallback.
+Hardware-test pushed commit `b042f13` first. If its Editor popup is still not identical to Routing, diagnose the single shared path rather than adding an Editor adapter. Then begin the test-first routing consolidation described at the top of this document.

@@ -2806,8 +2806,8 @@
       titleLine.className = "parameter-title-line";
       const strong = document.createElement("strong");
       strong.textContent = parameter.name;
-      const detail = document.createElement("span");
-      detail.textContent = `Parameter ${parameter.index + 1}`;
+      row.dataset.parameterIndex = String(parameter.index);
+      row.title = `${parameter.name} · Parameter ${parameter.index + 1}`;
 
       const pendingMapping = document.createElement("button");
       pendingMapping.className = "map-shortcut";
@@ -2824,8 +2824,8 @@
         pendingMapping.setAttribute("aria-label", `Add mapping for ${parameter.name}`);
         pendingMapping.textContent = "+";
       }
-      titleLine.append(strong, pendingMapping);
-      name.append(titleLine, detail);
+      titleLine.append(strong);
+      name.append(titleLine, pendingMapping);
 
       const slider = document.createElement("input");
       slider.type = "range";
