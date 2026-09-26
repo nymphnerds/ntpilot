@@ -244,10 +244,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.ipad-mode .nav-item { justify-content: flex-start; gap: 12px; padding: 9px 9px; font-size: 21px; }
 .device-frame.ipad-mode .nav-item svg { width: 32px; height: 32px; }
 .device-frame.ipad-mode .nav-item span:not(.nav-badge) { display: inline; }
-.device-frame.ipad-mode .interface-scale { height: 54px; padding: 3px; border-radius: 12px; }
-.device-frame.ipad-mode .interface-scale button { width: 46px; height: 46px; font-size: 26px; line-height: 1; }
-.device-frame.ipad-mode .interface-scale output { min-width: 76px; color: #223d48; font-size: 19px; font-weight: 950; }
-.device-frame.ipad-mode .status-sync { width: 100%; height: 42px; margin-top: 7px; padding: 0 5px 0 11px; justify-content: space-between; border-radius: 10px; font-size: 13px; }
+.device-frame.ipad-mode .interface-scale { height: 42px; margin-top: 7px; padding: 3px 5px; border-radius: 10px; }
+.device-frame.ipad-mode .interface-scale button { width: 34px; height: 34px; font-size: 18px; line-height: 1; }
+.device-frame.ipad-mode .interface-scale output { min-width: 58px; color: #223d48; font-size: 13px; font-weight: 900; }
+.device-frame.ipad-mode .status-sync { width: 100%; height: 42px; margin-top: auto; padding: 0 5px 0 11px; justify-content: space-between; border-radius: 10px; font-size: 13px; }
 .device-frame.ipad-mode .status-sync select { height: 32px; padding-inline: 7px 24px; font-size: 13px; }
 .device-frame.ipad-mode .ipad-mode-control { margin-top: 8px; padding: 13px 8px; font-size: 18px; }
 .device-frame.ipad-mode .ipad-mode-control i { flex-basis: 38px; width: 38px; height: 23px; border-radius: 13px; }.device-frame.ipad-mode .ipad-mode-control i::after { width: 19px; height: 19px; }.device-frame.ipad-mode .ipad-mode-control input:checked + i::after { transform: translateX(15px); }
