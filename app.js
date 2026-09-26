@@ -73,8 +73,7 @@
   const routingConnectionPanel = $("#routing-connection-panel");
   const routingConnectionTitle = $("#routing-connection-title");
   const routingConnectionPath = $("#routing-connection-path");
-  const routingInputSourceField = $("#routing-input-source-field");
-  const routingInputSourceHelp = $("#routing-input-source-help");
+  const routingConnectionNote = $("#routing-connection-note");
   const routingOutputModeField = $("#routing-output-mode-field");
   const routingOutputModeHelp = $("#routing-output-mode-help");
   const routingExistingRoutesField = $("#routing-existing-routes-field");
@@ -640,6 +639,15 @@
     if (index < snapshot.inputBusCount) return "input";
     if (index < snapshot.inputBusCount + snapshot.outputBusCount) return "output";
     return "aux";
+  }
+
+  function routingBusContextLabel(index, snapshot = state.routingSnapshot || state.liveIdentity) {
+    if (index < 0) return "None";
+    const label = routingBusLabel(index, snapshot);
+    const kind = routingBusKind(index, snapshot);
+    if (kind === "input") return `Input ${label}`;
+    if (kind === "output") return `Output ${label}`;
+    return `Aux ${label}`;
   }
 
   function routingAuxColour(bus, snapshot) {
@@ -1273,35 +1281,25 @@
 
   async function openRoutingConnectionPanel({ source, destination, output, destinationBus, onApply, title = "New connection", submitLabel = "Connect", allowRouteChanges = true }) {
     routingConnectionPanel.classList.toggle("ipad-panel", state.ipadMode);
+    const isInputAssignment = !output && source?.side === "input";
     const details = output?.parameterIndex != null ? routingModeDetails(output) : null;
     const existing = allowRouteChanges && output?.parameterIndex != null && destinationBus >= 0
       ? existingWritableOutputRoutes(destinationBus, output)
       : [];
-    routingConnectionTitle.textContent = title;
-    routingConnectionPath.textContent = `${routingSelectionLabel(source)} → ${routingSelectionLabel(destination)}`;
+    routingConnectionTitle.textContent = isInputAssignment ? "Change input source" : title;
+    routingConnectionPath.textContent = isInputAssignment
+      ? `${routingSelectionLabel(source)} · ${routingBusContextLabel(source.bus)} → ${routingBusContextLabel(destinationBus)}`
+      : `${routingSelectionLabel(source)} → ${routingSelectionLabel(destination)}`;
     $("#routing-connection-apply").disabled = false;
-    $("#routing-connection-apply").textContent = submitLabel;
+    $("#routing-connection-apply").textContent = isInputAssignment ? "Change source" : submitLabel;
     const modeControls = $$('input[name="routing-output-mode"]', routingConnectionPanel);
     const renderedMode = output?.element?.querySelector(".routing-mode-toggle")?.dataset.mode || "add";
     const currentMode = details?.currentMode || renderedMode;
     const modeStatus = routingOutputModeStatus(output);
-    const isInputAssignment = !output && source?.side === "input";
-    routingInputSourceField.classList.toggle("hidden", !isInputAssignment);
-    if (isInputAssignment) {
-      const routingIdentity = state.routingSnapshot || state.liveIdentity;
-      const nextLabel = routingBusLabel(destinationBus, routingIdentity);
-      const currentLabel = source.bus >= 0 ? routingBusLabel(source.bus, routingIdentity) : "None";
-      $("#routing-input-new-label").textContent = `Use ${nextLabel}`;
-      $("#routing-input-current-label").textContent = `Keep ${currentLabel}`;
-      const inputControls = $$('input[name="routing-input-source"]', routingConnectionPanel);
-      inputControls.forEach(control => {
-        control.disabled = false;
-        control.checked = control.value === "new";
-      });
-      routingInputSourceHelp.textContent = source.bus >= 0
-        ? `${routingSelectionLabel(source)} currently reads ${currentLabel}. Using ${nextLabel} replaces only this input's source; it does not disconnect any other route.`
-        : `${routingSelectionLabel(source)} is unassigned. It will read ${nextLabel}; no other route is changed.`;
-    }
+    routingConnectionNote.classList.toggle("hidden", !isInputAssignment);
+    routingConnectionNote.textContent = isInputAssignment
+      ? "Changes only this input. Other routes remain connected."
+      : "";
     routingOutputModeField.classList.toggle("hidden", !output);
     modeControls.forEach(control => {
       control.checked = control.value === currentMode;
@@ -1324,7 +1322,6 @@
       ? `${routingBusLabel(destinationBus, state.routingSnapshot)} has ${existing.length} other editable connection${existing.length === 1 ? "" : "s"}. Disconnecting them sets those output assignments to None.`
       : "No other editable routes use this destination.";
     routingConnectionAction = () => {
-      if (isInputAssignment && $('input[name="routing-input-source"]:checked', routingConnectionPanel)?.value === "current") return Promise.resolve();
       const selectedMode = $('input[name="routing-output-mode"]:checked', routingConnectionPanel)?.value || currentMode;
       const routeChoice = $('input[name="routing-existing-routes"]:checked', routingConnectionPanel)?.value || "keep";
       return onApply(details ? { details, mode: selectedMode } : null, routeChoice === "disconnect" ? existing : []);

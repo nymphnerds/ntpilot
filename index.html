@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-220">
+  <link rel="stylesheet" href="styles.css?v=20260926-221">
 </head>
 <body>
   <main class="stage">
@@ -262,11 +262,6 @@
                 <form class="routing-connection-panel hidden" id="routing-connection-panel">
                   <div class="routing-connection-heading"><span id="routing-connection-title">New connection</span><strong id="routing-connection-path">Source → destination</strong></div>
                   <div class="routing-connection-decisions">
-                    <fieldset class="hidden" id="routing-input-source-field">
-                      <legend>Input source</legend>
-                      <div><label><input type="radio" name="routing-input-source" value="new" checked><span id="routing-input-new-label">Use selected bus</span></label><label><input type="radio" name="routing-input-source" value="current"><span id="routing-input-current-label">Keep current bus</span></label></div>
-                      <small id="routing-input-source-help">An input reads one bus. Choosing a new bus replaces only this input's current source.</small>
-                    </fieldset>
                     <fieldset id="routing-output-mode-field">
                       <legend>Output mode</legend>
                       <div><label><input type="radio" name="routing-output-mode" value="add"><span>Add</span></label><label><input type="radio" name="routing-output-mode" value="replace"><span>Replace</span></label></div>
@@ -278,6 +273,7 @@
                       <small id="routing-existing-routes-help">No other editable routes use this destination.</small>
                     </fieldset>
                   </div>
+                  <p class="routing-connection-note hidden" id="routing-connection-note"></p>
                   <div class="routing-connection-actions"><button type="button" id="routing-connection-cancel">Cancel</button><button type="submit" id="routing-connection-apply">Connect</button></div>
                 </form>
               </div>
@@ -487,6 +483,6 @@
 
   <script src="web-midi-transport.js?v=20260925-44"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-151"></script>
+  <script src="app.js?v=20260926-152"></script>
 </body>
 </html>
