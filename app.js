@@ -8,6 +8,7 @@
   const connectionPill = $("#connection-pill");
   const connectionLabel = $("#connection-label");
   const deviceFrame = $("#device-frame");
+  const appMain = $(".app-main");
   const deviceTitle = $("#device-title");
   const editorShell = $("#editor-shell");
   const editorEmptyState = $("#editor-empty-state");
@@ -41,6 +42,8 @@
   const interfaceScaleDown = $("#interface-scale-down");
   const interfaceScaleValue = $("#interface-scale-value");
   const interfaceScaleUp = $("#interface-scale-up");
+  const busDockLayoutControl = $("#bus-dock-layout");
+  const busDockLayoutLabel = $("#bus-dock-layout-label");
   const syncModeControl = $("#sync-mode");
   const syncModeLabel = $("#sync-mode-label");
   const syncModeDetail = $("#sync-mode-detail");
@@ -99,6 +102,7 @@
     routingReadToken: 0,
     routingZoom: 1,
     interfaceScale: 100,
+    busDockLayout: "auto",
     routingCanvasSize: { width: 1180, height: 760 },
     routingSnapshot: null,
     routingSelection: null,
@@ -628,6 +632,42 @@
 
   function updateEditorBusDockVisibility() {
     editorBusDock.classList.toggle("hidden", !state.transportOnline || !state.liveIdentity || state.view !== "editor");
+    updateBottomBusDockHeight();
+  }
+
+  const bottomBusDockMedia = window.matchMedia("(pointer: coarse) and (max-width: 1250px)");
+
+  function updateBottomBusDockHeight() {
+    requestAnimationFrame(() => {
+      const height = deviceFrame.classList.contains("bus-dock-bottom") && !editorBusDock.classList.contains("hidden")
+        ? Math.ceil(editorBusDock.getBoundingClientRect().height)
+        : 0;
+      deviceFrame.style.setProperty("--bottom-bus-dock-height", `${height}px`);
+    });
+  }
+
+  function applyBusDockLayout() {
+    const bottom = state.busDockLayout === "bottom" || (state.busDockLayout === "auto" && bottomBusDockMedia.matches);
+    if (bottom && editorBusDock.parentElement !== deviceFrame) deviceFrame.appendChild(editorBusDock);
+    if (!bottom && editorBusDock.parentElement !== appMain) appMain.insertBefore(editorBusDock, viewStack);
+    deviceFrame.classList.toggle("bus-dock-bottom", bottom);
+    busDockLayoutLabel.textContent = state.busDockLayout === "auto"
+      ? `Automatic · ${bottom ? "bottom" : "top"}`
+      : `${bottom ? "Bottom" : "Top"} bus dock`;
+    updateBottomBusDockHeight();
+  }
+
+  function setBusDockLayout(value, { save = true } = {}) {
+    state.busDockLayout = ["auto", "top", "bottom"].includes(value) ? value : "auto";
+    busDockLayoutControl.value = state.busDockLayout;
+    if (save) {
+      try {
+        localStorage.setItem("ntPilotBusDockLayout", state.busDockLayout);
+      } catch (_) {
+        // The selected layout remains active for this session.
+      }
+    }
+    applyBusDockLayout();
   }
 
   function renderEditorBusDock(identity) {
@@ -2947,6 +2987,11 @@
   interfaceScaleDown.addEventListener("click", () => setInterfaceScale(state.interfaceScale - 10));
   interfaceScaleUp.addEventListener("click", () => setInterfaceScale(state.interfaceScale + 10));
   interfaceScaleValue.addEventListener("dblclick", () => setInterfaceScale(100));
+  busDockLayoutControl.addEventListener("change", () => setBusDockLayout(busDockLayoutControl.value));
+  bottomBusDockMedia.addEventListener("change", () => {
+    if (state.busDockLayout === "auto") applyBusDockLayout();
+  });
+  new ResizeObserver(updateBottomBusDockHeight).observe(editorBusDock);
   $("#routing-zoom-out").addEventListener("click", () => {
     state.routingZoom = Math.max(.2, Number((state.routingZoom - .1).toFixed(2)));
     applyRoutingZoom();
@@ -3335,6 +3380,13 @@
     savedInterfaceScale = 100;
   }
   setInterfaceScale(savedInterfaceScale, { save: false });
+  let savedBusDockLayout = "auto";
+  try {
+    savedBusDockLayout = localStorage.getItem("ntPilotBusDockLayout") || "auto";
+  } catch (_) {
+    savedBusDockLayout = "auto";
+  }
+  setBusDockLayout(savedBusDockLayout, { save: false });
   resetEditorForConnection();
   const recoveredView = ["editor", "routing", "mapping", "control", "status", "assistant"].includes(rebootRecovery?.view)
     ? rebootRecovery.view

@@ -59,6 +59,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 
 .stage { padding: var(--frame-gutter); min-height: 100vh; height: 100vh; height: 100dvh; display: grid; place-items: start center; }
 .device-frame {
+  position: relative;
   width: 100%;
   min-height: 0;
   height: calc(100vh - var(--frame-gutter) - var(--frame-gutter));
@@ -209,6 +210,18 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .parameter-title span { color: #89969e; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .parameter-title h2 { margin: 3px 0 0; font-size: 20px; letter-spacing: -.025em; }
 .editor-bus-dock { z-index: 7; flex: 0 0 auto; width: 100%; overflow: visible; border-bottom: 0; background: var(--surface); }
+.device-frame.bus-dock-bottom .editor-bus-dock { position: absolute; z-index: 20; left: 0; right: 0; bottom: 0; width: 100%; border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(34,58,69,.09); }
+.device-frame.bus-dock-bottom:has(.editor-bus-dock:not(.hidden)) .app-main,
+.device-frame.bus-dock-bottom:has(.editor-bus-dock:not(.hidden)) .app-sidebar { padding-bottom: var(--bottom-bus-dock-height, 92px); }
+.device-frame.bus-dock-bottom .editor-bus-dock-row,
+.device-frame.bus-dock-bottom .editor-physical-bus-row { padding-inline: var(--chrome-gutter); }
+.device-frame.bus-dock-bottom { grid-template-columns: 160px minmax(0, 1fr); }
+.device-frame.bus-dock-bottom .app-sidebar { padding-inline: 14px 8px; }
+.device-frame.bus-dock-bottom .app-mark { gap: 9px; }
+.device-frame.bus-dock-bottom .mark-copy strong { font-size: 18px; }
+.device-frame.bus-dock-bottom .mark-copy small { font-size: 11px; }
+.device-frame.bus-dock-bottom .nav-item { gap: 8px; padding-block: 12px; font-size: 15px; }
+.device-frame.bus-dock-bottom .nav-item svg { width: 22px; height: 22px; }
 .editor-bus-dock-row { overflow: hidden; }
 .editor-physical-bus-row { overflow: visible; }
 .editor-aux-bus-row { min-height: 41px; padding: 7px var(--chrome-gutter); display: grid; grid-template-columns: repeat(var(--bus-grid-columns, 44), minmax(0, 1fr)); align-items: center; gap: 2px; border-bottom: 0; }

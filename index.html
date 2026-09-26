@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-185">
+  <link rel="stylesheet" href="styles.css?v=20260926-186">
 </head>
 <body>
   <main class="stage">
@@ -386,6 +386,7 @@
               <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM9 8h6m-6 4h6m-6 4h3"/></svg></div><div><span>Hardware</span><h2 id="hardware-title">disting NT</h2><p id="hardware-detail">Waiting for MIDI connection</p></div><span class="settings-status" id="hardware-status">Not connected</span></article>
               <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 8h14M5 16h14"/></svg></div><div><span>Advanced connection</span><h2>SysEx device ID</h2><p>Leave at 0 unless your NT uses another ID.</p></div><label class="settings-select"><select id="sysex-id" aria-label="SysEx device ID"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option></select></label></article>
               <article class="settings-card"><div class="settings-icon sync"><svg viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5M18 9a7 7 0 0 0-12-2l-2 4m16 2-2 4a7 7 0 0 1-12-2"/></svg></div><div><span>Synchronization</span><h2 id="sync-mode-label">Fast</h2><p id="sync-mode-detail">Immediate MIDI feedback · 100 ms polling</p></div></article>
+              <article class="settings-card"><div class="settings-icon device"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4zM7 9h10M7 13h6"/></svg></div><div><span>Editor layout</span><h2 id="bus-dock-layout-label">Automatic bus dock</h2><p>Use the full-width bottom tray on constrained touch screens.</p></div><label class="settings-select"><select id="bus-dock-layout" aria-label="Bus dock position"><option value="auto">Auto</option><option value="top">Top</option><option value="bottom">Bottom</option></select></label></article>
               <article class="settings-card"><div class="settings-icon ai"><svg viewBox="0 0 24 24"><path d="M5 6h14v11H9l-4 3V6Zm4 4h6m-6 3h4"/></svg></div><div><span>AI provider</span><h2>Not configured</h2><p>Assistant is currently an interface preview.</p></div><button class="secondary-button" disabled>Unavailable</button></article>
               <article class="settings-card settings-card-action" id="reference-guide-card" role="button" tabindex="0"><div class="settings-icon knowledge"><svg viewBox="0 0 24 24"><path d="M4 5h7v14H4zm9 0h7v14h-7M7 9h1m8 0h1"/></svg></div><div><span>Knowledge</span><h2>NT wiki</h2><p>Browse practical guides for firmware 1.18</p></div><button class="secondary-button" id="open-reference-guide" type="button">Open wiki</button></article>
             </div>
@@ -469,6 +470,6 @@
 
   <script src="web-midi-transport.js?v=20260925-44"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-120"></script>
+  <script src="app.js?v=20260926-121"></script>
 </body>
 </html>
