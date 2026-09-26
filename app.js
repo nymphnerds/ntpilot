@@ -1128,6 +1128,7 @@
   }
 
   async function openRoutingConnectionPanel({ source, destination, output, destinationBus, onApply, title = "New connection", submitLabel = "Connect", allowRouteChanges = true }) {
+    routingConnectionPanel.classList.toggle("ipad-panel", state.ipadMode);
     const details = output?.parameterIndex != null ? await resolveRoutingModeDetails(output) : null;
     const existing = allowRouteChanges && output?.parameterIndex != null && destinationBus >= 0
       ? existingWritableOutputRoutes(destinationBus, output)
@@ -1744,8 +1745,8 @@
       showToast("Select an algorithm input or output first");
       return true;
     }
-    const assigningOutputToAux = selection.side === "output" && bus >= 0 && routingBusKind(bus, state.routingSnapshot) === "aux";
-    if (!confirmed && assigningOutputToAux) {
+    const assigningOutput = selection.side === "output" && bus >= 0;
+    if (!confirmed && assigningOutput) {
       const busChip = $(`.routing-aux-chip[data-bus="${bus}"]`, routingAuxPalette);
       const destination = { element: busChip || selection.element, side: "both", bus, slotIndex: null, parameterIndex: null };
       await openRoutingConnectionPanel({
