@@ -578,9 +578,27 @@
     state.cpuTimer = null;
   }
 
+  function cpuMeterColour(value) {
+    const percent = Math.max(0, Math.min(90, Number(value) || 0));
+    const hue = percent <= 60
+      ? 165 - (percent / 60) * 90
+      : percent <= 75
+        ? 75 - ((percent - 60) / 15) * 40
+        : 35 - ((percent - 75) / 15) * 35;
+    return `hsl(${Math.round(hue)} 72% ${state.darkMode ? 66 : 39}%)`;
+  }
+
+  function updateCpuMeter(element, value) {
+    element.style.setProperty("--cpu-colour", cpuMeterColour(value));
+    $("b", element).textContent = `${value}%`;
+    element.classList.toggle("danger", Number(value) >= 90);
+  }
+
   function startCpuPolling() {
     stopCpuPolling();
     const cpuLabel = $("#editor-cpu-usage");
+    const audioMeter = $("#audio-cpu-meter");
+    const overallMeter = $("#overall-cpu-meter");
     const poll = async () => {
       if (!state.ntTransport || !state.transportOnline || document.hidden) return;
       if (state.pollInFlight || state.routingReadPromise || state.performanceReadPromise) {
@@ -589,9 +607,11 @@
       }
       try {
         const usage = await state.ntTransport.readCpuUsage();
-        cpuLabel.textContent = `Audio ${usage.audioThread}% · Overall ${usage.overall}%`;
-        cpuLabel.title = `Audio thread ${usage.audioThread}% · Overall CPU ${usage.overall}%`;
-        cpuLabel.classList.toggle("high", usage.audioThread >= 85 || usage.overall >= 85);
+        updateCpuMeter(audioMeter, usage.audioThread);
+        updateCpuMeter(overallMeter, usage.overall);
+        audioMeter.title = `Algorithm/audio CPU ${usage.audioThread}%. Expert Sleepers recommends keeping this below about 90%.`;
+        overallMeter.title = `Overall CPU ${usage.overall}%. This also includes MicroSD and other background activity.`;
+        cpuLabel.title = `Audio ${usage.audioThread}% · Overall ${usage.overall}%`;
       } catch (_) {
         // Other live reads have priority on the NT's single-request transport.
       } finally {

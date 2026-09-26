@@ -183,7 +183,11 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .editor-section-heading { color: var(--ink); font-size: 11px; font-weight: 850; }
 .editor-meta { gap: 10px; color: #80909a; font-size: 10px; font-weight: 700; }
 .editor-meta > span + span { border-left: 0; padding-left: 10px; }
-#editor-cpu-usage.high { color: #c24f4f; font-weight: 850; }
+#editor-cpu-usage { display: inline-flex; align-items: center; gap: 5px; }
+.cpu-meter { display: inline-flex; align-items: center; gap: 4px; color: var(--cpu-colour, #71858f); transition: color .45s ease; }
+.cpu-meter i { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: var(--cpu-colour, #71858f); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cpu-colour, #71858f) 14%, transparent); transition: background .45s ease, box-shadow .45s ease; }
+.cpu-meter b { font: inherit; font-weight: 800; }.cpu-meter.danger { font-weight: 900; }.cpu-separator { color: #9cabb2; }
+.device-frame.ipad-mode .cpu-meter i { width: 12px; height: 12px; flex-basis: 12px; }
 .freshness { color: var(--pilot-deep); }
 .freshness i { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--pilot); }
 .editor-columns { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(180px, 23%) minmax(0, 1fr); }

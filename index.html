@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-225">
+  <link rel="stylesheet" href="styles.css?v=20260926-226">
 </head>
 <body>
   <main class="stage">
@@ -132,7 +132,7 @@
               <div class="editor-toolbar">
                 <strong class="editor-section-heading">Algorithms</strong>
                 <div class="editor-meta">
-                  <span id="editor-slot-count">10 slots</span><span id="editor-cpu-usage" title="Waiting for CPU usage from the NT">Audio — · Overall —</span>
+                  <span id="editor-slot-count">10 slots</span><span id="editor-cpu-usage" title="Waiting for CPU usage from the NT"><span class="cpu-meter" id="audio-cpu-meter"><i></i>Audio <b>—</b></span><span class="cpu-separator">·</span><span class="cpu-meter" id="overall-cpu-meter"><i></i>Overall <b>—</b></span></span>
                   <span class="freshness"><i></i> Updated now</span>
                 </div>
               </div>
@@ -463,7 +463,7 @@
 
         <section id="wiki-performance"><p class="wiki-kicker">Manual pages 35–37 and 48</p><h3>Performance Page</h3><p>The Performance Page is a preset-wide collection of chosen parameters, independent of MIDI mappings. Assign a Performance Page index from the parameter’s mapping setup. Items can be renamed, constrained to custom min/max values and reordered.</p><p>The first four controls correspond to the four pots, and pages extend the available set. Knob Recorder algorithms can capture and replay gestures, optionally clock-synchronised. Firmware 1.18 makes a knob press reset its assigned parameter to default.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=35" target="_blank" rel="noopener">Official manual: Performance Page →</a></section>
 
-        <section id="wiki-cpu"><p class="wiki-kicker">Manual pages 31–32 and 50</p><h3>CPU, sample rate and block size</h3><p>The overview reports audio CPU and overall CPU. Audio overload causes glitches; overall load also includes display, card and background work. Higher sample rates and smaller blocks cost more CPU, while larger blocks increase latency.</p><p>Engine sample rates are 32, 44.1, 48, 88.2 or 96 kHz. Sample-rate and block-size changes require <b>Apply</b>. USB may control sample rate if <b>Allow USB rate change</b> is enabled; changing that option requires rebooting.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=31" target="_blank" rel="noopener">Official manual: Engine and CPU →</a></section>
+        <section id="wiki-cpu"><p class="wiki-kicker">Manual pages 31–32 and 50</p><h3>CPU, sample rate and block size</h3><p>The overview reports audio CPU and overall CPU. Expert Sleepers recommends keeping total algorithm/audio CPU below about <b>90%</b> for reliable operation. Overall load also includes display, MicroSD and background work, so it can sometimes be significantly higher. Overload can cause crackling, a slow UI and eventually muted algorithm processing.</p><p>Engine sample rates are 32, 44.1, 48, 88.2 or 96 kHz. Higher sample rates and smaller blocks cost more CPU, while larger blocks increase latency. Sample-rate and block-size changes require <b>Apply</b>. USB may control sample rate if <b>Allow USB rate change</b> is enabled; changing that option requires rebooting.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=31" target="_blank" rel="noopener">Official manual: Engine and CPU →</a></section>
 
         <section id="wiki-expanders"><p class="wiki-kicker">Manual pages 13 and 50–51</p><h3>NTX-8CV, ES-5 and ESX</h3><p><b>CV (8×8):</b> up to eight NTX-8CVs provide 64 time-interleaved CV outputs. Channels are individually enabled; enabling unused channels wastes some CPU. <b>Audio 32-bit:</b> one unit provides eight full-resolution channels. <b>Audio 16-bit:</b> two units provide 16 channels. Match the NTX sample rate to the NT for audio modes.</p><p>NTX channels 1–44 carry aux 1–44, channels 45–56 carry inputs 1–12, and channels 57–64 carry outputs 1–8. In CV mode, NTX can share the link with an ES-5 and up to two ESX expanders, but shared mode halves NTX bandwidth. ES-5/ESX are otherwise addressed by compatible algorithms rather than ordinary output busses.</p><a class="wiki-source" href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf#page=50" target="_blank" rel="noopener">Official manual: NTX-8CV settings →</a></section>
 
@@ -483,6 +483,6 @@
 
   <script src="web-midi-transport.js?v=20260925-44"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-165"></script>
+  <script src="app.js?v=20260926-166"></script>
 </body>
 </html>
