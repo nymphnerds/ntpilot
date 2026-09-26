@@ -318,11 +318,18 @@
     const inferredError = /failed|could not|did not|no longer|unexpected|invalid|timed? out|unavailable|\berror\b/i.test(raw);
     const resolvedTone = tone === "error" || inferredError ? "error" : tone;
     if (resolvedTone === "error") console.warn("NT Pilot:", raw);
-    $("span", toast).textContent = friendlyToastMessage(raw);
+    const visibleMessage = friendlyToastMessage(raw);
+    $("span", toast).textContent = visibleMessage;
     toast.classList.toggle("error", resolvedTone === "error");
     toast.classList.toggle("guidance", resolvedTone === "guidance");
     toast.classList.add("visible");
-    state.toastTimer = setTimeout(() => toast.classList.remove("visible"), resolvedTone === "error" ? 3600 : 1800);
+    const timing = resolvedTone === "error"
+      ? { base: 6500, perCharacter: 34, maximum: 12000 }
+      : resolvedTone === "guidance"
+        ? { base: 2600, perCharacter: 28, maximum: 7000 }
+        : { base: 1400, perCharacter: 28, maximum: 5000 };
+    const duration = Math.min(timing.maximum, timing.base + visibleMessage.length * timing.perCharacter);
+    state.toastTimer = setTimeout(() => toast.classList.remove("visible"), duration);
   }
 
   function formatMonitorTime(wallTime) {
