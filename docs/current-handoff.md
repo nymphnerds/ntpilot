@@ -36,6 +36,34 @@ Last updated: 26 September 2026
 
 Do not claim zero regression risk. Keep every stage testable and reversible, do not redesign visuals during the refactor, and do not delete an old path until tests prove the replacement has equivalent behaviour.
 
+## Second major missing system: add and manage algorithms/plug-ins
+
+NT Pilot can currently edit, route, bypass and reorder algorithms already present in a preset, but it does not provide the complete slot lifecycle. This is the next major product feature after the routing architecture is stabilized.
+
+Required user workflow:
+
+- Add a factory algorithm or installed plug-in to an empty slot.
+- Browse and search the algorithms and plug-ins actually available on the connected NT rather than relying on a hard-coded catalogue.
+- Clearly distinguish factory algorithms from plug-ins and show the authoritative name plus any firmware-exposed author, version, compatibility or resource information.
+- Replace an occupied slot with an explicit warning about affected routing, mappings, Performance assignments and unsaved working state.
+- Handle a full ten-slot preset with an understandable choice: replace a slot, cancel, or reorder first. Never silently overwrite a slot.
+- Remove an algorithm with equivalent impact information and confirmation.
+- Reread the authoritative slot/preset state from the NT after every successful mutation.
+- Integrate add, replace and remove into the same Undo/Redo model where the official NT API provides enough information to restore the previous state safely.
+- Work consistently in desktop and iPad modes without separate mutation implementations.
+
+Architecture requirements:
+
+1. Create one canonical slot-mutation controller for add, replace, remove and reorder. Editor cards and any future browser are only clients of this controller.
+2. Keep algorithm discovery/catalogue reads separate from preset mutation writes.
+3. Represent every requested change as a previewable plan containing the target slot, selected algorithm/plug-in and known affected state before any write occurs.
+4. Serialize mutations through the same hardware command queue and reconnect protection used by other NT writes.
+5. Verify every mutation using NT readback; do not optimistically fabricate the new slot state.
+6. Preserve the existing selected slot when possible and deliberately choose the new selection after add/replace/remove.
+7. Add protocol-level and controller-level tests before exposing destructive replace/remove controls.
+
+Before implementation, reread the latest official disting NT manual and API/SysEx documentation to establish the authoritative commands and limitations for algorithm enumeration, plug-in enumeration, slot creation, replacement and removal. Do not infer these operations from NT Helper UI behaviour and do not create separate factory/plugin write paths unless the hardware API genuinely requires them.
+
 ## Repository and runtime
 
 - Development checkout: `/home/nymph/DistingNT/ntpilot`
@@ -155,7 +183,7 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-217`
+- `styles.css?v=20260926-218`
 - `web-midi-transport.js?v=20260925-44`
 - `routing-logic.js?v=20260925-2`
 - `app.js?v=20260926-150`
