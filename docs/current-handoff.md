@@ -10,7 +10,8 @@ Last updated: 26 September 2026
 - The user has hardware-tested the shared Editor/Routing connection popup, iPad routing list, popup retargeting, immediate verified routing writes, dark mode and reconnect flow. The routing interaction is now substantially usable on the real NT and iPad Web MIDI browser.
 - Recent work removed the blocking full routing scan from the connection transaction. Each parameter write still receives targeted NT readback; the local port updates immediately and a quiet debounced full reconciliation follows.
 - Recent UI polish added bus-aware popup/sidebar colours for Aux, physical input and physical output selections; reliable touch radio choices; calmer severity-aware notifications with adaptive reading time; and independent Audio/Overall CPU colour spectra with larger dots.
-- In iPad mode, Sync and interface Scale form a matched compact stack at the bottom of the navigation area, with Sync directly above Scale and identical outer dimensions.
+- Sync and interface Scale form a matched compact stack at the bottom of the sidebar in both desktop and iPad modes, with Sync directly above Scale and identical outer dimensions for the active mode.
+- The built-in wiki becomes a near-edge-to-edge full-page reader in iPad mode, with larger navigation, search, article and footer typography while retaining independent contents/article scrolling.
 - Do **not** start the algorithm/plug-in lifecycle feature by adding UI directly to `app.js`. The user explicitly wants an architecture audit and canonical systems rather than another parallel implementation.
 - Next session should begin with behaviour-locking routing tests and the incremental controller extraction below. Preserve the current visuals while restructuring.
 
@@ -193,10 +194,10 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-227`
+- `styles.css?v=20260926-228`
 - `web-midi-transport.js?v=20260925-44`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-167`
+- `app.js?v=20260926-168`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

@@ -43,12 +43,13 @@
   const interfaceScaleDown = $("#interface-scale-down");
   const interfaceScaleValue = $("#interface-scale-value");
   const interfaceScaleUp = $("#interface-scale-up");
+  const interfaceScaleControl = $(".interface-scale");
+  const sidebarUtilityStack = $(".sidebar-utility-stack");
   const ipadModeControl = $("#ipad-mode");
   const darkModeControl = $("#dark-mode");
   const syncModeControl = $("#sync-mode");
   const statusSyncControl = $(".status-sync");
-  const statusSyncAnchor = document.createComment("status sync position");
-  statusSyncControl.parentNode.insertBefore(statusSyncAnchor, statusSyncControl);
+  sidebarUtilityStack.insertBefore(statusSyncControl, interfaceScaleControl);
   const syncModeLabel = $("#sync-mode-label");
   const syncModeDetail = $("#sync-mode-detail");
   const slotList = $(".slot-list");
@@ -873,11 +874,6 @@
     if (!bottom && routingAuxPalette.parentElement !== routingViewport.parentElement) routingViewport.parentElement.insertBefore(routingAuxPalette, routingViewport);
     deviceFrame.classList.toggle("bus-dock-bottom", bottom);
     deviceFrame.classList.toggle("ipad-mode", bottom);
-    if (bottom) {
-      interfaceScale.parentNode.insertBefore(statusSyncControl, interfaceScale);
-    } else {
-      statusSyncAnchor.parentNode.insertBefore(statusSyncControl, statusSyncAnchor.nextSibling);
-    }
     if (state.liveIdentity) renderEditorBusDock(state.liveIdentity);
     if (state.liveRouting) renderAuxPalette(state.liveRouting);
     updateRoutingPaletteVisibility();
@@ -887,6 +883,7 @@
   function setIpadMode(enabled, { save = true } = {}) {
     state.ipadMode = Boolean(enabled);
     ipadModeControl.checked = state.ipadMode;
+    referenceGuide.classList.toggle("ipad-guide", state.ipadMode);
     if (save) {
       try {
         localStorage.setItem("ntPilotIpadMode", state.ipadMode ? "true" : "false");
