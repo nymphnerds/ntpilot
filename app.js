@@ -3817,7 +3817,16 @@
       button.type = "button";
       button.dataset.algorithmLoadPlacement = placement;
       button.classList.toggle("selected", state.pendingAlgorithmPlacement === placement);
+      button.setAttribute("aria-pressed", String(state.pendingAlgorithmPlacement === placement));
       button.textContent = label;
+      // Bind the selection directly. The dialog is rebuilt after a plug-in load,
+      // so this stays reliable in iOS Web MIDI browsers as well as desktop.
+      button.addEventListener("click", () => {
+        if (state.algorithmLoadStep !== "insert") return;
+        state.pendingAlgorithmPlacement = placement;
+        renderAlgorithmLoadPage();
+        requestAnimationFrame(() => confirmAlgorithmLoad.focus({ preventScroll: true }));
+      });
       algorithmLoadPlacement.appendChild(button);
     });
   }
@@ -4906,12 +4915,6 @@
   closeAlgorithmLoad.addEventListener("click", closeAlgorithmLoadDialog);
   cancelAlgorithmLoad.addEventListener("click", closeAlgorithmLoadDialog);
   algorithmLoadDialog.addEventListener("close", () => { state.pendingPluginLoad = null; });
-  algorithmLoadPlacement.addEventListener("click", event => {
-    const action = event.target.closest("[data-algorithm-load-placement]");
-    if (!action || state.algorithmLoadStep !== "insert") return;
-    state.pendingAlgorithmPlacement = action.dataset.algorithmLoadPlacement;
-    renderAlgorithmLoadPage();
-  });
   confirmAlgorithmLoad.addEventListener("click", async () => {
     const algorithm = state.pendingPluginLoad;
     if (!algorithm) return;
