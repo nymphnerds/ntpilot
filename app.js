@@ -1902,16 +1902,13 @@
   }
 
   function restoreRoutingAnchor(anchor, clientX, clientY) {
-    const canvasRect = routingCanvas.getBoundingClientRect();
     const viewportRect = routingViewport.getBoundingClientRect();
-    const canvasScaleX = canvasRect.width / Math.max(1, state.routingCanvasSize.width);
-    const canvasScaleY = canvasRect.height / Math.max(1, state.routingCanvasSize.height);
     const viewportScaleX = viewportRect.width / Math.max(1, routingViewport.clientWidth);
     const viewportScaleY = viewportRect.height / Math.max(1, routingViewport.clientHeight);
-    const anchoredClientX = canvasRect.left + anchor.x * canvasScaleX;
-    const anchoredClientY = canvasRect.top + anchor.y * canvasScaleY;
-    routingViewport.scrollLeft += (anchoredClientX - clientX) / Math.max(.01, viewportScaleX);
-    routingViewport.scrollTop += (anchoredClientY - clientY) / Math.max(.01, viewportScaleY);
+    const localX = (clientX - viewportRect.left) / Math.max(.01, viewportScaleX);
+    const localY = (clientY - viewportRect.top) / Math.max(.01, viewportScaleY);
+    routingViewport.scrollLeft = anchor.x * state.routingZoom - localX;
+    routingViewport.scrollTop = anchor.y * state.routingZoom - localY;
   }
 
   function fitRoutingGraph(behavior = "smooth") {
@@ -3291,6 +3288,9 @@
   };
   routingViewport.addEventListener("touchend", finishNativeRoutingTouch, { passive: false });
   routingViewport.addEventListener("touchcancel", finishNativeRoutingTouch, { passive: false });
+  ["gesturestart", "gesturechange", "gestureend"].forEach(type => {
+    routingViewport.addEventListener(type, event => event.preventDefault(), { passive: false });
+  });
   midiMonitorFilter.addEventListener("change", renderMIDIMonitor);
   $("#clear-midi-monitor").addEventListener("click", resetMIDIMonitor);
   $("#sysex-id").addEventListener("change", () => {
