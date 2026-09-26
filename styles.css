@@ -114,7 +114,11 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .interface-scale { display: inline-flex; align-items: center; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: #f7fafb; }
 .interface-scale button { width: 25px; height: 24px; padding: 0; border: 0; border-radius: 6px; color: #60727c; background: transparent; font-size: 11px; font-weight: 900; cursor: pointer; }.interface-scale button:hover:not(:disabled) { color: var(--pilot-deep); background: var(--pilot-soft); }.interface-scale button:disabled { opacity: .35; cursor: default; }
 .interface-scale output { min-width: 36px; color: #536872; font-size: 8px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; cursor: default; }
-.sidebar-scale { width: 100%; margin-top: auto; justify-content: space-between; }
+.sidebar-scale { display: none; width: 100%; margin-top: auto; justify-content: space-between; }
+.device-frame.ipad-mode .sidebar-scale { display: flex; }
+.ipad-mode-control { margin-top: auto; padding: 8px 5px; display: flex; align-items: center; justify-content: space-between; gap: 7px; color: #536872; font-size: 10px; font-weight: 900; cursor: pointer; }
+.device-frame.ipad-mode .sidebar-scale + .ipad-mode-control { margin-top: 7px; }
+.ipad-mode-control input { position: absolute; opacity: 0; pointer-events: none; }.ipad-mode-control i { position: relative; flex: 0 0 30px; width: 30px; height: 18px; border-radius: 10px; background: #cbd5d9; transition: .18s; }.ipad-mode-control i::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,.22); transition: .18s; }.ipad-mode-control input:checked + i { background: var(--pilot); }.ipad-mode-control input:checked + i::after { transform: translateX(12px); }
 .history-actions { display: inline-flex; align-items: center; gap: 8px; }
 .history-actions button { padding: 2px 0; border: 0; color: #344f5b; background: transparent; font: inherit; font-size: 11px; font-weight: 850; cursor: pointer; }
 .history-actions button:hover:not(:disabled) { color: var(--pilot-deep); }
@@ -215,13 +219,17 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.bus-dock-bottom:has(.editor-bus-dock:not(.hidden)) .app-sidebar { padding-bottom: var(--bottom-bus-dock-height, 92px); }
 .device-frame.bus-dock-bottom .editor-bus-dock-row,
 .device-frame.bus-dock-bottom .editor-physical-bus-row { padding-inline: var(--chrome-gutter); }
-.device-frame.bus-dock-bottom { grid-template-columns: 160px minmax(0, 1fr); }
-.device-frame.bus-dock-bottom .app-sidebar { padding-inline: 14px 8px; }
-.device-frame.bus-dock-bottom .app-mark { gap: 9px; }
-.device-frame.bus-dock-bottom .mark-copy strong { font-size: 18px; }
-.device-frame.bus-dock-bottom .mark-copy small { font-size: 11px; }
-.device-frame.bus-dock-bottom .nav-item { gap: 8px; padding-block: 12px; font-size: 15px; }
-.device-frame.bus-dock-bottom .nav-item svg { width: 22px; height: 22px; }
+.device-frame.ipad-mode { grid-template-columns: 190px minmax(0, 1fr); }
+.device-frame.ipad-mode .app-sidebar { display: flex; padding-inline: 16px 10px; }
+.device-frame.ipad-mode .app-mark { justify-content: flex-start; gap: 11px; padding-bottom: 38px; }
+.device-frame.ipad-mode .mark-glyph, .device-frame.ipad-mode .mark-glyph img { flex-basis: 56px; width: 56px; height: 56px; }
+.device-frame.ipad-mode .mark-copy { display: flex; }
+.device-frame.ipad-mode .mark-copy strong { font-size: 21px; }
+.device-frame.ipad-mode .mark-copy small { font-size: 13px; }
+.device-frame.ipad-mode .nav-item { justify-content: flex-start; gap: 10px; padding: 14px 7px; font-size: 17px; }
+.device-frame.ipad-mode .nav-item svg { width: 26px; height: 26px; }
+.device-frame.ipad-mode .nav-item span:not(.nav-badge) { display: inline; }
+.device-frame.ipad-mode .ipad-mode-control { font-size: 13px; }
 .editor-bus-dock-row { overflow: hidden; }
 .editor-physical-bus-row { overflow: visible; }
 .editor-aux-bus-row { min-height: 41px; padding: 7px var(--chrome-gutter); display: grid; grid-template-columns: repeat(var(--bus-grid-columns, 44), minmax(0, 1fr)); align-items: center; gap: 2px; border-bottom: 0; }

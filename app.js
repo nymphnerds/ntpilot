@@ -42,8 +42,7 @@
   const interfaceScaleDown = $("#interface-scale-down");
   const interfaceScaleValue = $("#interface-scale-value");
   const interfaceScaleUp = $("#interface-scale-up");
-  const busDockLayoutControl = $("#bus-dock-layout");
-  const busDockLayoutLabel = $("#bus-dock-layout-label");
+  const ipadModeControl = $("#ipad-mode");
   const syncModeControl = $("#sync-mode");
   const syncModeLabel = $("#sync-mode-label");
   const syncModeDetail = $("#sync-mode-detail");
@@ -102,7 +101,7 @@
     routingReadToken: 0,
     routingZoom: 1,
     interfaceScale: 100,
-    busDockLayout: "auto",
+    ipadMode: false,
     routingCanvasSize: { width: 1180, height: 760 },
     routingSnapshot: null,
     routingSelection: null,
@@ -635,8 +634,6 @@
     updateBottomBusDockHeight();
   }
 
-  const bottomBusDockMedia = window.matchMedia("(pointer: coarse) and (max-width: 1250px)");
-
   function updateBottomBusDockHeight() {
     requestAnimationFrame(() => {
       const height = deviceFrame.classList.contains("bus-dock-bottom") && !editorBusDock.classList.contains("hidden")
@@ -647,26 +644,25 @@
   }
 
   function applyBusDockLayout() {
-    const bottom = state.busDockLayout === "bottom" || (state.busDockLayout === "auto" && bottomBusDockMedia.matches);
+    const bottom = state.ipadMode;
     if (bottom && editorBusDock.parentElement !== deviceFrame) deviceFrame.appendChild(editorBusDock);
     if (!bottom && editorBusDock.parentElement !== appMain) appMain.insertBefore(editorBusDock, viewStack);
     deviceFrame.classList.toggle("bus-dock-bottom", bottom);
-    busDockLayoutLabel.textContent = state.busDockLayout === "auto"
-      ? `Automatic · ${bottom ? "bottom" : "top"}`
-      : `${bottom ? "Bottom" : "Top"} bus dock`;
+    deviceFrame.classList.toggle("ipad-mode", bottom);
     updateBottomBusDockHeight();
   }
 
-  function setBusDockLayout(value, { save = true } = {}) {
-    state.busDockLayout = ["auto", "top", "bottom"].includes(value) ? value : "auto";
-    busDockLayoutControl.value = state.busDockLayout;
+  function setIpadMode(enabled, { save = true } = {}) {
+    state.ipadMode = Boolean(enabled);
+    ipadModeControl.checked = state.ipadMode;
     if (save) {
       try {
-        localStorage.setItem("ntPilotBusDockLayout", state.busDockLayout);
+        localStorage.setItem("ntPilotIpadMode", state.ipadMode ? "true" : "false");
       } catch (_) {
-        // The selected layout remains active for this session.
+        // iPad mode remains active for this session.
       }
     }
+    setInterfaceScale(state.interfaceScale, { save: false });
     applyBusDockLayout();
   }
 
@@ -1886,8 +1882,9 @@
   function setInterfaceScale(value, { save = true } = {}) {
     const next = Math.max(90, Math.min(170, Math.round(Number(value) / 10) * 10));
     state.interfaceScale = next;
-    document.documentElement.style.setProperty("--interface-scale", String(next / 100));
-    document.documentElement.style.setProperty("--scaled-header-height", `${Math.round(54 * next / 100)}px`);
+    const effective = state.ipadMode ? next : 100;
+    document.documentElement.style.setProperty("--interface-scale", String(effective / 100));
+    document.documentElement.style.setProperty("--scaled-header-height", `${Math.round(54 * effective / 100)}px`);
     interfaceScaleValue.textContent = `${next}%`;
     interfaceScaleDown.disabled = next <= 90;
     interfaceScaleUp.disabled = next >= 170;
@@ -2987,10 +2984,7 @@
   interfaceScaleDown.addEventListener("click", () => setInterfaceScale(state.interfaceScale - 10));
   interfaceScaleUp.addEventListener("click", () => setInterfaceScale(state.interfaceScale + 10));
   interfaceScaleValue.addEventListener("dblclick", () => setInterfaceScale(100));
-  busDockLayoutControl.addEventListener("change", () => setBusDockLayout(busDockLayoutControl.value));
-  bottomBusDockMedia.addEventListener("change", () => {
-    if (state.busDockLayout === "auto") applyBusDockLayout();
-  });
+  ipadModeControl.addEventListener("change", () => setIpadMode(ipadModeControl.checked));
   new ResizeObserver(updateBottomBusDockHeight).observe(editorBusDock);
   $("#routing-zoom-out").addEventListener("click", () => {
     state.routingZoom = Math.max(.2, Number((state.routingZoom - .1).toFixed(2)));
@@ -3380,13 +3374,16 @@
     savedInterfaceScale = 100;
   }
   setInterfaceScale(savedInterfaceScale, { save: false });
-  let savedBusDockLayout = "auto";
+  let savedIpadMode = false;
   try {
-    savedBusDockLayout = localStorage.getItem("ntPilotBusDockLayout") || "auto";
+    const storedIpadMode = localStorage.getItem("ntPilotIpadMode");
+    savedIpadMode = storedIpadMode == null
+      ? localStorage.getItem("ntPilotBusDockLayout") === "bottom"
+      : storedIpadMode === "true";
   } catch (_) {
-    savedBusDockLayout = "auto";
+    savedIpadMode = false;
   }
-  setBusDockLayout(savedBusDockLayout, { save: false });
+  setIpadMode(savedIpadMode, { save: false });
   resetEditorForConnection();
   const recoveredView = ["editor", "routing", "mapping", "control", "status", "assistant"].includes(rebootRecovery?.view)
     ? rebootRecovery.view
