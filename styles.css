@@ -236,6 +236,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.ipad-mode .status-sync select { height: 44px; padding-inline: 10px 28px; font-size: 17px; }
 .device-frame.ipad-mode .ipad-mode-control { padding: 13px 8px; font-size: 18px; }
 .device-frame.ipad-mode .ipad-mode-control i { flex-basis: 38px; width: 38px; height: 23px; border-radius: 13px; }.device-frame.ipad-mode .ipad-mode-control i::after { width: 19px; height: 19px; }.device-frame.ipad-mode .ipad-mode-control input:checked + i::after { transform: translateX(15px); }
+.device-frame.ipad-mode .parameter-row { min-height: 64px; padding-block: 7px; }
+.device-frame.ipad-mode .parameter-name strong { font-size: 14px; }
+.device-frame.ipad-mode .parameter-name span { margin-top: 4px; font-size: 11px; }
+.device-frame.ipad-mode .live-parameter-row .map-shortcut { min-width: 30px; height: 30px; padding-inline: 7px; font-size: 10px; }
 .editor-bus-dock-row { overflow: hidden; }
 .editor-physical-bus-row { overflow: visible; }
 .editor-aux-bus-row { min-height: 41px; padding: 7px var(--chrome-gutter); display: grid; grid-template-columns: repeat(var(--bus-grid-columns, 44), minmax(0, 1fr)); align-items: center; gap: 2px; border-bottom: 0; }
