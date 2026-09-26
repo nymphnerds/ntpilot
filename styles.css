@@ -399,6 +399,11 @@ input[type="range"]:disabled { opacity: .48; cursor: wait; }
 .device-frame.ipad-mode .routing-ipad-card .routing-port b { min-width: 40px; padding: 5px 7px; font-size: 11px; text-align: center; }
 .device-frame.ipad-mode .routing-ipad-card .routing-port .routing-bus-badge.input::before { content: "IN "; }
 .device-frame.ipad-mode .routing-ipad-card .routing-port .routing-bus-badge.output::before { content: "OUT "; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port.derived { padding-left: 17px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-port.derived::before { font-size: 15px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-derived-count { margin-left: auto; padding: 3px !important; gap: 4px; border-radius: 7px !important; }
+.device-frame.ipad-mode .routing-ipad-card .routing-derived-count strong { min-width: 72px; font-size: 10px; }
+.device-frame.ipad-mode .routing-ipad-card .routing-derived-count-step { width: 28px; height: 28px; border-radius: 6px; font-size: 17px; }
 .device-frame.ipad-mode .routing-ipad-card .routing-mode-toggle { padding: 4px 6px; border-radius: 5px; font-size: 9px; line-height: 15px; }
 .device-frame.ipad-mode .routing-ipad-card.bypassed { opacity: .62; background: repeating-linear-gradient(135deg, rgba(226,232,235,.5) 0 10px, rgba(248,250,251,.72) 10px 20px); }
 .device-frame.ipad-mode .routing-ipad-modulation { padding: 0 12px 12px; display: flex; align-items: center; gap: 10px; }
@@ -487,7 +492,14 @@ button.routing-node { padding: 0; text-align: left; }
 .routing-port:hover, .routing-node.endpoint:hover { filter: saturate(1.3) brightness(.97); }
 .routing-port.routing-selected-source, .routing-node.endpoint.routing-selected-source { filter: saturate(1.35); outline: 3px solid rgba(19,128,107,.34); outline-offset: 3px; border-radius: 7px; }
 .routing-port.disconnected { color: #829099; }.routing-port.disconnected b { color: #6f7d85; background: #e4e9eb; }
-.routing-port.implicit { opacity: .72; font-style: italic; }
+.routing-port.implicit { opacity: .78; font-style: normal; cursor: help; }
+.routing-port.derived { position: relative; padding-left: 11px; }
+.routing-port.derived::before { content: "↳"; flex: 0 0 auto; color: #8297a2; font-weight: 950; }
+.routing-port.derived i { opacity: .42; }
+.routing-derived-count { margin-left: auto; padding: 1px !important; display: inline-flex; align-items: center; gap: 2px; overflow: visible !important; border: 1px solid #ccd9dd; border-radius: 5px !important; background: #edf3f5 !important; }
+.routing-derived-count strong { min-width: 42px; padding: 0 2px; color: #526973; font-size: 6px; text-align: center; white-space: nowrap; }
+.routing-derived-count-step { width: 15px; height: 15px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 4px; color: #176f62; background: white !important; font-size: 10px; font-weight: 950; line-height: 1; cursor: pointer; }
+.routing-derived-count-step.disabled { opacity: .32; cursor: default; }
 .routing-port.partial .routing-bus-badge { outline: 1px dashed currentColor; outline-offset: 2px; }
 .routing-port.input { margin-left: -5px; padding-right: 3px; }.routing-port.output { margin-right: -5px; padding-left: 3px; justify-content: flex-end; text-align: right; }
 .routing-port i { flex: 0 0 10px; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px currentColor; background: currentColor; }
@@ -735,6 +747,9 @@ body.dark-mode { --pilot-soft: color-mix(in srgb, var(--pilot) 18%, #102033); --
 .device-frame.dark-mode .routing-node-head { color: #dce6eb; background: #142438; }
 .device-frame.dark-mode .routing-port { color: #c8d5dc; }
 .device-frame.dark-mode .routing-port span { background: rgba(27,39,61,.94); }
+.device-frame.dark-mode .routing-derived-count { background: #203447 !important; border-color: #3a5062; }
+.device-frame.dark-mode .routing-derived-count strong { color: #c4d2d9; }
+.device-frame.dark-mode .routing-derived-count-step { color: var(--pilot); background: #142438 !important; }
 .device-frame.dark-mode .routing-port.disconnected b,
 .device-frame.dark-mode .routing-port .routing-mode-toggle.fixed,
 .device-frame.dark-mode .routing-port .routing-mode-toggle.loading { color: #9aabb4; background: #283b4a; }

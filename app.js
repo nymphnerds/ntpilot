@@ -1024,6 +1024,61 @@
     };
   }
 
+  function unprefixedParameterName(name) {
+    return String(name || "").replace(/^\d+:/, "").trim();
+  }
+
+  function decorateDerivedInputPorts(ports, slot, snapshot) {
+    const explicit = ports.filter(port => !port.implicit);
+    const implicit = ports.filter(port => port.implicit);
+    const claimed = new Set();
+
+    explicit.forEach(parent => {
+      const match = unprefixedParameterName(parent.name).match(/^Gate input (\d+)$/i);
+      if (!match || parent.bus < 0) return;
+      const gateNumber = Number(match[1]);
+      const countParameter = (slot.parameters || []).find(parameter =>
+        unprefixedParameterName(parameter.name).toLowerCase() === `gate ${gateNumber} cv count`
+      );
+      if (!countParameter) return;
+      const count = Math.max(0, Number(countParameter.value) || 0);
+      parent.derivedCount = {
+        label: "Pitch CVs",
+        parameterIndex: countParameter.index,
+        value: count,
+        minimum: Number(countParameter.min),
+        maximum: Math.min(
+          Number(countParameter.max),
+          snapshot.inputBusCount + snapshot.outputBusCount + snapshot.auxBusCount - parent.bus - 1
+        )
+      };
+      implicit.forEach(port => {
+        const offset = port.bus - parent.bus;
+        if (offset < 1 || offset > count || claimed.has(port.key)) return;
+        claimed.add(port.key);
+        port.derivedFrom = parent.key;
+        port.derivedOrder = offset;
+        port.name = `Pitch CV ${offset}`;
+        port.title = `Assigned automatically after ${parent.name}`;
+      });
+    });
+
+    implicit.filter(port => !claimed.has(port.key)).forEach(port => {
+      port.name = "Also uses";
+      port.title = "Assigned automatically by this algorithm";
+    });
+
+    const ordered = [];
+    explicit.forEach(parent => {
+      ordered.push(parent);
+      implicit.filter(port => port.derivedFrom === parent.key)
+        .sort((first, second) => first.derivedOrder - second.derivedOrder)
+        .forEach(port => ordered.push(port));
+    });
+    implicit.filter(port => !claimed.has(port.key)).forEach(port => ordered.push(port));
+    return ordered;
+  }
+
   function slotGuid(slot) {
     return String.fromCharCode(...(slot.guid || [])).replace(/\0/g, "").toLowerCase();
   }
@@ -1114,9 +1169,10 @@
         row.dataset.minimum = String(port.minimum ?? 0);
         row.dataset.maximum = String(port.maximum ?? 0);
         row.classList.toggle("implicit", Boolean(port.implicit));
+        row.classList.toggle("derived", Boolean(port.derivedFrom));
         row.classList.toggle("partial", Boolean(port.partial));
         if (port.kind === "aux") row.style.setProperty("--aux-colour", routingAuxColour(port.bus, state.routingSnapshot));
-        row.title = `${port.name} · ${port.busLabel}`;
+        row.title = port.title || `${port.name} · ${port.busLabel}`;
         const dot = document.createElement("i");
         const label = document.createElement("span");
         label.textContent = port.name;
@@ -1124,6 +1180,37 @@
         bus.className = `routing-bus-badge ${port.kind}`;
         bus.textContent = side === "output" && port.kind === "input" ? `${port.busLabel} downstream` : port.busLabel;
         if (port.kind === "aux") bus.style.setProperty("--aux-colour", routingAuxColour(port.bus, state.routingSnapshot));
+        const derivedCount = port.derivedCount ? document.createElement("span") : null;
+        if (derivedCount) {
+          derivedCount.className = "routing-derived-count";
+          derivedCount.setAttribute("aria-label", `${port.derivedCount.label}: ${port.derivedCount.value}`);
+          const decrease = document.createElement("span");
+          decrease.tabIndex = 0;
+          decrease.setAttribute("role", "button");
+          decrease.textContent = "−";
+          decrease.title = `Use fewer ${port.derivedCount.label.toLowerCase()}`;
+          const value = document.createElement("strong");
+          value.textContent = `${port.derivedCount.label} ×${port.derivedCount.value}`;
+          const increase = document.createElement("span");
+          increase.tabIndex = 0;
+          increase.setAttribute("role", "button");
+          increase.textContent = "+";
+          increase.title = `Use more ${port.derivedCount.label.toLowerCase()}`;
+          [decrease, increase].forEach((button, index) => {
+            button.className = "routing-derived-count-step";
+            button.dataset.slotIndex = String(definition.slotIndex);
+            button.dataset.parameterIndex = String(port.derivedCount.parameterIndex);
+            button.dataset.value = String(port.derivedCount.value);
+            button.dataset.minimum = String(port.derivedCount.minimum);
+            button.dataset.maximum = String(port.derivedCount.maximum);
+            button.dataset.delta = index === 0 ? "-1" : "1";
+          });
+          decrease.classList.toggle("disabled", port.derivedCount.value <= port.derivedCount.minimum);
+          increase.classList.toggle("disabled", port.derivedCount.value >= port.derivedCount.maximum);
+          decrease.setAttribute("aria-disabled", String(port.derivedCount.value <= port.derivedCount.minimum));
+          increase.setAttribute("aria-disabled", String(port.derivedCount.value >= port.derivedCount.maximum));
+          derivedCount.append(decrease, value, increase);
+        }
         if (side === "output") {
           const mode = document.createElement("span");
           const editableMode = port.modeStatus === "editable" && !port.inPlace;
@@ -1147,6 +1234,7 @@
           row.append(mode, bus, label, dot);
         } else {
           row.append(...(side === "input" ? [dot, label, bus] : [bus, label, dot]));
+          if (derivedCount) row.appendChild(derivedCount);
         }
         column.appendChild(row);
       });
@@ -1426,13 +1514,16 @@
           key: `${side}:${slot.index}:implicit:${bus}`,
           side,
           parameterIndex: null,
-          name: `${side === "input" ? "Implicit read" : "Implicit write"} ${routingBusLabel(bus, snapshot)}`,
+          name: side === "input" ? "Also uses" : "Also writes",
           bus,
           busLabel: routingBusLabel(bus, snapshot),
           kind: routingBusKind(bus, snapshot),
           minimum: 0,
           maximum: 0,
           implicit: true,
+          title: side === "input"
+            ? "Assigned automatically by this algorithm"
+            : "Written automatically by this algorithm",
           outputMode: side === "output" ? (masks.replaces.includes(bus) ? "replace" : "add") : null,
           outputModeKnown: side === "output",
           modeStatus: side === "output" ? "fixed" : null,
@@ -1441,6 +1532,7 @@
       };
       addImplicitPorts(inputPorts, masks.directInputs, "input");
       addImplicitPorts(outputPorts, masks.outputs, "output");
+      inputPorts = decorateDerivedInputPorts(inputPorts, slot, snapshot);
       return { slot, masks, inputPorts, outputPorts };
     });
     const edges = [];
@@ -1679,6 +1771,12 @@
   async function handleRoutingConnectionClick(target) {
     const port = target.closest(".routing-port, .routing-node.endpoint");
     if (!port) return false;
+    if (port.classList.contains("implicit")) {
+      showToast(port.classList.contains("derived")
+        ? "This pitch CV bus follows its gate automatically. Change the gate or its Pitch CV count."
+        : "This bus is assigned automatically by the algorithm and cannot be changed independently.");
+      return true;
+    }
     if (routingConnectionAction) closeRoutingConnectionPanel();
     const side = port.dataset.routingSide;
     const selection = {
@@ -1749,6 +1847,34 @@
       });
     } else {
       await continueRoutingConnection(source, selection, output, []);
+    }
+    return true;
+  }
+
+  async function handleDerivedCountClick(target) {
+    const control = target.closest(".routing-derived-count-step");
+    if (!control) return false;
+    const slotIndex = Number(control.dataset.slotIndex);
+    const parameterIndex = Number(control.dataset.parameterIndex);
+    const current = Number(control.dataset.value);
+    const minimum = Number(control.dataset.minimum);
+    const maximum = Number(control.dataset.maximum);
+    const next = Math.min(maximum, Math.max(minimum, current + Number(control.dataset.delta)));
+    if (next === current || !state.ntTransport || !state.transportOnline) return true;
+    const historyBefore = captureRoutingParameterState();
+    $$(".routing-derived-count-step", control.closest(".routing-node")).forEach(button => {
+      button.classList.add("disabled");
+      button.setAttribute("aria-disabled", "true");
+    });
+    try {
+      await state.ntTransport.writeParameter(slotIndex, parameterIndex, next);
+      await loadLiveRouting({ preserveView: true });
+      markWorkingEdit();
+      recordRoutingHistory(historyBefore, `change pitch CV count to ${next}`);
+      showToast(`Pitch CV count changed to ${next} and verified from the NT`);
+    } catch (error) {
+      showToast(error.message);
+      await loadLiveRouting({ preserveView: true }).catch(() => {});
     }
     return true;
   }
@@ -3337,6 +3463,7 @@
   });
   const handleRoutingSurfaceClick = async event => {
     if (activateBypassToggle(event.target)) return;
+    if (await handleDerivedCountClick(event.target)) return;
     if (await handleRoutingModeClick(event.target)) return;
     if (await handleRoutingConnectionClick(event.target)) return;
     const node = event.target.closest(".routing-node.slot");

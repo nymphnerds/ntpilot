@@ -138,7 +138,8 @@ The central model is the NT bus universe:
 - Side stacks are centred against the total central algorithm list.
 - Add/Replace chips are always visible on output rows. Editable chips are backed by a real NT mode-controller parameter; fixed or unresolved chips are read-only.
 - Output-mode chips explicitly distinguish editable Add/Replace, known fixed mode, disconnected fixed mode, metadata loading and metadata failure. A missing `0x55` association never fabricates an editable Replace option.
-- New assignments are confirmed in a compact popup positioned beside the pointer/touch target. Outputs keep NT Add/Replace visibly separate from “Keep existing”/“Disconnect other routes.” Inputs show the selected new source versus retaining the current source, because Add/Replace does not apply to reads.
+- New assignments are confirmed in a compact popup positioned beside the pointer/touch target. Outputs keep NT Add/Replace visibly separate from “Keep existing”/“Disconnect other routes.” Input confirmation states the old and new sources and makes clear that only that input changes, because Add/Replace does not apply to reads.
+- Routing-mask-only reads are presented as derived routing rather than exposing internal “implicit read” terminology. Standard polysynth gate inputs show their editable Pitch CV count directly on the parent gate row, with automatically consecutive Pitch CV buses indented underneath. Unrecognised derived reads use a safe “Also uses” fallback and remain non-editable.
 - Replace has repeatedly confused users because it sounds like a routing replacement. It is not: no parameter assignment is disconnected. Replace overwrites the signal accumulated on that bus at the algorithm's ordered slot position. Writes from earlier slots remain configured but are inaudible downstream of that Replace; writes from later slots still contribute.
 - The graph makes that signal-order result explicit. A route whose contribution is masked by a later Replace remains present as a faded dashed cable, the effective Replace writer is emphasized, and its native SVG hover text explains the state. A truly disconnected route has no cable. Apply this consistently to physical-output and Aux-bus paths.
 - Assigning a supported algorithm output to a physical or Aux bus opens the shared connection popup before writing.
@@ -184,10 +185,10 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-221`
+- `styles.css?v=20260926-222`
 - `web-midi-transport.js?v=20260925-44`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-152`
+- `app.js?v=20260926-153`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
