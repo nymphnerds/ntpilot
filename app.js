@@ -1854,7 +1854,7 @@
     }
   }
 
-  async function assignRoutingPort(selection, bus, modeChoice = null, routesToRemove = [], confirmed = false) {
+  async function assignRoutingPort(selection, bus, modeChoice = null, routesToRemove = [], confirmed = false, anchorElement = null) {
     if (selection.parameterIndex == null || selection.slotIndex == null) {
       showToast("Select an algorithm input or output first");
       return true;
@@ -1862,13 +1862,13 @@
     const assigningOutput = selection.side === "output" && bus >= 0;
     if (!confirmed && assigningOutput) {
       const busChip = $(`.routing-aux-chip[data-bus="${bus}"]`, routingAuxPalette);
-      const destination = { element: busChip || selection.element, side: "both", bus, slotIndex: null, parameterIndex: null };
+      const destination = { element: anchorElement || busChip || selection.element, side: "both", bus, slotIndex: null, parameterIndex: null };
       await openRoutingConnectionPanel({
         source: selection,
         destination,
         output: selection,
         destinationBus: bus,
-        onApply: (nextModeChoice, nextRoutesToRemove) => assignRoutingPort(selection, bus, nextModeChoice, nextRoutesToRemove, true)
+        onApply: (nextModeChoice, nextRoutesToRemove) => assignRoutingPort(selection, bus, nextModeChoice, nextRoutesToRemove, true, anchorElement)
       });
       return true;
     }
@@ -1912,6 +1912,36 @@
     } finally {
       if (state.activeLiveSlotIndex != null && !state.routingReadPromise) startLivePolling(state.activeLiveSlotIndex);
     }
+    return true;
+  }
+
+  async function assignEditorOutputBus(entry, value, anchorElement) {
+    if (!state.routingSnapshot) {
+      showToast("Reading routing choices from the NT…");
+      await loadLiveRouting({ preserveView: true });
+    }
+    if (!state.routingSnapshot) {
+      showToast("Routing choices are unavailable until the NT routing state is read");
+      return false;
+    }
+    const port = [...$$(".routing-port[data-routing-side=\"output\"]", routingIpadList), ...$$(".routing-port[data-routing-side=\"output\"]", routingNodes)]
+      .find(candidate => Number(candidate.dataset.slotIndex) === entry.slotInfo.index
+        && Number(candidate.dataset.parameterIndex) === entry.parameter.index);
+    if (!port) {
+      showToast("This output could not be matched to the live routing state");
+      return false;
+    }
+    const selection = {
+      element: port,
+      side: "output",
+      bus: Number(port.dataset.bus),
+      slotIndex: entry.slotInfo.index,
+      parameterIndex: entry.parameter.index,
+      minimum: Number(entry.parameter.min),
+      maximum: Number(entry.parameter.max)
+    };
+    await assignRoutingPort(selection, value - 1, null, [], false, anchorElement);
+    disarmEditorBusAssignment();
     return true;
   }
 
@@ -3576,7 +3606,7 @@
       activateBypassToggle(event.target);
     }
   }));
-  editorBusDock.addEventListener("click", event => {
+  editorBusDock.addEventListener("click", async event => {
     const chip = event.target.closest(".editor-bus-chip[data-value]");
     if (!chip || chip.disabled) return;
     const value = Number(chip.dataset.value);
@@ -3587,6 +3617,10 @@
       return;
     }
     if (value < entry.parameter.min || value > entry.parameter.max) return;
+    if ((entry.parameter.ioFlags & 0x02) && value > 0) {
+      await assignEditorOutputBus(entry, value, chip);
+      return;
+    }
     queueLiveParameterWrite(entry, value, {
       historyRouting: true,
       successMessage: `${entry.parameter.name} assigned to ${descriptor.label} in NT working memory`,
