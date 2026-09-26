@@ -3476,9 +3476,10 @@
   function renderAlgorithmLoadPlacement() {
     algorithmLoadPlacement.replaceChildren();
     const slot = selectedLiveSlot();
+    if (!slot) return;
     const actions = slot
       ? [["before", "Add before"], ["after", "Add after"], ["end", "Add at end"]]
-      : [["end", "Add as first algorithm"]];
+      : [];
     actions.forEach(([placement, label]) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -3497,7 +3498,7 @@
     algorithmLoadTitle.textContent = inserting ? `Add ${algorithm.name}` : "Load plug-in into NT?";
     algorithmLoadName.textContent = algorithm.name;
     algorithmLoadDetail.textContent = inserting
-      ? "Choose where it goes and set the starting values sent to the NT."
+      ? (selectedLiveSlot() ? "Choose where it goes and set the starting values sent to the NT." : "This will become slot 1. Set the starting values sent to the NT.")
       : "This loads the plug-in code into the NT so its starting settings and memory fit can be checked.";
     algorithmLoadWarning.hidden = inserting;
     algorithmLoadInsert.hidden = !inserting;
@@ -3513,7 +3514,7 @@
     if (!algorithm?.isPlugin || algorithm.isLoaded || state.slotMutationBusy) return;
     state.pendingPluginLoad = algorithm;
     state.algorithmLoadStep = "load";
-    state.pendingAlgorithmPlacement = null;
+    state.pendingAlgorithmPlacement = selectedLiveSlot() ? null : "end";
     renderAlgorithmLoadPage();
     algorithmLoadDialog.showModal();
   }
@@ -3670,7 +3671,7 @@
     }
     state.pendingAlgorithm = algorithm;
     state.pendingPluginLoad = algorithm;
-    state.pendingAlgorithmPlacement = null;
+    state.pendingAlgorithmPlacement = selectedLiveSlot() ? null : "end";
     state.algorithmLoadStep = "insert";
     renderAlgorithmSpecificationFields(algorithm, algorithmLoadSpecList, () => queueAlgorithmLoadMemoryCheck(algorithm));
     showAlgorithmMemoryNotice("Checking NT memory for these starting settings…", "checking", algorithmLoadSpecNotice);
