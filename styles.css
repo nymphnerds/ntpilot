@@ -732,7 +732,19 @@ body.dark-mode { --pilot-soft: color-mix(in srgb, var(--pilot) 18%, #102033); --
 .device-frame.dark-mode :is(.routing-toolbar, .routing-aux-palette, .routing-inspector) { background: #111f2f; border-color: #2a3e51; }
 .device-frame.dark-mode .routing-zoom { background: #142438; border-color: #30465a; }
 .device-frame.dark-mode .routing-zoom button { color: #b3c2ca; }
-.device-frame.dark-mode .routing-canvas { background-color: #0b1725; }
+.device-frame.dark-mode .routing-viewport {
+  background-color: #0b1725;
+  background-image:
+    linear-gradient(rgba(112,145,188,.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(112,145,188,.12) 1px, transparent 1px),
+    linear-gradient(rgba(112,145,188,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(112,145,188,.045) 1px, transparent 1px);
+  scrollbar-color: #526a82 #101e2d;
+}
+.device-frame.dark-mode .routing-canvas { background: transparent; }
+.device-frame.dark-mode .routing-viewport::-webkit-scrollbar-track,
+.device-frame.dark-mode .routing-viewport::-webkit-scrollbar-corner { background: #101e2d; }
+.device-frame.dark-mode .routing-viewport::-webkit-scrollbar-thumb { border-color: #101e2d; background: #526a82; }
 .device-frame.dark-mode .routing-ipad-list { background: #0a1522; }
 .device-frame.dark-mode .routing-ipad-card.routing-node.slot { color: #dce7ec; background: #111f2f; border-color: #2d4356; box-shadow: 0 5px 18px rgba(0,0,0,.3); }
 .device-frame.dark-mode .routing-ipad-card .routing-node-head { background: #142438; border-color: #2a3e51; }
