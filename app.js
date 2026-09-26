@@ -18,6 +18,7 @@
   const stateBannerCopy = $("#state-banner-copy");
   const stateAction = $("#state-action");
   const toast = $("#toast");
+  deviceFrame.appendChild(toast);
   const mappingForm = $("#mapping-form");
   const mappingConfirmation = $("#mapping-confirmation");
   const applyMapping = $("#apply-mapping");
