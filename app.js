@@ -107,7 +107,15 @@
   const confirmAlgorithmSpec = $("#confirm-algorithm-spec");
   const algorithmLoadDialog = $("#algorithm-load-dialog");
   const closeAlgorithmLoad = $("#close-algorithm-load");
+  const algorithmLoadKicker = $("#algorithm-load-kicker");
+  const algorithmLoadTitle = $("#algorithm-load-title");
   const algorithmLoadName = $("#algorithm-load-name");
+  const algorithmLoadDetail = $("#algorithm-load-detail");
+  const algorithmLoadWarning = $("#algorithm-load-warning");
+  const algorithmLoadInsert = $("#algorithm-load-insert");
+  const algorithmLoadPlacement = $("#algorithm-load-placement");
+  const algorithmLoadSpecList = $("#algorithm-load-spec-list");
+  const algorithmLoadSpecNotice = $("#algorithm-load-spec-notice");
   const cancelAlgorithmLoad = $("#cancel-algorithm-load");
   const confirmAlgorithmLoad = $("#confirm-algorithm-load");
   const algorithmRemoveDialog = $("#algorithm-remove-dialog");
@@ -181,6 +189,7 @@
     midiRenderPending: false,
     midiCounts: { all: 0, channel: 0, sysex: 0 },
     algorithmBrowserFilter: "all",
+    algorithmLoadStep: "load",
     pendingAlgorithm: null,
     pendingAlgorithmPlacement: null,
     pendingSlotRemoval: null,
@@ -3460,12 +3469,52 @@
   function closeAlgorithmLoadDialog() {
     if (algorithmLoadDialog.open) algorithmLoadDialog.close();
     state.pendingPluginLoad = null;
+    state.algorithmLoadStep = "load";
+    state.pendingAlgorithmPlacement = null;
+  }
+
+  function renderAlgorithmLoadPlacement() {
+    algorithmLoadPlacement.replaceChildren();
+    const slot = selectedLiveSlot();
+    const actions = slot
+      ? [["before", "Add before"], ["after", "Add after"], ["end", "Add at end"]]
+      : [["end", "Add as first algorithm"]];
+    actions.forEach(([placement, label]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.algorithmLoadPlacement = placement;
+      button.classList.toggle("selected", state.pendingAlgorithmPlacement === placement);
+      button.textContent = label;
+      algorithmLoadPlacement.appendChild(button);
+    });
+  }
+
+  function renderAlgorithmLoadPage() {
+    const algorithm = state.pendingPluginLoad;
+    const inserting = state.algorithmLoadStep === "insert";
+    if (!algorithm) return;
+    algorithmLoadKicker.textContent = inserting ? "Insert algorithm" : "Plug-in runtime";
+    algorithmLoadTitle.textContent = inserting ? `Add ${algorithm.name}` : "Load plug-in into NT?";
+    algorithmLoadName.textContent = algorithm.name;
+    algorithmLoadDetail.textContent = inserting
+      ? "Choose where it goes and set the starting values sent to the NT."
+      : "This loads the plug-in code into the NT so its starting settings and memory fit can be checked.";
+    algorithmLoadWarning.hidden = inserting;
+    algorithmLoadInsert.hidden = !inserting;
+    cancelAlgorithmLoad.textContent = inserting ? "Back to algorithms" : "Cancel";
+    confirmAlgorithmLoad.textContent = inserting
+      ? (state.pendingAlgorithmPlacement ? `Add ${algorithm.name}` : "Choose where to add it")
+      : "Load into NT";
+    confirmAlgorithmLoad.disabled = inserting && !state.pendingAlgorithmPlacement;
+    if (inserting) renderAlgorithmLoadPlacement();
   }
 
   function openAlgorithmLoadDialog(algorithm) {
     if (!algorithm?.isPlugin || algorithm.isLoaded || state.slotMutationBusy) return;
     state.pendingPluginLoad = algorithm;
-    algorithmLoadName.textContent = algorithm.name;
+    state.algorithmLoadStep = "load";
+    state.pendingAlgorithmPlacement = null;
+    renderAlgorithmLoadPage();
     algorithmLoadDialog.showModal();
   }
 
@@ -3476,9 +3525,9 @@
     return `${bytes} B`;
   }
 
-  function showAlgorithmMemoryNotice(message, tone = "checking") {
-    algorithmSpecNotice.textContent = message;
-    algorithmSpecNotice.className = `algorithm-spec-notice ${tone}`;
+  function showAlgorithmMemoryNotice(message, tone = "checking", notice = algorithmSpecNotice) {
+    notice.textContent = message;
+    notice.className = `algorithm-spec-notice ${tone}`;
   }
 
   function ntSupportsMemoryPreview() {
@@ -3508,33 +3557,33 @@
     }
   }
 
-  async function checkAlgorithmMemory(algorithm, { updateUi = true } = {}) {
+  async function checkAlgorithmMemory(algorithm, { updateUi = true, notice = algorithmSpecNotice } = {}) {
     if (!state.ntTransport) return { allowed: true, available: false };
     if (!ntSupportsMemoryPreview()) {
-      if (updateUi) showAlgorithmMemoryNotice("NT memory preview requires firmware 1.19 or later. The NT will verify this add.", "checking");
+      if (updateUi) showAlgorithmMemoryNotice("NT memory preview requires firmware 1.19 or later. The NT will verify this add.", "checking", notice);
       return { allowed: true, available: false };
     }
     const token = ++algorithmMemoryCheckToken;
-    if (updateUi) showAlgorithmMemoryNotice("Checking NT memory for these starting settings…", "checking");
+    if (updateUi) showAlgorithmMemoryNotice("Checking NT memory for these starting settings…", "checking", notice);
     try {
       const report = await readAlgorithmMemoryExclusively(algorithm);
       if (token !== algorithmMemoryCheckToken) return { allowed: false, stale: true };
       if (!report.available) {
-        if (updateUi) showAlgorithmMemoryNotice(report.reason, "blocked");
+        if (updateUi) showAlgorithmMemoryNotice(report.reason, "blocked", notice);
         return { allowed: false, reason: report.reason };
       }
       const blocked = report.pools.filter(pool => !pool.fits);
       const summary = report.pools.map(pool => `${pool.name} ${formatMemoryBytes(pool.current + pool.required)}/${formatMemoryBytes(pool.total)}`).join(" · ");
       if (blocked.length) {
         const why = blocked.map(pool => `${pool.name} short ${formatMemoryBytes(pool.required - pool.free)}`).join(" · ");
-        if (updateUi) showAlgorithmMemoryNotice(`Will not fit: ${why}. ${summary}`, "blocked");
+        if (updateUi) showAlgorithmMemoryNotice(`Will not fit: ${why}. ${summary}`, "blocked", notice);
         return { allowed: false, reason: `Not enough NT memory: ${why}.` };
       }
-      if (updateUi) showAlgorithmMemoryNotice(`Fits NT memory · ${summary}`, "ready");
+      if (updateUi) showAlgorithmMemoryNotice(`Fits NT memory · ${summary}`, "ready", notice);
       return { allowed: true, report };
     } catch (error) {
       if (token !== algorithmMemoryCheckToken) return { allowed: false, stale: true };
-      if (updateUi) showAlgorithmMemoryNotice("NT memory preflight unavailable; the NT will verify the add.", "warning");
+      if (updateUi) showAlgorithmMemoryNotice("NT memory preflight unavailable; the NT will verify the add.", "warning", notice);
       return { allowed: true, available: false, error };
     }
   }
@@ -3546,21 +3595,15 @@
     }, 180);
   }
 
-  function openAlgorithmSpecDialog(algorithm, placement) {
+  function renderAlgorithmSpecificationFields(algorithm, list, onChange) {
     const specifications = algorithm.specifications || [];
-    if (specifications.length > 3) {
-      showToast(`${algorithm.name} reports more than three setup values, which the NT add command cannot send.`);
-      return;
-    }
-    state.pendingAlgorithmPlacement = placement;
-    algorithmSpecName.textContent = algorithm.name;
-    algorithmSpecList.replaceChildren();
-    showAlgorithmMemoryNotice("Checking NT memory for these starting settings…", "checking");
+    list.replaceChildren();
     if (!specifications.length) {
       const empty = document.createElement("p");
       empty.className = "algorithm-spec-empty";
       empty.textContent = "This algorithm has no starting settings.";
-      algorithmSpecList.appendChild(empty);
+      list.appendChild(empty);
+      return;
     }
     specifications.forEach((specification, index) => {
       const field = document.createElement("label");
@@ -3585,21 +3628,60 @@
       }
       control.dataset.specIndex = String(index);
       control.value = String(specification.defaultValue ?? 0);
-      control.addEventListener("input", () => queueAlgorithmMemoryCheck(algorithm));
-      control.addEventListener("change", () => queueAlgorithmMemoryCheck(algorithm));
+      control.addEventListener("input", onChange);
+      control.addEventListener("change", onChange);
       field.append(copy, control);
-      algorithmSpecList.appendChild(field);
+      list.appendChild(field);
     });
+  }
+
+  function openAlgorithmSpecDialog(algorithm, placement) {
+    const specifications = algorithm.specifications || [];
+    if (specifications.length > 3) {
+      showToast(`${algorithm.name} reports more than three setup values, which the NT add command cannot send.`);
+      return;
+    }
+    state.pendingAlgorithmPlacement = placement;
+    algorithmSpecName.textContent = algorithm.name;
+    showAlgorithmMemoryNotice("Checking NT memory for these starting settings…", "checking");
+    renderAlgorithmSpecificationFields(algorithm, algorithmSpecList, () => queueAlgorithmMemoryCheck(algorithm));
     const label = placement === "before" ? "Add before" : placement === "after" ? "Add after" : "Add at end";
     confirmAlgorithmSpec.textContent = label;
     algorithmSpecDialog.showModal();
     checkAlgorithmMemory(algorithmWithChosenSpecifications(algorithm));
   }
 
-  function algorithmWithChosenSpecifications(algorithm) {
+  function queueAlgorithmLoadMemoryCheck(algorithm) {
+    clearTimeout(algorithmMemoryCheckTimer);
+    algorithmMemoryCheckTimer = setTimeout(() => {
+      try {
+        checkAlgorithmMemory(algorithmWithChosenSpecifications(algorithm, algorithmLoadSpecList), { notice: algorithmLoadSpecNotice });
+      } catch (error) {
+        showAlgorithmMemoryNotice(error.message, "blocked", algorithmLoadSpecNotice);
+      }
+    }, 180);
+  }
+
+  function openAlgorithmLoadInsertPage(algorithm) {
+    const specifications = algorithm.specifications || [];
+    if (specifications.length > 3) {
+      showToast(`${algorithm.name} reports more than three setup values, which the NT add command cannot send.`);
+      return;
+    }
+    state.pendingAlgorithm = algorithm;
+    state.pendingPluginLoad = algorithm;
+    state.pendingAlgorithmPlacement = null;
+    state.algorithmLoadStep = "insert";
+    renderAlgorithmSpecificationFields(algorithm, algorithmLoadSpecList, () => queueAlgorithmLoadMemoryCheck(algorithm));
+    showAlgorithmMemoryNotice("Checking NT memory for these starting settings…", "checking", algorithmLoadSpecNotice);
+    renderAlgorithmLoadPage();
+    checkAlgorithmMemory(algorithmWithChosenSpecifications(algorithm, algorithmLoadSpecList), { notice: algorithmLoadSpecNotice });
+  }
+
+  function algorithmWithChosenSpecifications(algorithm, list = algorithmSpecList) {
     const specifications = algorithm.specifications || [];
     const chosen = specifications.map((specification, index) => {
-      const control = $(`[data-spec-index="${index}"]`, algorithmSpecList);
+      const control = $(`[data-spec-index="${index}"]`, list);
       const value = Number(control?.value);
       if (!Number.isInteger(value) || value < specification.min || value > specification.max) {
         throw new Error(`${specification.name || `Specification ${index + 1}`} must be between ${specification.min} and ${specification.max}.`);
@@ -4454,21 +4536,48 @@
   closeAlgorithmLoad.addEventListener("click", closeAlgorithmLoadDialog);
   cancelAlgorithmLoad.addEventListener("click", closeAlgorithmLoadDialog);
   algorithmLoadDialog.addEventListener("close", () => { state.pendingPluginLoad = null; });
+  algorithmLoadPlacement.addEventListener("click", event => {
+    const action = event.target.closest("[data-algorithm-load-placement]");
+    if (!action || state.algorithmLoadStep !== "insert") return;
+    state.pendingAlgorithmPlacement = action.dataset.algorithmLoadPlacement;
+    renderAlgorithmLoadPage();
+  });
   confirmAlgorithmLoad.addEventListener("click", async () => {
     const algorithm = state.pendingPluginLoad;
     if (!algorithm) return;
+    if (state.algorithmLoadStep === "insert") {
+      const placement = state.pendingAlgorithmPlacement;
+      if (!placement) return;
+      let selected;
+      try {
+        selected = algorithmWithChosenSpecifications(algorithm, algorithmLoadSpecList);
+      } catch (error) {
+        showAlgorithmMemoryNotice(error.message, "blocked", algorithmLoadSpecNotice);
+        return;
+      }
+      const preflight = await checkAlgorithmMemory(selected, { notice: algorithmLoadSpecNotice });
+      if (!preflight.allowed) {
+        showToast(preflight.reason || "This algorithm will not fit in available NT memory.");
+        return;
+      }
+      confirmAlgorithmLoad.disabled = true;
+      const added = await addLiveAlgorithm(selected, placement);
+      if (added) {
+        closeAlgorithmLoadDialog();
+        closeAlgorithmBrowserDialog();
+      } else {
+        renderAlgorithmLoadPage();
+      }
+      return;
+    }
     confirmAlgorithmLoad.disabled = true;
     const loaded = await loadPluginFromBrowser(algorithm);
-    confirmAlgorithmLoad.disabled = false;
-    if (!loaded) return;
-    closeAlgorithmLoadDialog();
-    state.pendingAlgorithm = loaded;
-    renderAlgorithmBrowser();
-    requestAnimationFrame(() => {
-      const placement = $("[data-algorithm-placement=\"after\"]", algorithmBrowserPlacement)
-        || $("[data-algorithm-placement]", algorithmBrowserPlacement);
-      placement?.focus();
-    });
+    if (!loaded) {
+      confirmAlgorithmLoad.disabled = false;
+      renderAlgorithmLoadPage();
+      return;
+    }
+    openAlgorithmLoadInsertPage(loaded);
   });
   confirmAlgorithmSpec.addEventListener("click", async () => {
     const algorithm = state.pendingAlgorithm;

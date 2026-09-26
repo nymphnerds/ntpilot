@@ -13,9 +13,9 @@ Last updated: 26 September 2026
 - Sync and interface Scale form a matched compact stack at the bottom of the sidebar in both desktop and iPad modes, with Sync directly above Scale and identical outer dimensions for the active mode.
 - Sync uses an app-rendered three-choice menu rather than a native browser select, so its popup follows light/dark styling consistently in the iPad Web MIDI browser.
 - The built-in wiki becomes a near-edge-to-edge full-page reader in iPad mode, with larger navigation, search, article and footer typography while retaining independent contents/article scrolling.
-- The first safe algorithm-add slice is now implemented: the `Algorithms [+]` browser reads the live NT catalogue, distinguishes built-ins from plug-ins, loads an unloaded plug-in through the NT first, then adds with the factory defaults and verifies each NT readback.
+- The first safe algorithm-add slice is now implemented: the `Algorithms [+]` browser reads the live NT catalogue, distinguishes built-ins from plug-ins, loads an unloaded plug-in through the NT first, then adds with named starting settings and verifies each NT readback.
 - The NT SysEx add command only appends. NT Pilot turns **Add before**, **Add after** and **Add at end** into one transaction: append, native move if needed, then reread the complete preset and verify the requested GUID at its target slot.
-- This slice deliberately refuses a full ten-slot preset. Do not add destructive replacement by chaining remove/add: the old slot's complete specification state cannot yet be restored safely. Implement replacement only as a previewable, tested, reversible lifecycle plan.
+- This slice refuses a full 40-slot preset. Do not add destructive replacement by chaining remove/add: the old slot's complete specification state cannot yet be restored safely. Implement replacement only as a previewable, tested, reversible lifecycle plan.
 - An algorithm add is represented as one Undo/Redo history action; Undo removes only the exact verified newly-added slot, and Redo recreates it at the original target position.
 
 ### Audit findings
@@ -44,17 +44,17 @@ Do not claim zero regression risk. Keep every stage testable and reversible, do 
 
 ## Second major missing system: add and manage algorithms/plug-ins
 
-NT Pilot can now browse live factory algorithms and installed plug-ins, load an installed plug-in, then add it before, after or at the end of the selected slot. The browser always exposes those three placement choices after an algorithm is selected; it does not pre-judge slot capacity or imply a replacement. Before every add, NT Pilot presents the firmware-reported starting specifications with named, range-checked controls. Unloaded plug-ins are loaded and reread first so those actual specifications are available. Each add mutation is read back from the NT before the UI accepts it.
+NT Pilot can now browse live factory algorithms and installed plug-ins, load an installed plug-in, then add it before, after or at the end of the selected slot. The browser always exposes those three placement choices after an available algorithm is selected; it does not pre-judge slot capacity or imply a replacement. An unloaded plug-in opens its compact Load popup; after the NT confirms the load, that same popup becomes the insertion form with placement choices, firmware-reported starting specifications, memory result and the final Add action. Each add mutation is read back from the NT before the UI accepts it.
 
 Every live Editor algorithm card also has an explicit remove control: a compact red × on desktop hover and a touch-sized control in iPad mode. Its confirmation names the exact algorithm and explains that later slots shift up. NT Pilot sends the official `0x33 <slot>` command, then rereads and requires the slot count to decrease before accepting the delete. Removal clears local Undo/Redo because a removed algorithm's specification state cannot yet be reconstructed safely.
 
 Required user workflow:
 
-- Add a factory algorithm or installed plug-in to an empty slot.
+- Add a factory algorithm or installed plug-in at a chosen insertion point.
 - Browse and search the algorithms and plug-ins actually available on the connected NT rather than relying on a hard-coded catalogue.
 - Clearly distinguish factory algorithms from plug-ins and show the authoritative name plus any firmware-exposed author, version, compatibility or resource information.
 - Replace an occupied slot with an explicit warning about affected routing, mappings, Performance assignments and unsaved working state.
-- Handle a full ten-slot preset with an understandable choice: replace a slot, cancel, or reorder first. Never silently overwrite a slot.
+- Handle a full 40-slot preset with an understandable choice: replace a slot, cancel, or reorder first. Never silently overwrite a slot.
 - Remove an algorithm with equivalent impact information and confirmation.
 - Reread the authoritative slot/preset state from the NT after every successful mutation.
 - Integrate add, replace and remove into the same Undo/Redo model where the official NT API provides enough information to restore the previous state safely.
@@ -200,17 +200,17 @@ Initial routing content renders before output-mode hydration completes. If a use
 ## Algorithm add limits and plug-ins
 
 - The 1.19 target supports **40 slots**. The add browser always shows `used / 40`; placement is unavailable only when all 40 are occupied.
-- Built-ins are immediately available. An installed plug-in that is not resident is selectable but does nothing until the user chooses **Load into NT** from the footer. The confirmation states that code may remain resident until a reboot. It then sends `0x38` and polls only that catalogue record for up to five seconds—important for slower C++ plug-ins.
+- Built-ins are immediately available. An installed plug-in that is not resident is selectable but needs **Load into NT**. Its compact Load popup states that code may remain resident until reboot; once loaded, that same popup switches straight to placement, starting settings and Add. It sends `0x38` and polls only that catalogue record for up to five seconds—important for slower C++ plug-ins.
 - `isLoaded` is treated as device truth. A loaded plug-in used by a slot reads **in preset**; a loaded plug-in with no matching slot reads **Loaded in NT · not in preset**. Removing a slot (`0x33`) never claims to free code memory because the API has no unload command.
 - On firmware 1.19+, the starting-settings dialog serializes a SysEx `0x39` query with the selected first three specification values. It accepts the documented three- or four-row response, shows SRAM/DRAM/DTC/ITC projected `used / total`, and blocks only a validated pool shortfall. Timeouts and malformed replies are neutral “preflight unavailable” states, never false memory warnings.
 - A load timeout says that the device did not report the plug-in loaded; SysEx does not supply a precise cause. It advises a reboot to clear resident plug-ins and checking the native NT screen rather than guessing it is a memory failure.
 
 ## Current asset versions
 
-- `styles.css?v=20260926-244`
+- `styles.css?v=20260926-245`
 - `web-midi-transport.js?v=20260926-48`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-180`
+- `app.js?v=20260926-181`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
