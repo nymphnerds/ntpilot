@@ -123,7 +123,7 @@ The central model is the NT bus universe:
 - The entire Knowledge card opens a built-in, searchable, text-first NT wiki.
 - The wiki condenses the official firmware 1.18 manual into 15 operational sections with a contents column and page-specific links back to the official PDF.
 - The header uses the supplied transparent NT Pilot emblem from `assets/nt-pilot-emblem.png`.
-- The default interface accent is neutral mint. A confirmed Aux assignment changes the accent to that Aux bus colour; simply selecting a port does not imply assignment.
+- The default interface accent is neutral mint. Selecting an Aux chip previews that bus colour across the interface, and a confirmed Aux assignment retains it. Selecting a port alone does not imply an Aux colour.
 
 ## Current Routing behaviour
 
@@ -188,7 +188,7 @@ Initial routing content renders before output-mode hydration completes. If a use
 - `styles.css?v=20260926-223`
 - `web-midi-transport.js?v=20260925-44`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-153`
+- `app.js?v=20260926-154`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

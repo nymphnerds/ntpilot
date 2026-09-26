@@ -2116,6 +2116,7 @@
     const chip = target.closest(".routing-aux-chip");
     if (!chip || !state.routingSnapshot) return false;
     const bus = Number(chip.dataset.bus);
+    applyPilotAccentFromAux(bus, state.routingSnapshot);
     if (state.routingSelection?.parameterIndex != null) {
       const selection = state.routingSelection;
       selection.element.classList.remove("routing-selected-source");
