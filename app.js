@@ -1955,6 +1955,7 @@
       });
     }
     disarmEditorBusAssignment();
+    previewLiveParameterEntry(entry, entry.confirmedValue);
     return true;
   }
 
@@ -2862,12 +2863,28 @@
         if (!entry) return;
         entry.sliderInteracting = true;
         updateRangeProgress(slider);
+        if (entry.busChip) {
+          previewLiveParameterEntry(entry, slider.value);
+          return;
+        }
         queueLiveSliderWrite(entry, slider.value);
       });
-      slider.addEventListener("change", () => {
+      slider.addEventListener("change", async () => {
         const entry = state.liveParameters.get(pendingMapping.dataset.mappingKey);
         if (!entry) return;
         entry.sliderInteracting = false;
+        if (entry.busChip) {
+          const value = Number(slider.value);
+          if (value > 0) await assignEditorBusWithPopup(entry, value, slider);
+          else queueLiveParameterWrite(entry, value, {
+            historyRouting: true,
+            successMessage: `${entry.parameter.name} disconnected in NT working memory`,
+            afterWrite: async () => {
+              if (state.liveRouting) await loadLiveRouting({ preserveView: true });
+            }
+          });
+          return;
+        }
         queueLiveSliderWrite(entry, slider.value, { commit: true });
       });
       return row;
