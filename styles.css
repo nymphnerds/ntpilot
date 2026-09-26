@@ -967,6 +967,215 @@ body:has(.device-frame.ipad-mode) .algorithm-load-placement button { min-height:
 body:has(.device-frame.ipad-mode) .algorithm-load-dialog > footer { padding: 15px 22px; }
 body:has(.device-frame.ipad-mode) .algorithm-load-dialog > footer button { min-height: 42px; padding-inline: 15px; font-size: 12px; }
 
+/*
+   Presets and the algorithm workflow intentionally use the same visual grammar
+   as the rest of Pilot: quiet resting cards, a mint selection state, and the
+   shared light/dark surfaces.  This is kept here as one layer because dialogs
+   live outside .device-frame while Presets lives inside it.
+*/
+.preset-library {
+  border-color: var(--line);
+  background: var(--surface-2);
+  box-shadow: 0 7px 22px rgba(31,57,68,.055);
+}
+.preset-library-topbar {
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+.preset-up-button {
+  border-color: var(--line);
+  color: var(--ink-soft);
+  background: var(--surface-3);
+}
+.preset-up-button:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--pilot) 42%, var(--line));
+  color: var(--pilot-deep);
+  background: var(--pilot-soft);
+}
+.preset-breadcrumbs button { color: var(--pilot-deep); }
+.preset-breadcrumbs span { color: var(--ink-soft); }
+.preset-file-list {
+  border-color: var(--line);
+  background: var(--surface);
+}
+.preset-library-empty { color: var(--ink-soft); }
+.preset-file-row {
+  border-color: #e1e7e9;
+  color: #344650;
+  background: transparent;
+}
+.preset-file-row:hover { background: var(--surface-2); }
+.preset-file-row.selected {
+  border-color: color-mix(in srgb, var(--pilot) 42%, #d5e0e3);
+  background: var(--pilot-soft);
+  box-shadow: 0 3px 12px rgba(35,60,70,.07);
+}
+.preset-file-icon {
+  color: #667985;
+  background: #e8eef0;
+}
+.preset-file-row.directory .preset-file-icon {
+  color: #7d641e;
+  background: #fff0c8;
+}
+.preset-file-row strong { font-size: 12px; }
+.preset-file-row small { color: #8a99a2; }
+.preset-file-affordance { color: var(--pilot-deep); }
+.preset-inspector {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+.preset-inspector-kicker { color: var(--ink-soft); }
+.preset-inspector h2 { color: var(--ink); }
+.preset-inspector p { color: var(--ink-soft); }
+.preset-inspector-actions button {
+  border-color: var(--line);
+  color: #3e505c;
+  background: var(--surface-2);
+}
+.preset-inspector-actions .primary-button {
+  border-color: var(--pilot-deep);
+  color: white;
+  background: var(--pilot);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--pilot) 20%, transparent);
+}
+.preset-inspector-manage .text-button { color: var(--pilot-deep); }
+.preset-inspector-manage .text-button.danger { color: #b84d59; }
+
+/* Shared modal surfaces: algorithm browser, plug-in load, starting settings,
+   and preset actions are one Pilot workflow rather than separate mini-apps. */
+:is(.algorithm-browser, .algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--surface);
+}
+:is(.algorithm-browser, .algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) > header,
+:is(.algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) > footer,
+.algorithm-browser-placement {
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+:is(.algorithm-browser, .algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) > header button {
+  border-color: var(--line);
+  color: var(--ink-soft);
+  background: var(--surface-3);
+}
+:is(.algorithm-browser, .algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) > header button:hover {
+  color: var(--pilot-deep);
+  background: var(--pilot-soft);
+}
+.algorithm-browser-tools,
+.algorithm-browser-list { background: var(--surface); }
+.algorithm-browser-tools input,
+.algorithm-browser-filters button,
+.algorithm-browser-placement-actions button,
+.algorithm-load-placement button,
+:is(.algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) > footer button,
+.algorithm-spec-field :is(input, select),
+.preset-file-dialog-copy input {
+  border-color: var(--line);
+  color: var(--ink-soft);
+  background: var(--surface-2);
+}
+.algorithm-browser-item,
+.algorithm-spec-field {
+  border-color: #e1e7e9;
+  color: #344650;
+  background: transparent;
+}
+.algorithm-browser-item:hover { background: var(--surface-2); }
+.algorithm-browser-item.selected {
+  border-color: color-mix(in srgb, var(--pilot) 42%, #d5e0e3);
+  background: var(--pilot-soft);
+  box-shadow: 0 3px 12px rgba(35,60,70,.07);
+}
+.algorithm-browser-item small,
+.algorithm-browser-empty,
+.algorithm-spec-copy p,
+.algorithm-spec-field small,
+.algorithm-spec-empty,
+.algorithm-load-copy p { color: var(--ink-soft); }
+.algorithm-browser-item strong,
+.algorithm-browser-placement strong,
+.algorithm-spec-copy strong,
+.algorithm-spec-field strong,
+.algorithm-load-copy strong { color: var(--ink); }
+.algorithm-browser-kind { color: #48739a; background: #e4eef7; }
+.algorithm-browser-item.plugin .algorithm-browser-kind { color: #684f98; background: #eee8fa; }
+.algorithm-browser-item .algorithm-load {
+  border-color: color-mix(in srgb, var(--pilot) 42%, var(--line));
+  color: var(--pilot-deep);
+  background: var(--pilot-soft);
+}
+.algorithm-browser-placement-actions button.primary,
+.algorithm-load-placement button.selected,
+:is(.algorithm-load-dialog, .algorithm-spec-dialog, .preset-load-dialog, .preset-file-dialog) > footer button:last-child {
+  border-color: var(--pilot-deep);
+  color: white;
+  background: var(--pilot);
+}
+
+body.dark-mode .preset-library {
+  border-color: #2b4154;
+  background: #132335;
+  box-shadow: 0 8px 24px rgba(0,0,0,.22);
+}
+body.dark-mode .preset-library-topbar,
+body.dark-mode .preset-inspector { border-color: #2a3e51; background: #132335; }
+body.dark-mode .preset-file-list { border-color: #2a3e51; background: #101e2d; }
+body.dark-mode .preset-up-button { border-color: #30465a; color: #a9bac4; background: #1b3043; }
+body.dark-mode .preset-breadcrumbs span { color: #8fa3af; }
+body.dark-mode .preset-file-row { border-color: #263b4d; color: #cfdae0; background: transparent; }
+body.dark-mode .preset-file-row:hover { background: #142438; }
+body.dark-mode .preset-file-row.selected {
+  border-color: color-mix(in srgb, var(--pilot) 52%, #263b4d);
+  background: color-mix(in srgb, var(--pilot) 16%, #142438);
+  box-shadow: 0 4px 15px rgba(0,0,0,.24);
+}
+body.dark-mode .preset-file-icon { color: #a9bac4; background: #1b3043; }
+body.dark-mode .preset-file-row.directory .preset-file-icon { color: #f5d38c; background: #3b3420; }
+body.dark-mode :is(.preset-file-row small, .preset-library-empty, .preset-inspector p, .preset-inspector-kicker) { color: #8fa3af; }
+body.dark-mode .preset-inspector h2 { color: #edf4f7; }
+body.dark-mode .preset-inspector-actions button { border-color: #344b5d; color: #c5d2d9; background: #17293b; }
+body.dark-mode .preset-inspector-actions .primary-button { border-color: var(--pilot); color: #072b27; background: var(--pilot); }
+body.dark-mode .preset-inspector-manage .text-button { color: #a8c1cc; }
+
+body.dark-mode :is(.algorithm-browser, .algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) {
+  color: #dce7ec;
+  border-color: #2b4154;
+  background: #101e2d;
+  box-shadow: 0 28px 80px rgba(0,0,0,.58);
+}
+body.dark-mode :is(.algorithm-browser, .algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) > header,
+body.dark-mode :is(.algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) > footer,
+body.dark-mode .algorithm-browser-placement { border-color: #2a3e51; background: #132335; }
+body.dark-mode .algorithm-browser-tools,
+body.dark-mode .algorithm-browser-list { border-color: #2a3e51; background: #101e2d; }
+body.dark-mode :is(.algorithm-browser, .algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) > header button,
+body.dark-mode .algorithm-browser-tools input,
+body.dark-mode .algorithm-browser-filters button,
+body.dark-mode .algorithm-browser-placement-actions button,
+body.dark-mode .algorithm-load-placement button,
+body.dark-mode :is(.algorithm-load-dialog, .algorithm-spec-dialog, .algorithm-remove-dialog, .preset-load-dialog, .preset-file-dialog) > footer button,
+body.dark-mode .algorithm-spec-field :is(input, select),
+body.dark-mode .preset-file-dialog-copy input { border-color: #30465a; color: #dce7ec; background: #172a3c; }
+body.dark-mode :is(.algorithm-browser-item, .algorithm-spec-field) { border-color: #263b4d; color: #cfdae0; background: transparent; }
+body.dark-mode .algorithm-browser-item:hover { background: #142438; }
+body.dark-mode .algorithm-browser-item.selected {
+  border-color: color-mix(in srgb, var(--pilot) 52%, #263b4d);
+  background: color-mix(in srgb, var(--pilot) 16%, #142438);
+  box-shadow: 0 4px 15px rgba(0,0,0,.24);
+}
+body.dark-mode :is(.algorithm-browser-item small, .algorithm-browser-empty, .algorithm-spec-copy p, .algorithm-spec-field small, .algorithm-spec-empty, .algorithm-load-copy p) { color: #8fa3af; }
+body.dark-mode :is(.algorithm-browser-item strong, .algorithm-browser-placement strong, .algorithm-spec-copy strong, .algorithm-spec-field strong, .algorithm-load-copy strong) { color: #edf4f7; }
+body.dark-mode .algorithm-browser-kind { color: #a9bac4; background: #1b3043; }
+body.dark-mode .algorithm-browser-item.plugin .algorithm-browser-kind { color: #d1c0f0; background: #332d4d; }
+body.dark-mode :is(.algorithm-browser-placement-actions button.primary, .algorithm-load-placement button.selected, .algorithm-load-dialog > footer button:last-child, .algorithm-spec-dialog > footer button:last-child, .preset-load-dialog > footer button:last-child, .preset-file-dialog > footer button:last-child) { border-color: var(--pilot); color: #072b27; background: var(--pilot); }
+
+/* Keep the same component scale on iPad; colours above are inherited by both modes. */
+.device-frame.ipad-mode .preset-file-row { background: transparent; }
+.device-frame.dark-mode.ipad-mode .preset-file-row { background: transparent; }
+
 @media (max-width: 900px) {
   :root { --sidebar-width: 76px; }
   .device-frame { grid-template-columns: 76px minmax(0,1fr); }
