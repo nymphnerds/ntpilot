@@ -70,6 +70,7 @@ let loadPresetCommand = null;
 let wakeCommand = null;
 let directoryCommand = null;
 let sendWrongSDOperationOnce = false;
+let sendFragmentedSDListingOnce = false;
 const output = {
   id: "out",
   name: "disting NT MIDI OUT",
@@ -220,6 +221,13 @@ const output = {
         const wrongOperation = operation === 1 ? 7 : 1;
         queueMicrotask(() => input.onmidimessage({ data: Uint8Array.from([...header, 0x7A, 0, wrongOperation, 0xF7]) }));
         queueMicrotask(() => input.onmidimessage({ data: Uint8Array.from(reply) }));
+        return;
+      }
+      if (sendFragmentedSDListingOnce) {
+        sendFragmentedSDListingOnce = false;
+        const splitAt = Math.floor(reply.length / 2);
+        queueMicrotask(() => input.onmidimessage({ data: Uint8Array.from(reply.slice(0, splitAt)) }));
+        queueMicrotask(() => input.onmidimessage({ data: Uint8Array.from(reply.slice(splitAt)) }));
         return;
       }
     }
@@ -410,6 +418,9 @@ global.navigator = { requestMIDIAccess: async options => {
   sendWrongSDOperationOnce = true;
   const matchedDirectory = await transport.readSDDirectory("/presets");
   assert.deepEqual(matchedDirectory.map(entry => entry.name), ["presets", "Live Set.json"]);
+  sendFragmentedSDListingOnce = true;
+  const fragmentedDirectory = await transport.readSDDirectory("/presets");
+  assert.deepEqual(fragmentedDirectory.map(entry => entry.name), ["presets", "Live Set.json"]);
   await transport.createSDDirectory("/presets/New");
   await transport.renameSDPath("/presets/New", "/presets/Renamed");
   await transport.deleteSDPath("/presets/Renamed");

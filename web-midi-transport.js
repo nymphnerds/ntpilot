@@ -280,6 +280,10 @@
       this.pending = null;
       this.requestTail = Promise.resolve();
       this.outputModeUsageCache = new Map();
+      // Web MIDI does not guarantee that one input event contains one SysEx
+      // frame. In particular, directory listings can arrive in several input
+      // chunks. Keep the unfinished frame until its terminating F7 arrives.
+      this.sysExInputBuffer = [];
       this.handleMessage = this.handleMessage.bind(this);
       this.handleStateChange = this.handleStateChange.bind(this);
     }
@@ -330,6 +334,7 @@
       this.input = null;
       this.output = null;
       this.outputModeUsageCache.clear();
+      this.sysExInputBuffer = [];
       this.access = await navigator.requestMIDIAccess({ sysex: true });
       this.access.onstatechange = this.handleStateChange;
       this.selectPorts();
@@ -370,6 +375,32 @@
         receivedTime: message.receivedTime ?? null,
         wallTime: Date.now()
       });
+      for (const frame of this.extractSysExFrames(bytes)) this.handleSysExFrame(frame);
+    }
+
+    extractSysExFrames(bytes) {
+      const frames = [];
+      for (const byte of bytes) {
+        if (this.sysExInputBuffer.length) {
+          // A new start byte before F7 abandons the incomplete frame, matching
+          // NT Helper's scheduler behaviour for interrupted SysEx input.
+          if (byte === 0xF0) {
+            this.sysExInputBuffer = [byte];
+            continue;
+          }
+          this.sysExInputBuffer.push(byte);
+          if (byte === 0xF7) {
+            frames.push(this.sysExInputBuffer);
+            this.sysExInputBuffer = [];
+          }
+          continue;
+        }
+        if (byte === 0xF0) this.sysExInputBuffer = [byte];
+      }
+      return frames;
+    }
+
+    handleSysExFrame(bytes) {
       const header = [...PRODUCT_HEADER, this.sysexId];
       if (bytes.length < 8 || !bytesMatch(bytes, header) || bytes[bytes.length - 1] !== 0xF7) return;
       this.onEvent({ type: "received", command: bytes[6], byteLength: bytes.length });
@@ -956,6 +987,7 @@
       this.input = null;
       this.output = null;
       this.access = null;
+      this.sysExInputBuffer = [];
     }
   }
 
