@@ -201,15 +201,15 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 - The add browser shows the preset capacity directly: **x of 10 slots used**. With all ten occupied, placement actions are unavailable and the user must remove an algorithm first.
 - Built-ins are immediately available. Installed plug-ins which are not loaded show **Load into NT** rather than a mysterious greyed-out state. NT Pilot sends SysEx `0x38` and polls that exact catalogue entry for up to five seconds; this matters for slower C++ plug-ins.
-- The starting-settings dialog queries the NT's SysEx `0x39` memory report with the selected first three specification values. It shows all four hardware pools—SRAM, DRAM, DTC and ITC—as projected `used / total` values, and blocks an add with the precise pool and shortage when it will not fit.
+- On firmware 1.19+, the starting-settings dialog queries the NT's SysEx `0x39` memory report with the selected first three specification values. It shows all four hardware pools—SRAM, DRAM, DTC and ITC—as projected `used / total` values, and blocks an add with the precise pool and shortage when it will not fit. Earlier firmware is never sent this unsupported request; the dialog plainly says the NT will verify the add.
 - A load timeout is not silently described as a generic add failure: the UI says that the plug-in did not report loaded and may be too large, unsupported or unable to load with the NT's current free memory. The device remains authoritative; successful add is still reread and verified from the NT.
 
 ## Current asset versions
 
-- `styles.css?v=20260926-242`
+- `styles.css?v=20260926-243`
 - `web-midi-transport.js?v=20260926-47`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-177`
+- `app.js?v=20260926-178`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

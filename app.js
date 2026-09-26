@@ -3457,8 +3457,19 @@
     algorithmSpecNotice.className = `algorithm-spec-notice ${tone}`;
   }
 
+  function ntSupportsMemoryPreview() {
+    const version = String(state.liveIdentity?.version || "");
+    const parts = version.match(/\d+/g)?.map(Number) || [];
+    const [major = 0, minor = 0] = parts;
+    return major > 1 || (major === 1 && minor >= 19);
+  }
+
   async function checkAlgorithmMemory(algorithm, { updateUi = true } = {}) {
     if (!state.ntTransport) return { allowed: true, available: false };
+    if (!ntSupportsMemoryPreview()) {
+      if (updateUi) showAlgorithmMemoryNotice("NT memory preview requires firmware 1.19 or later. The NT will verify this add.", "checking");
+      return { allowed: true, available: false };
+    }
     const token = ++algorithmMemoryCheckToken;
     if (updateUi) showAlgorithmMemoryNotice("Checking NT memory for these starting settings…", "checking");
     try {
