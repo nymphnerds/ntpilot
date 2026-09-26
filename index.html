@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-234">
+  <link rel="stylesheet" href="styles.css?v=20260926-235">
 </head>
 <body>
   <main class="stage">
@@ -136,7 +136,7 @@
 
             <div class="editor-shell hidden" id="editor-shell">
               <div class="editor-toolbar">
-                <strong class="editor-section-heading">Algorithms</strong>
+                <span class="editor-heading-actions"><strong class="editor-section-heading">Algorithms</strong><button class="editor-add-algorithm" id="add-algorithm" type="button" aria-label="Add algorithm" title="Add algorithm" disabled>+</button></span>
                 <div class="editor-meta">
                   <span id="editor-slot-count">10 slots</span><span id="editor-cpu-usage" title="Waiting for CPU usage from the NT"><span class="cpu-meter" id="audio-cpu-meter"><i></i>Audio <b>—</b></span><span class="cpu-separator">·</span><span class="cpu-meter" id="overall-cpu-meter"><i></i>Overall <b>—</b></span></span>
                   <span class="freshness"><i></i> Updated now</span>
@@ -487,8 +487,24 @@
     <footer><span id="guide-result-count">15 topics</span><div><a href="https://www.expert-sleepers.co.uk/downloads/manuals/disting_NT_user_manual_1.18.pdf" target="_blank" rel="noopener">Open official 1.18 manual</a><a href="https://www.expert-sleepers.co.uk/distingNTfirmwareupdates.html" target="_blank" rel="noopener">All manual versions</a></div></footer>
   </dialog>
 
-  <script src="web-midi-transport.js?v=20260925-44"></script>
+  <dialog class="algorithm-browser" id="algorithm-browser" aria-labelledby="algorithm-browser-title">
+    <header>
+      <div><span>NT working preset</span><h2 id="algorithm-browser-title">Add algorithm</h2></div>
+      <button id="close-algorithm-browser" type="button" aria-label="Close algorithm browser">×</button>
+    </header>
+    <div class="algorithm-browser-tools">
+      <label for="algorithm-browser-search"><span>Search</span><input id="algorithm-browser-search" type="search" placeholder="Search built-in algorithms and installed plug-ins…" autocomplete="off"></label>
+      <div class="algorithm-browser-filters" role="group" aria-label="Algorithm type"><button type="button" class="active" data-algorithm-filter="all">All</button><button type="button" data-algorithm-filter="factory">Built-in</button><button type="button" data-algorithm-filter="plugin">Plug-ins</button></div>
+    </div>
+    <div class="algorithm-browser-list" id="algorithm-browser-list" aria-live="polite"></div>
+    <footer class="algorithm-browser-placement" id="algorithm-browser-placement">
+      <div><span>Choose an algorithm</span><strong>Select an algorithm to choose where it goes.</strong></div>
+      <div class="algorithm-browser-placement-actions" id="algorithm-browser-placement-actions"></div>
+    </footer>
+  </dialog>
+
+  <script src="web-midi-transport.js?v=20260926-45"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-169"></script>
+  <script src="app.js?v=20260926-170"></script>
 </body>
 </html>

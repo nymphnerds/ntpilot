@@ -13,8 +13,10 @@ Last updated: 26 September 2026
 - Sync and interface Scale form a matched compact stack at the bottom of the sidebar in both desktop and iPad modes, with Sync directly above Scale and identical outer dimensions for the active mode.
 - Sync uses an app-rendered three-choice menu rather than a native browser select, so its popup follows light/dark styling consistently in the iPad Web MIDI browser.
 - The built-in wiki becomes a near-edge-to-edge full-page reader in iPad mode, with larger navigation, search, article and footer typography while retaining independent contents/article scrolling.
-- Do **not** start the algorithm/plug-in lifecycle feature by adding UI directly to `app.js`. The user explicitly wants an architecture audit and canonical systems rather than another parallel implementation.
-- Next session should begin with behaviour-locking routing tests and the incremental controller extraction below. Preserve the current visuals while restructuring.
+- The first safe algorithm-add slice is now implemented: the `Algorithms [+]` browser reads the live NT catalogue, distinguishes built-ins from plug-ins, loads an unloaded plug-in through the NT first, then adds with the factory defaults and verifies each NT readback.
+- The NT SysEx add command only appends. NT Pilot turns **Add before**, **Add after** and **Add at end** into one transaction: append, native move if needed, then reread the complete preset and verify the requested GUID at its target slot.
+- This slice deliberately refuses a full ten-slot preset. Do not add destructive replacement by chaining remove/add: the old slot's complete specification state cannot yet be restored safely. Implement replacement only as a previewable, tested, reversible lifecycle plan.
+- An algorithm add is represented as one Undo/Redo history action; Undo removes only the exact verified newly-added slot, and Redo recreates it at the original target position.
 
 ### Audit findings
 
@@ -195,10 +197,10 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-234`
-- `web-midi-transport.js?v=20260925-44`
+- `styles.css?v=20260926-235`
+- `web-midi-transport.js?v=20260926-45`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-169`
+- `app.js?v=20260926-170`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

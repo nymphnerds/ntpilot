@@ -26,6 +26,11 @@
     return [(value >> 14) & 0x7F, (value >> 7) & 0x7F, value & 0x7F];
   }
 
+  function encodeSignedShort(value) {
+    const normalized = Number(value) & 0xFFFF;
+    return [(normalized >> 14) & 0x03, (normalized >> 7) & 0x7F, normalized & 0x7F];
+  }
+
   function guidKey(bytes) {
     return bytes.map(value => value.toString(16).padStart(2, "0")).join("");
   }
@@ -385,7 +390,18 @@
         const responseIndex = decodeUnsigned21(payload.slice(0, 3));
         const guid = payload.slice(3, 7);
         const numSpecs = payload[7];
-        let cursor = 8 + (numSpecs * 10);
+        const specifications = [];
+        let specificationCursor = 8;
+        for (let specificationIndex = 0; specificationIndex < numSpecs; specificationIndex += 1) {
+          specifications.push({
+            min: decodeSignedShort(payload.slice(specificationCursor, specificationCursor + 3)),
+            max: decodeSignedShort(payload.slice(specificationCursor + 3, specificationCursor + 6)),
+            defaultValue: decodeSignedShort(payload.slice(specificationCursor + 6, specificationCursor + 9)),
+            type: payload[specificationCursor + 9] ?? 0
+          });
+          specificationCursor += 10;
+        }
+        let cursor = specificationCursor;
         const names = [];
         for (let nameIndex = 0; nameIndex < 1 + numSpecs; nameIndex += 1) {
           const start = cursor;
@@ -411,7 +427,8 @@
           factoryName,
           isPlugin,
           isLoaded,
-          filename
+          filename,
+          specifications
         });
       }
       return algorithms;
@@ -609,6 +626,30 @@
       this.send(0x36, [option]);
     }
 
+    addAlgorithm(algorithm) {
+      if (!algorithm || !Array.isArray(algorithm.guid) || algorithm.guid.length !== 4) {
+        throw new Error("Invalid NT algorithm selection.");
+      }
+      if (algorithm.isPlugin && !algorithm.isLoaded) {
+        throw new Error("Load this plug-in before adding it to the preset.");
+      }
+      const values = (algorithm.specifications || []).slice(0, 3).map(specification => specification.defaultValue ?? 0);
+      while (values.length < 3) values.push(0);
+      this.send(0x32, [...algorithm.guid, ...values.flatMap(encodeSignedShort)]);
+    }
+
+    loadPlugin(algorithm) {
+      if (!algorithm?.isPlugin || !Array.isArray(algorithm.guid) || algorithm.guid.length !== 4) {
+        throw new Error("Invalid NT plug-in selection.");
+      }
+      this.send(0x38, algorithm.guid);
+    }
+
+    removeAlgorithm(slot) {
+      if (!Number.isInteger(slot) || slot < 0 || slot > 127) throw new Error("Invalid disting NT slot removal.");
+      this.send(0x33, [slot]);
+    }
+
     async moveAlgorithm(fromSlot, toSlot) {
       if (!Number.isInteger(fromSlot) || !Number.isInteger(toSlot) || fromSlot < 0 || toSlot < 0 || fromSlot > 127 || toSlot > 127) {
         throw new Error("Invalid disting NT slot move.");
@@ -764,6 +805,7 @@
       decodeUnsigned21,
       decodeSignedShort,
       encodeUnsigned21,
+      encodeSignedShort,
       guidKey,
       parseRoutingPayload,
       parseParameterPages,

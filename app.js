@@ -91,6 +91,13 @@
   const referenceGuide = $("#reference-guide");
   const guideSearch = $("#guide-search");
   const guideResultCount = $("#guide-result-count");
+  const addAlgorithmButton = $("#add-algorithm");
+  const algorithmBrowser = $("#algorithm-browser");
+  const closeAlgorithmBrowser = $("#close-algorithm-browser");
+  const algorithmBrowserSearch = $("#algorithm-browser-search");
+  const algorithmBrowserList = $("#algorithm-browser-list");
+  const algorithmBrowserPlacement = $("#algorithm-browser-placement");
+  const algorithmBrowserPlacementActions = $("#algorithm-browser-placement-actions");
 
   let rebootRecovery = null;
   try {
@@ -155,6 +162,9 @@
     midiEvents: [],
     midiRenderPending: false,
     midiCounts: { all: 0, channel: 0, sysex: 0 },
+    algorithmBrowserFilter: "all",
+    pendingAlgorithm: null,
+    slotMutationBusy: false,
   };
 
   function updateHistoryControls() {
@@ -3288,6 +3298,224 @@
     displaySlot($(".slot.active", slotList));
   }
 
+  function selectedLiveSlot() {
+    const slots = state.liveIdentity?.slots || [];
+    return slots.find(slot => slot.index === state.selectedSlotIndex) || slots.at(-1) || null;
+  }
+
+  function closeAlgorithmBrowserDialog() {
+    if (algorithmBrowser.open) algorithmBrowser.close();
+    state.pendingAlgorithm = null;
+    algorithmBrowserSearch.value = "";
+  }
+
+  function algorithmBrowserSelectionCopy() {
+    const algorithm = state.pendingAlgorithm;
+    const slot = selectedLiveSlot();
+    const count = state.liveIdentity?.slots?.length || 0;
+    if (!algorithm) return { kicker: "Choose an algorithm", detail: "Select an algorithm to choose where it goes." };
+    if (count >= 10) return { kicker: "All 10 slots are occupied", detail: "Adding without discarding an existing algorithm is not available yet." };
+    if (!slot) return { kicker: algorithm.name, detail: "This will become slot 1." };
+    return { kicker: algorithm.name, detail: `Choose where to add it around ${slot.name}.` };
+  }
+
+  function renderAlgorithmBrowserPlacement() {
+    const copy = algorithmBrowserSelectionCopy();
+    const summary = $("div", algorithmBrowserPlacement);
+    summary.replaceChildren();
+    const kicker = document.createElement("span");
+    kicker.textContent = copy.kicker;
+    const detail = document.createElement("strong");
+    detail.textContent = copy.detail;
+    summary.append(kicker, detail);
+    algorithmBrowserPlacementActions.replaceChildren();
+    const algorithm = state.pendingAlgorithm;
+    const slot = selectedLiveSlot();
+    const count = state.liveIdentity?.slots?.length || 0;
+    if (!algorithm || count >= 10 || state.slotMutationBusy) return;
+    const actions = slot
+      ? [["before", "Add before"], ["after", "Add after"], ["end", "Add at end"]]
+      : [["end", "Add first algorithm"]];
+    actions.forEach(([position, label], index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.algorithmPlacement = position;
+      button.textContent = label;
+      if (index === 1 || (!slot && index === 0)) button.classList.add("primary");
+      algorithmBrowserPlacementActions.appendChild(button);
+    });
+  }
+
+  function renderAlgorithmBrowser() {
+    const catalog = state.liveIdentity?.algorithms || [];
+    const query = algorithmBrowserSearch.value.trim().toLowerCase();
+    const filter = state.algorithmBrowserFilter;
+    const algorithms = catalog
+      .filter(algorithm => filter === "all" || (filter === "plugin" ? algorithm.isPlugin : !algorithm.isPlugin))
+      .filter(algorithm => !query || `${algorithm.name} ${algorithm.factoryName || ""} ${algorithm.filename || ""}`.toLowerCase().includes(query))
+      .sort((left, right) => Number(right.isLoaded) - Number(left.isLoaded) || Number(left.isPlugin) - Number(right.isPlugin) || left.name.localeCompare(right.name));
+    algorithmBrowserList.replaceChildren();
+    if (!algorithms.length) {
+      const empty = document.createElement("p");
+      empty.className = "algorithm-browser-empty";
+      empty.textContent = "No matching algorithms are available on this NT.";
+      algorithmBrowserList.appendChild(empty);
+    }
+    algorithms.forEach(algorithm => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = `algorithm-browser-item${algorithm.isPlugin ? " plugin" : ""}${algorithm.isPlugin && !algorithm.isLoaded ? " unloaded" : ""}${state.pendingAlgorithm?.guidKey === algorithm.guidKey ? " selected" : ""}`;
+      item.dataset.guidKey = algorithm.guidKey;
+      const copy = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = algorithm.name;
+      const detail = document.createElement("small");
+      detail.textContent = algorithm.isPlugin
+        ? `${algorithm.isLoaded ? "Installed plug-in" : "Installed plug-in · needs loading"}${algorithm.filename ? ` · ${algorithm.filename.split(/[\\/]/).pop()}` : ""}`
+        : "Built-in algorithm";
+      copy.append(title, detail);
+      if (algorithm.isPlugin && !algorithm.isLoaded) {
+        const load = document.createElement("button");
+        load.type = "button";
+        load.className = "algorithm-load";
+        load.dataset.loadPlugin = algorithm.guidKey;
+        load.textContent = "Load";
+        item.append(copy, load);
+      } else {
+        const kind = document.createElement("span");
+        kind.className = "algorithm-browser-kind";
+        kind.textContent = algorithm.isPlugin ? "Plug-in" : "Built-in";
+        item.append(copy, kind);
+      }
+      algorithmBrowserList.appendChild(item);
+    });
+    $$("[data-algorithm-filter]").forEach(button => button.classList.toggle("active", button.dataset.algorithmFilter === filter));
+    renderAlgorithmBrowserPlacement();
+  }
+
+  async function refreshIdentityAfterSlotMutation({ selectSlot = null, refreshRouting = true } = {}) {
+    const identity = await state.ntTransport.readSnapshot();
+    state.liveIdentity = identity;
+    state.performanceItems = [];
+    state.performanceEntries.clear();
+    showLiveIdentity(identity);
+    const selected = selectSlot == null ? null : $(`.slot[data-index="${selectSlot}"]`, slotList);
+    if (selected) displaySlot(selected);
+    if (refreshRouting && (state.liveRouting || state.view === "routing")) await loadLiveRouting({ preserveView: true });
+    return identity;
+  }
+
+  async function addLiveAlgorithm(algorithm, placement, { record = true, announce = true } = {}) {
+    if (!state.ntTransport || !state.transportOnline || state.slotMutationBusy) return false;
+    const before = state.liveIdentity;
+    const slotCount = before?.slots?.length || 0;
+    if (slotCount >= 10) {
+      showToast("All 10 slots are occupied. Safe replacement is the next lifecycle step.");
+      return false;
+    }
+    const selected = selectedLiveSlot();
+    const targetSlot = Number.isInteger(placement)
+      ? Math.max(0, Math.min(slotCount, placement))
+      : placement === "before" && selected ? selected.index
+        : placement === "after" && selected ? selected.index + 1
+          : slotCount;
+    const pendingPoll = stopLivePolling();
+    state.slotMutationBusy = true;
+    renderAlgorithmBrowserPlacement();
+    addAlgorithmButton.disabled = true;
+    try {
+      if (pendingPoll) await pendingPoll.catch(() => {});
+      await state.parameterReadQueue.catch(() => {});
+      state.ntTransport.addAlgorithm(algorithm);
+      await new Promise(resolve => setTimeout(resolve, 140));
+      let verified = await state.ntTransport.readSnapshot();
+      if (verified.slots.length !== slotCount + 1) throw new Error("The algorithm did not appear in the preset after the NT add command.");
+      const appendedSlot = verified.slots.at(-1);
+      if (appendedSlot?.guidKey !== algorithm.guidKey) throw new Error("The NT added a different algorithm than requested.");
+      if (targetSlot !== appendedSlot.index) {
+        await state.ntTransport.moveAlgorithm(appendedSlot.index, targetSlot);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        verified = await state.ntTransport.readSnapshot();
+      }
+      const placedSlot = verified.slots[targetSlot];
+      if (!placedSlot || placedSlot.guidKey !== algorithm.guidKey) throw new Error("The NT did not place the new algorithm at the requested position.");
+      state.liveIdentity = verified;
+      state.performanceItems = [];
+      state.performanceEntries.clear();
+      showLiveIdentity(verified);
+      const newSlot = $(`.slot[data-index="${targetSlot}"]`, slotList);
+      if (newSlot) displaySlot(newSlot);
+      if (state.liveRouting || state.view === "routing") await loadLiveRouting({ preserveView: true });
+      markWorkingEdit();
+      if (record) recordHistory({ type: "slot-add", algorithm, targetSlot, label: `add ${algorithm.name}` });
+      if (announce) showToast(`Added ${algorithm.name} at slot ${targetSlot + 1} and verified from the NT`);
+      return true;
+    } catch (error) {
+      showToast(`Could not add ${algorithm.name} · ${error.message}`);
+      try { await refreshIdentityAfterSlotMutation({ selectSlot: state.selectedSlotIndex }); } catch (_) {}
+      return false;
+    } finally {
+      state.slotMutationBusy = false;
+      addAlgorithmButton.disabled = !state.transportOnline;
+      renderAlgorithmBrowserPlacement();
+      if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
+    }
+  }
+
+  async function removeLiveAddedAlgorithm(action, { announce = true } = {}) {
+    if (!state.ntTransport || !state.transportOnline || state.slotMutationBusy) return false;
+    const existing = state.liveIdentity?.slots?.[action.targetSlot];
+    if (!existing || existing.guidKey !== action.algorithm.guidKey) {
+      showToast("The added algorithm is no longer at its original slot, so it cannot be safely undone.");
+      return false;
+    }
+    state.slotMutationBusy = true;
+    try {
+      const previousCount = state.liveIdentity.slots.length;
+      state.ntTransport.removeAlgorithm(action.targetSlot);
+      await new Promise(resolve => setTimeout(resolve, 130));
+      const verified = await refreshIdentityAfterSlotMutation({ selectSlot: Math.max(0, action.targetSlot - 1) });
+      if (verified.slots.length !== previousCount - 1) throw new Error("The NT did not remove the added algorithm.");
+      markWorkingEdit();
+      if (announce) showToast(`Removed ${action.algorithm.name} and verified from the NT`);
+      return true;
+    } catch (error) {
+      showToast(`Could not undo algorithm add · ${error.message}`);
+      return false;
+    } finally {
+      state.slotMutationBusy = false;
+      addAlgorithmButton.disabled = !state.transportOnline;
+    }
+  }
+
+  async function loadPluginFromBrowser(algorithm) {
+    if (!state.ntTransport || state.slotMutationBusy) return;
+    state.slotMutationBusy = true;
+    renderAlgorithmBrowser();
+    try {
+      state.ntTransport.loadPlugin(algorithm);
+      let identity = null;
+      let loaded = null;
+      for (const delay of [250, 600, 1100]) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        identity = await state.ntTransport.readSnapshot();
+        loaded = identity.algorithms.find(item => item.guidKey === algorithm.guidKey);
+        if (loaded?.isLoaded) break;
+      }
+      if (!identity) throw new Error("The NT did not return its algorithm catalogue.");
+      state.liveIdentity = identity;
+      if (!loaded?.isLoaded) throw new Error("The NT did not report this plug-in as loaded.");
+      showLiveIdentity(identity);
+      state.pendingAlgorithm = loaded;
+      showToast(`${loaded.name} loaded and ready to add`);
+    } catch (error) {
+      showToast(`Could not load ${algorithm.name} · ${error.message}`);
+    } finally {
+      state.slotMutationBusy = false;
+      renderAlgorithmBrowser();
+    }
+  }
+
   async function moveLiveSlot(fromSlot, toSlot, { record = true, announce = true } = {}) {
     if (!state.ntTransport || !state.transportOnline || fromSlot === toSlot) return false;
     const pendingPoll = stopLivePolling();
@@ -3342,6 +3570,11 @@
         ? await moveLiveSlot(action.toSlot, action.fromSlot, { record: false, announce: false })
         : await moveLiveSlot(action.fromSlot, action.toSlot, { record: false, announce: false });
     }
+    if (action.type === "slot-add") {
+      succeeded = direction === "undo"
+        ? await removeLiveAddedAlgorithm(action, { announce: false })
+        : await addLiveAlgorithm(action.algorithm, action.targetSlot, { record: false, announce: false });
+    }
     if (action.type === "parameter-batch") succeeded = await applyParameterHistory(action, direction);
     if (succeeded) {
       destination.push(action);
@@ -3372,6 +3605,7 @@
     setHardwareStatus("Connected", true);
     editorEmptyState.classList.add("hidden");
     editorShell.classList.remove("hidden");
+    addAlgorithmButton.disabled = false;
     renderEditorBusDock(identity);
     renderLiveSlots(identity.slots);
   }
@@ -3414,6 +3648,9 @@
     state.undoHistory.length = 0;
     state.redoHistory.length = 0;
     state.historyBusy = false;
+    state.pendingAlgorithm = null;
+    state.slotMutationBusy = false;
+    addAlgorithmButton.disabled = true;
     routingNodes.replaceChildren();
     routingIpadList.replaceChildren();
     routingWires.replaceChildren();
@@ -3896,6 +4133,52 @@
     if (event.target.closest(".sync-picker")) return;
     syncPickerOptions.classList.add("hidden");
     syncPickerTrigger.setAttribute("aria-expanded", "false");
+  });
+  addAlgorithmButton.addEventListener("click", () => {
+    if (!state.transportOnline || !state.liveIdentity) {
+      showToast("Connect and read the NT before adding an algorithm");
+      return;
+    }
+    state.pendingAlgorithm = null;
+    algorithmBrowserSearch.value = "";
+    state.algorithmBrowserFilter = "all";
+    renderAlgorithmBrowser();
+    algorithmBrowser.showModal();
+    algorithmBrowserSearch.focus();
+  });
+  closeAlgorithmBrowser.addEventListener("click", closeAlgorithmBrowserDialog);
+  algorithmBrowser.addEventListener("close", () => {
+    state.pendingAlgorithm = null;
+  });
+  algorithmBrowserSearch.addEventListener("input", renderAlgorithmBrowser);
+  $$("[data-algorithm-filter]").forEach(button => button.addEventListener("click", () => {
+    state.algorithmBrowserFilter = button.dataset.algorithmFilter;
+    renderAlgorithmBrowser();
+  }));
+  algorithmBrowserList.addEventListener("click", event => {
+    const load = event.target.closest("[data-load-plugin]");
+    const item = event.target.closest("[data-guid-key]");
+    if (!item) return;
+    const algorithm = state.liveIdentity?.algorithms?.find(entry => entry.guidKey === item.dataset.guidKey);
+    if (!algorithm) return;
+    if (load) {
+      event.stopPropagation();
+      loadPluginFromBrowser(algorithm);
+      return;
+    }
+    if (algorithm.isPlugin && !algorithm.isLoaded) {
+      showToast("Load this plug-in before adding it");
+      return;
+    }
+    state.pendingAlgorithm = algorithm;
+    renderAlgorithmBrowser();
+  });
+  algorithmBrowserPlacementActions.addEventListener("click", async event => {
+    const action = event.target.closest("[data-algorithm-placement]");
+    if (!action || !state.pendingAlgorithm) return;
+    const algorithm = state.pendingAlgorithm;
+    const added = await addLiveAlgorithm(algorithm, action.dataset.algorithmPlacement);
+    if (added) closeAlgorithmBrowserDialog();
   });
   undoEdit.addEventListener("click", () => stepEditHistory("undo"));
   redoEdit.addEventListener("click", () => stepEditHistory("redo"));

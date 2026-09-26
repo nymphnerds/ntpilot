@@ -43,6 +43,9 @@ function encodeRoutingMask(value) {
 const input = { id: "in", name: "disting NT MIDI IN", onmidimessage: null };
 let saveCommand = null;
 let moveCommand = null;
+let addCommand = null;
+let loadPluginCommand = null;
+let removeCommand = null;
 const output = {
   id: "out",
   name: "disting NT MIDI OUT",
@@ -53,6 +56,18 @@ const output = {
     }
     if (bytes[6] === 0x37) {
       moveCommand = [...bytes];
+      return;
+    }
+    if (bytes[6] === 0x32) {
+      addCommand = [...bytes];
+      return;
+    }
+    if (bytes[6] === 0x38) {
+      loadPluginCommand = [...bytes];
+      return;
+    }
+    if (bytes[6] === 0x33) {
+      removeCommand = [...bytes];
       return;
     }
     let reply = replies.get(bytes[6]);
@@ -227,8 +242,8 @@ global.navigator = { requestMIDIAccess: async options => {
     outputName: output.name,
     sysexId: 0,
     algorithms: [
-      { index: 0, guid: [1, 2, 3, 4], guidKey: "01020304", name: "Clock", factoryName: "Clock", isPlugin: false, isLoaded: true, filename: "" },
-      { index: 1, guid: [5, 6, 7, 8], guidKey: "05060708", name: "KickSnare", factoryName: "Custom plug-in", isPlugin: true, isLoaded: true, filename: "KickSnare.lua" }
+      { index: 0, guid: [1, 2, 3, 4], guidKey: "01020304", name: "Clock", factoryName: "Clock", isPlugin: false, isLoaded: true, filename: "", specifications: [] },
+      { index: 1, guid: [5, 6, 7, 8], guidKey: "05060708", name: "KickSnare", factoryName: "Custom plug-in", isPlugin: true, isLoaded: true, filename: "KickSnare.lua", specifications: [] }
     ],
     slots: [
       { index: 0, guid: [1, 2, 3, 4], guidKey: "01020304", name: "Master Clocks", algorithmName: "Clock", algorithmFactoryName: "Clock", isPlugin: false, pluginFilename: null, bypassed: false },
@@ -299,6 +314,12 @@ global.navigator = { requestMIDIAccess: async options => {
   assert.equal(saveCommand[7], 2);
   await transport.moveAlgorithm(1, 0);
   assert.deepEqual(moveCommand.slice(6, 9), [0x37, 1, 0]);
+  transport.addAlgorithm({ guid: algorithms[0].guid, specifications: [{ defaultValue: -1 }, { defaultValue: 4 }] });
+  assert.deepEqual(addCommand.slice(6, -1), [0x32, 1, 2, 3, 4, 3, 127, 127, 0, 0, 4, 0, 0, 0]);
+  transport.loadPlugin({ guid: algorithms[1].guid, isPlugin: true });
+  assert.deepEqual(loadPluginCommand.slice(6, 11), [0x38, 5, 6, 7, 8]);
+  transport.removeAlgorithm(1);
+  assert.deepEqual(removeCommand.slice(6, 8), [0x33, 1]);
   const routing = await transport.readRoutingSnapshot(await transport.readSnapshot());
   assert.equal(routing.slots.length, 2);
   assert.equal(routing.slots[0].outputModeStatus, "fixed");
