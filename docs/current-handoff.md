@@ -44,7 +44,7 @@ Do not claim zero regression risk. Keep every stage testable and reversible, do 
 
 ## Second major missing system: add and manage algorithms/plug-ins
 
-NT Pilot can now browse live factory algorithms and installed plug-ins, load an installed plug-in, add it before/after/end of the selected slot, and—when all ten slots are occupied—replace the selected slot through a two-step destructive confirmation. Each mutation is read back from the NT before the UI accepts it. Replacement necessarily clears Undo/Redo for now because the original algorithm's non-default specification values cannot yet be restored safely.
+NT Pilot can now browse live factory algorithms and installed plug-ins, load an installed plug-in, then add it before, after or at the end of the selected slot. The selected slot is only an insertion anchor: it is never implicitly or explicitly replaced. A full ten-slot preset instead explains that a separate future remove/manage flow is required to free a slot. Each add mutation is read back from the NT before the UI accepts it.
 
 Required user workflow:
 
@@ -197,10 +197,10 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-237`
+- `styles.css?v=20260926-238`
 - `web-midi-transport.js?v=20260926-45`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-171`
+- `app.js?v=20260926-172`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

@@ -164,7 +164,6 @@
     midiCounts: { all: 0, channel: 0, sysex: 0 },
     algorithmBrowserFilter: "all",
     pendingAlgorithm: null,
-    pendingSlotReplacement: null,
     slotMutationBusy: false,
   };
 
@@ -3307,7 +3306,6 @@
   function closeAlgorithmBrowserDialog() {
     if (algorithmBrowser.open) algorithmBrowser.close();
     state.pendingAlgorithm = null;
-    state.pendingSlotReplacement = null;
     algorithmBrowserSearch.value = "";
   }
 
@@ -3316,10 +3314,7 @@
     const slot = selectedLiveSlot();
     const count = state.liveIdentity?.slots?.length || 0;
     if (!algorithm) return { kicker: "Choose an algorithm", detail: "Select an algorithm to choose where it goes." };
-    if (count >= 10) {
-      if (state.pendingSlotReplacement) return { kicker: `Replace ${slot?.name || "selected slot"}?`, detail: "This removes its algorithm, routing, mappings and Performance assignments from NT working memory." };
-      return { kicker: "All 10 slots are occupied", detail: `Replace ${slot?.name || "the selected slot"} to add ${algorithm.name}.` };
-    }
+    if (count >= 10) return { kicker: "All 10 slots are occupied", detail: "Free a slot in algorithm management before adding another algorithm." };
     if (!slot) return { kicker: algorithm.name, detail: "This will become slot 1." };
     return { kicker: algorithm.name, detail: `Choose where to add it around ${slot.name}.` };
   }
@@ -3337,30 +3332,7 @@
     const algorithm = state.pendingAlgorithm;
     const slot = selectedLiveSlot();
     const count = state.liveIdentity?.slots?.length || 0;
-    if (!algorithm || state.slotMutationBusy) return;
-    if (count >= 10) {
-      const replacement = state.pendingSlotReplacement;
-      if (!replacement) {
-        const replace = document.createElement("button");
-        replace.type = "button";
-        replace.className = "primary danger";
-        replace.dataset.algorithmReplaceStart = "true";
-        replace.textContent = "Replace selected";
-        algorithmBrowserPlacementActions.appendChild(replace);
-      } else {
-        const cancel = document.createElement("button");
-        cancel.type = "button";
-        cancel.dataset.algorithmReplaceCancel = "true";
-        cancel.textContent = "Cancel";
-        const confirm = document.createElement("button");
-        confirm.type = "button";
-        confirm.className = "primary danger";
-        confirm.dataset.algorithmReplaceConfirm = "true";
-        confirm.textContent = `Replace slot ${replacement.targetSlot + 1}`;
-        algorithmBrowserPlacementActions.append(cancel, confirm);
-      }
-      return;
-    }
+    if (!algorithm || count >= 10 || state.slotMutationBusy) return;
     const actions = slot
       ? [["before", "Add before"], ["after", "Add after"], ["end", "Add at end"]]
       : [["end", "Add first algorithm"]];
@@ -3512,61 +3484,6 @@
     } finally {
       state.slotMutationBusy = false;
       addAlgorithmButton.disabled = !state.transportOnline;
-    }
-  }
-
-  async function replaceLiveAlgorithm(algorithm, targetSlot) {
-    if (!state.ntTransport || !state.transportOnline || state.slotMutationBusy) return false;
-    const existing = state.liveIdentity?.slots?.[targetSlot];
-    if (!existing) return false;
-    const previousCount = state.liveIdentity.slots.length;
-    const appendedSlot = previousCount - 1;
-    const pendingPoll = stopLivePolling();
-    state.slotMutationBusy = true;
-    renderAlgorithmBrowserPlacement();
-    addAlgorithmButton.disabled = true;
-    try {
-      if (pendingPoll) await pendingPoll.catch(() => {});
-      await state.parameterReadQueue.catch(() => {});
-      state.ntTransport.removeAlgorithm(targetSlot);
-      await new Promise(resolve => setTimeout(resolve, 140));
-      let verified = await state.ntTransport.readSnapshot();
-      if (verified.slots.length !== previousCount - 1) throw new Error("The NT did not remove the selected algorithm.");
-      state.ntTransport.addAlgorithm(algorithm);
-      await new Promise(resolve => setTimeout(resolve, 150));
-      verified = await state.ntTransport.readSnapshot();
-      if (verified.slots.length !== previousCount || verified.slots.at(-1)?.guidKey !== algorithm.guidKey) {
-        throw new Error("The replacement algorithm did not appear after the NT add command.");
-      }
-      if (targetSlot !== appendedSlot) {
-        await state.ntTransport.moveAlgorithm(appendedSlot, targetSlot);
-        await new Promise(resolve => setTimeout(resolve, 100));
-        verified = await state.ntTransport.readSnapshot();
-      }
-      if (verified.slots[targetSlot]?.guidKey !== algorithm.guidKey) throw new Error("The NT did not place the replacement at the selected slot.");
-      state.liveIdentity = verified;
-      state.performanceItems = [];
-      state.performanceEntries.clear();
-      state.undoHistory.length = 0;
-      state.redoHistory.length = 0;
-      updateHistoryControls();
-      showLiveIdentity(verified);
-      const replacement = $(`.slot[data-index="${targetSlot}"]`, slotList);
-      if (replacement) displaySlot(replacement);
-      if (state.liveRouting || state.view === "routing") await loadLiveRouting({ preserveView: true });
-      markWorkingEdit();
-      showToast(`Replaced ${existing.name} with ${algorithm.name} and verified from the NT`);
-      return true;
-    } catch (error) {
-      showToast(`Replacement did not complete · ${error.message}`);
-      try { await refreshIdentityAfterSlotMutation({ selectSlot: targetSlot }); } catch (_) {}
-      return false;
-    } finally {
-      state.slotMutationBusy = false;
-      state.pendingSlotReplacement = null;
-      addAlgorithmButton.disabled = !state.transportOnline;
-      renderAlgorithmBrowserPlacement();
-      if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
     }
   }
 
@@ -4231,7 +4148,6 @@
   closeAlgorithmBrowser.addEventListener("click", closeAlgorithmBrowserDialog);
   algorithmBrowser.addEventListener("close", () => {
     state.pendingAlgorithm = null;
-    state.pendingSlotReplacement = null;
   });
   algorithmBrowserSearch.addEventListener("input", renderAlgorithmBrowser);
   $$("[data-algorithm-filter]").forEach(button => button.addEventListener("click", () => {
@@ -4252,29 +4168,9 @@
       return;
     }
     state.pendingAlgorithm = algorithm;
-    state.pendingSlotReplacement = null;
     renderAlgorithmBrowser();
   });
   algorithmBrowserPlacementActions.addEventListener("click", async event => {
-    if (event.target.closest("[data-algorithm-replace-start]")) {
-      const selected = selectedLiveSlot();
-      if (!state.pendingAlgorithm || !selected) return;
-      state.pendingSlotReplacement = { algorithm: state.pendingAlgorithm, targetSlot: selected.index };
-      renderAlgorithmBrowserPlacement();
-      return;
-    }
-    if (event.target.closest("[data-algorithm-replace-cancel]")) {
-      state.pendingSlotReplacement = null;
-      renderAlgorithmBrowserPlacement();
-      return;
-    }
-    if (event.target.closest("[data-algorithm-replace-confirm]")) {
-      const replacement = state.pendingSlotReplacement;
-      if (!replacement) return;
-      const replaced = await replaceLiveAlgorithm(replacement.algorithm, replacement.targetSlot);
-      if (replaced) closeAlgorithmBrowserDialog();
-      return;
-    }
     const action = event.target.closest("[data-algorithm-placement]");
     if (!action || !state.pendingAlgorithm) return;
     const algorithm = state.pendingAlgorithm;
