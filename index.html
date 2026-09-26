@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-247">
+  <link rel="stylesheet" href="styles.css?v=20260926-248">
 </head>
 <body>
   <main class="stage">
@@ -32,6 +32,10 @@
           <button class="nav-item" data-view="control">
             <svg viewBox="0 0 24 24"><path d="M5 5v14M12 5v14M19 5v14M3 9h4m3 6h4m3-7h4"/></svg>
             <span>Performance</span>
+          </button>
+          <button class="nav-item" data-view="presets">
+            <svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3V7Zm0 0V5h7l2 2M3 10h18"/></svg>
+            <span>Presets</span>
           </button>
           <button class="nav-item" data-view="assistant">
             <svg viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 5h8m-8 4h5"/></svg>
@@ -363,6 +367,28 @@
             </div>
           </section>
 
+          <section class="view presets-view" data-panel="presets" aria-labelledby="presets-heading">
+            <div class="view-heading presets-heading">
+              <div><p class="eyebrow">disting NT microSD</p><h1 id="presets-heading">Presets</h1></div>
+              <button class="secondary-button" id="refresh-presets" type="button">Refresh library</button>
+            </div>
+            <div class="preset-library" id="preset-library">
+              <div class="preset-library-topbar">
+                <button class="preset-up-button" id="preset-up" type="button" disabled aria-label="Go to parent folder">↑</button>
+                <div class="preset-breadcrumbs" id="preset-breadcrumbs" aria-label="Preset folder"></div>
+              </div>
+              <div class="preset-library-body">
+                <div class="preset-file-list" id="preset-file-list" aria-live="polite"><p class="preset-library-empty">Connect to browse presets saved on your NT's microSD card.</p></div>
+                <aside class="preset-inspector" id="preset-inspector">
+                  <span class="preset-inspector-kicker">Select a preset</span>
+                  <h2>Preset library</h2>
+                  <p>Choose a .json preset from the NT's microSD card. Loading replaces the working preset; appending adds its algorithms after the current last slot.</p>
+                  <div class="preset-inspector-actions"><button class="secondary-button" id="append-preset" type="button" disabled>Append to preset</button><button class="primary-button" id="load-preset" type="button" disabled>Load preset</button></div>
+                </aside>
+              </div>
+            </div>
+          </section>
+
           <section class="view assistant-view" data-panel="assistant" aria-labelledby="assistant-heading">
             <div class="assistant-layout">
               <div class="conversation">
@@ -552,8 +578,17 @@
     </footer>
   </dialog>
 
-  <script src="web-midi-transport.js?v=20260926-48"></script>
+  <dialog class="preset-load-dialog" id="preset-load-dialog" aria-labelledby="preset-load-title">
+    <header>
+      <div><span id="preset-load-kicker">Load preset</span><h2 id="preset-load-title">Replace working preset?</h2></div>
+      <button id="close-preset-load" type="button" aria-label="Close preset confirmation">×</button>
+    </header>
+    <div class="preset-load-copy"><strong id="preset-load-name"></strong><p id="preset-load-detail"></p><p class="preset-load-warning" id="preset-load-warning"></p></div>
+    <footer><button id="cancel-preset-load" type="button">Cancel</button><button id="confirm-preset-load" type="button">Load preset</button></footer>
+  </dialog>
+
+  <script src="web-midi-transport.js?v=20260926-49"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-183"></script>
+  <script src="app.js?v=20260926-185"></script>
 </body>
 </html>

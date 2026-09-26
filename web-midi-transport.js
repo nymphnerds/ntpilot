@@ -35,6 +35,43 @@
     return bytes.reduce((value, byte) => (value * 128) + (byte & 0x7F), 0);
   }
 
+  function sdPathBytes(path) {
+    if (typeof path !== "string" || !path.startsWith("/") || path.includes("\0")) {
+      throw new Error("An absolute NT SD-card path is required.");
+    }
+    const bytes = [...path].map(character => character.charCodeAt(0));
+    if (bytes.some(byte => byte < 0x20 || byte > 0x7E)) throw new Error("NT SD-card paths must use printable ASCII characters.");
+    return bytes;
+  }
+
+  function sdChecksum(payload) {
+    return (-payload.reduce((sum, byte) => sum + (byte & 0x7F), 0)) & 0x7F;
+  }
+
+  function parseSDDirectoryEntries(payload) {
+    if ((payload[0] ?? 1) !== 0) {
+      throw new Error(decodeText(payload.slice(1)) || "The NT could not read that SD-card folder.");
+    }
+    if (payload[1] !== 1) throw new Error("The NT returned an unexpected SD-card response.");
+    const data = payload.slice(2);
+    const entries = [];
+    for (let offset = 0; offset < data.length;) {
+      if (data.length - offset < 18) break;
+      const attributes = data[offset++];
+      const date = decodeUnsigned21(data.slice(offset, offset + 3)); offset += 3;
+      const time = decodeUnsigned21(data.slice(offset, offset + 3)); offset += 3;
+      let size = 0;
+      for (let index = 0; index < 10; index += 1) size = (size * 128) + (data[offset++] & 0x7F);
+      const end = data.indexOf(0, offset);
+      if (end < 0) throw new Error("The NT returned an incomplete SD-card directory entry.");
+      const name = decodeText(data.slice(offset, end));
+      offset = end + 1;
+      if (!name) break;
+      entries.push({ name, attributes, isDirectory: Boolean(attributes & 0x10), size, date, time });
+    }
+    return entries;
+  }
+
   function guidKey(bytes) {
     return bytes.map(value => value.toString(16).padStart(2, "0")).join("");
   }
@@ -671,6 +708,17 @@
       // 0 asks on the module, 1 generates a new file, 2 overwrites the loaded file.
       // The NT protocol provides no acknowledgement for this command.
       this.send(0x36, [option]);
+    }
+
+    loadPreset(path, { append = false } = {}) {
+      this.send(0x34, [append ? 1 : 0, ...sdPathBytes(path), 0]);
+    }
+
+    async readSDDirectory(path = "/") {
+      const operation = 1;
+      const data = [operation, ...sdPathBytes(path)];
+      const payload = await this.request(0x7A, 0x7A, [...data, sdChecksum(data)], null, 5000);
+      return parseSDDirectoryEntries(payload);
     }
 
     addAlgorithm(algorithm) {

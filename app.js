@@ -123,6 +123,20 @@
   const algorithmRemoveName = $("#algorithm-remove-name");
   const cancelAlgorithmRemove = $("#cancel-algorithm-remove");
   const confirmAlgorithmRemove = $("#confirm-algorithm-remove");
+  const refreshPresets = $("#refresh-presets");
+  const presetUp = $("#preset-up");
+  const presetBreadcrumbs = $("#preset-breadcrumbs");
+  const presetFileList = $("#preset-file-list");
+  const presetInspector = $("#preset-inspector");
+  const presetLoadDialog = $("#preset-load-dialog");
+  const closePresetLoad = $("#close-preset-load");
+  const presetLoadKicker = $("#preset-load-kicker");
+  const presetLoadTitle = $("#preset-load-title");
+  const presetLoadName = $("#preset-load-name");
+  const presetLoadDetail = $("#preset-load-detail");
+  const presetLoadWarning = $("#preset-load-warning");
+  const cancelPresetLoad = $("#cancel-preset-load");
+  const confirmPresetLoad = $("#confirm-preset-load");
 
   let rebootRecovery = null;
   try {
@@ -196,6 +210,11 @@
     pendingPluginLoad: null,
     slotMutationBusy: false,
     memoryReadTail: Promise.resolve(),
+    presetPath: "/",
+    presetEntries: [],
+    selectedPresetEntry: null,
+    presetBrowserBusy: false,
+    pendingPresetLoad: null,
   };
   let algorithmMemoryCheckToken = 0;
   let algorithmMemoryCheckTimer = null;
@@ -2522,6 +2541,7 @@
       routing: "Routing",
       mapping: "MIDI mapping",
       control: "Performance",
+      presets: "Presets",
       assistant: "Assistant",
       status: "Status & setup"
     };
@@ -2541,6 +2561,225 @@
     if (view === "control") {
       renderPerformanceControls();
       if (state.ntTransport && state.transportOnline && !state.performanceItems.length) loadPerformancePage();
+    }
+    if (view === "presets") loadPresetDirectory();
+  }
+
+  function presetPathJoin(path, name) {
+    return `${path.endsWith("/") ? path : `${path}/`}${name}`;
+  }
+
+  function presetParentPath(path) {
+    if (path === "/") return "/";
+    const pieces = path.split("/").filter(Boolean);
+    pieces.pop();
+    return pieces.length ? `/${pieces.join("/")}` : "/";
+  }
+
+  function formatPresetSize(bytes) {
+    if (!Number.isFinite(bytes)) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function renderPresetBreadcrumbs() {
+    presetBreadcrumbs.replaceChildren();
+    const root = document.createElement("button");
+    root.type = "button";
+    root.textContent = "SD card";
+    root.dataset.presetPath = "/";
+    presetBreadcrumbs.append(root);
+    let current = "";
+    state.presetPath.split("/").filter(Boolean).forEach(part => {
+      const separator = document.createElement("span");
+      separator.textContent = "/";
+      const crumb = document.createElement("button");
+      crumb.type = "button";
+      current += `/${part}`;
+      crumb.dataset.presetPath = current;
+      crumb.textContent = part;
+      presetBreadcrumbs.append(separator, crumb);
+    });
+    presetUp.disabled = state.presetPath === "/" || state.presetBrowserBusy;
+  }
+
+  function renderPresetInspector() {
+    const selected = state.selectedPresetEntry;
+    presetInspector.replaceChildren();
+    const kicker = document.createElement("span");
+    kicker.className = "preset-inspector-kicker";
+    const title = document.createElement("h2");
+    const copy = document.createElement("p");
+    const actions = document.createElement("div");
+    actions.className = "preset-inspector-actions";
+    const append = document.createElement("button");
+    append.type = "button";
+    append.className = "secondary-button";
+    append.id = "append-preset";
+    append.textContent = "Append to preset";
+    const load = document.createElement("button");
+    load.type = "button";
+    load.className = "primary-button";
+    load.id = "load-preset";
+    load.textContent = "Load preset";
+    if (!selected) {
+      kicker.textContent = "Select a preset";
+      title.textContent = "Preset library";
+      copy.textContent = "Choose a .json preset from the NT's microSD card. Loading replaces the working preset; appending adds its algorithms after the current last slot.";
+      append.disabled = true;
+      load.disabled = true;
+    } else {
+      kicker.textContent = "Selected preset";
+      title.textContent = selected.name;
+      copy.textContent = `${formatPresetSize(selected.size)} · ${state.presetPath}. Load replaces the complete working preset. Append keeps it and adds this preset's algorithms at the end.`;
+      append.disabled = state.presetBrowserBusy || !state.transportOnline;
+      load.disabled = state.presetBrowserBusy || !state.transportOnline;
+      append.addEventListener("click", () => openPresetLoadDialog(true));
+      load.addEventListener("click", () => openPresetLoadDialog(false));
+    }
+    actions.append(append, load);
+    presetInspector.append(kicker, title, copy, actions);
+  }
+
+  function renderPresetLibrary() {
+    renderPresetBreadcrumbs();
+    presetFileList.replaceChildren();
+    if (state.presetBrowserBusy) {
+      const loading = document.createElement("p");
+      loading.className = "preset-library-empty";
+      loading.textContent = "Reading this folder from the NT…";
+      presetFileList.append(loading);
+    } else if (!state.transportOnline) {
+      const empty = document.createElement("p");
+      empty.className = "preset-library-empty";
+      empty.textContent = "Connect to browse presets saved on your NT's microSD card.";
+      presetFileList.append(empty);
+    } else if (!state.presetEntries.length) {
+      const empty = document.createElement("p");
+      empty.className = "preset-library-empty";
+      empty.textContent = "This folder is empty.";
+      presetFileList.append(empty);
+    } else {
+      const entries = [...state.presetEntries].sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name));
+      entries.forEach(entry => {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = `preset-file-row${state.selectedPresetEntry === entry ? " selected" : ""}${entry.isDirectory ? " directory" : ""}`;
+        const icon = document.createElement("span");
+        icon.className = "preset-file-icon";
+        icon.textContent = entry.isDirectory ? "▰" : "{}";
+        const text = document.createElement("span");
+        const name = document.createElement("strong");
+        name.textContent = entry.name;
+        const meta = document.createElement("small");
+        meta.textContent = entry.isDirectory ? "Folder" : `${formatPresetSize(entry.size)}${/\.json$/i.test(entry.name) ? " · Preset" : " · File"}`;
+        text.append(name, meta);
+        const affordance = document.createElement("span");
+        affordance.className = "preset-file-affordance";
+        affordance.textContent = entry.isDirectory ? "Open ›" : /\.json$/i.test(entry.name) ? "Select" : "";
+        row.append(icon, text, affordance);
+        row.addEventListener("click", () => {
+          if (entry.isDirectory) {
+            state.presetPath = presetPathJoin(state.presetPath, entry.name);
+            state.selectedPresetEntry = null;
+            loadPresetDirectory();
+          } else if (/\.json$/i.test(entry.name)) {
+            state.selectedPresetEntry = entry;
+            renderPresetLibrary();
+          } else {
+            showToast("NT preset files use the .json extension.", "guidance");
+          }
+        });
+        presetFileList.append(row);
+      });
+    }
+    renderPresetInspector();
+  }
+
+  async function loadPresetDirectory(path = state.presetPath) {
+    if (state.presetBrowserBusy) return;
+    if (!state.ntTransport || !state.transportOnline) {
+      renderPresetLibrary();
+      return;
+    }
+    state.presetPath = path;
+    state.presetBrowserBusy = true;
+    renderPresetLibrary();
+    try {
+      state.presetEntries = await state.ntTransport.readSDDirectory(path);
+    } catch (error) {
+      state.presetEntries = [];
+      showToast(`Could not read ${path} · ${error.message}`);
+    } finally {
+      state.presetBrowserBusy = false;
+      renderPresetLibrary();
+    }
+  }
+
+  function openPresetLoadDialog(append) {
+    const entry = state.selectedPresetEntry;
+    if (!entry || state.presetBrowserBusy) return;
+    state.pendingPresetLoad = { path: presetPathJoin(state.presetPath, entry.name), append, name: entry.name };
+    presetLoadKicker.textContent = append ? "Append preset" : "Load preset";
+    presetLoadTitle.textContent = append ? "Append to working preset?" : "Replace working preset?";
+    presetLoadName.textContent = entry.name;
+    presetLoadDetail.textContent = append
+      ? "Its algorithms will be added after the current last algorithm. The NT will reject the operation if the combined preset exceeds its slot or memory limits."
+      : "This replaces the complete working preset: algorithms, parameter values, routing, mappings and Performance assignments.";
+    presetLoadWarning.textContent = append
+      ? "Undo history will be cleared because the NT has no reversible preset-append command. NT Pilot will reread the preset before it returns control."
+      : "Any unsaved working changes will be lost. Undo history will be cleared. NT Pilot will reread the loaded preset before it returns control.";
+    confirmPresetLoad.textContent = append ? "Append preset" : "Load preset";
+    presetLoadDialog.showModal();
+  }
+
+  async function applyPresetLoad() {
+    const pending = state.pendingPresetLoad;
+    if (!pending || !state.ntTransport || !state.transportOnline || state.presetBrowserBusy) return;
+    const priorSlotCount = state.liveIdentity?.slots?.length ?? 0;
+    const pendingPoll = stopLivePolling();
+    state.presetBrowserBusy = true;
+    confirmPresetLoad.disabled = true;
+    try {
+      if (pendingPoll) await pendingPoll.catch(() => {});
+      await state.parameterReadQueue.catch(() => {});
+      state.ntTransport.loadPreset(pending.path, { append: pending.append });
+      await new Promise(resolve => setTimeout(resolve, 450));
+      let verified = null;
+      let lastError = null;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        try {
+          verified = await state.ntTransport.readSnapshot();
+          if (!pending.append || verified.slots.length >= priorSlotCount) break;
+        } catch (error) { lastError = error; }
+        await new Promise(resolve => setTimeout(resolve, 350));
+      }
+      if (!verified) throw lastError || new Error("The NT did not return a readable preset after loading.");
+      if (pending.append && verified.slots.length < priorSlotCount) throw new Error("The NT did not confirm that the preset was appended.");
+      state.liveIdentity = verified;
+      state.liveRouting = null;
+      state.performanceItems = [];
+      state.performanceEntries.clear();
+      state.undoHistory.length = 0;
+      state.redoHistory.length = 0;
+      state.hasUnsavedWorkingEdits = pending.append;
+      state.selectedSlotIndex = verified.slots.length ? (pending.append ? priorSlotCount : 0) : null;
+      showLiveIdentity(verified);
+      const next = state.selectedSlotIndex == null ? null : $(`.slot[data-index="${state.selectedSlotIndex}"]`, slotList);
+      if (next) displaySlot(next);
+      updateHistoryControls();
+      updateWorkingState();
+      presetLoadDialog.close();
+      showToast(`${pending.append ? "Appended" : "Loaded"} ${pending.name} and verified it from the NT`);
+    } catch (error) {
+      showToast(`Could not ${pending.append ? "append" : "load"} ${pending.name} · ${error.message}`);
+    } finally {
+      state.presetBrowserBusy = false;
+      confirmPresetLoad.disabled = false;
+      state.pendingPresetLoad = null;
+      renderPresetLibrary();
+      if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
     }
   }
 
@@ -4165,6 +4404,30 @@
   }
 
   $$("[data-view]").forEach(button => button.addEventListener("click", () => setView(button.dataset.view)));
+  refreshPresets.addEventListener("click", () => loadPresetDirectory());
+  presetUp.addEventListener("click", () => {
+    if (state.presetPath !== "/") {
+      state.presetPath = presetParentPath(state.presetPath);
+      state.selectedPresetEntry = null;
+      loadPresetDirectory();
+    }
+  });
+  presetBreadcrumbs.addEventListener("click", event => {
+    const button = event.target.closest("button[data-preset-path]");
+    if (!button || state.presetBrowserBusy) return;
+    state.presetPath = button.dataset.presetPath;
+    state.selectedPresetEntry = null;
+    loadPresetDirectory();
+  });
+  closePresetLoad.addEventListener("click", () => presetLoadDialog.close());
+  cancelPresetLoad.addEventListener("click", () => presetLoadDialog.close());
+  confirmPresetLoad.addEventListener("click", applyPresetLoad);
+  presetLoadDialog.addEventListener("close", () => {
+    if (!state.presetBrowserBusy) state.pendingPresetLoad = null;
+  });
+  presetLoadDialog.addEventListener("click", event => {
+    if (event.target === presetLoadDialog) presetLoadDialog.close();
+  });
   const openReferenceGuide = () => {
     if (referenceGuide.open) return;
     referenceGuide.showModal();

@@ -40,6 +40,16 @@ function encodeUnsigned35(value) {
   return bytes;
 }
 
+function encodeUnsigned70(value) {
+  const bytes = Array(10).fill(0);
+  let remaining = value;
+  for (let index = bytes.length - 1; index >= 0; index -= 1) {
+    bytes[index] = remaining & 0x7F;
+    remaining = Math.floor(remaining / 128);
+  }
+  return bytes;
+}
+
 function encodeRoutingMask(value) {
   const bytes = [];
   let remaining = BigInt(value);
@@ -56,6 +66,7 @@ let moveCommand = null;
 let addCommand = null;
 let loadPluginCommand = null;
 let removeCommand = null;
+let loadPresetCommand = null;
 const output = {
   id: "out",
   name: "disting NT MIDI OUT",
@@ -78,6 +89,10 @@ const output = {
     }
     if (bytes[6] === 0x33) {
       removeCommand = [...bytes];
+      return;
+    }
+    if (bytes[6] === 0x34) {
+      loadPresetCommand = [...bytes];
       return;
     }
     let reply = replies.get(bytes[6]);
@@ -181,6 +196,14 @@ const output = {
       reply = [...header, 0x61, slot, ...masks.flatMap(encodeRoutingMask), 0xF7];
     }
     if (bytes[6] === 0x62) reply = [...header, 0x62, 48, 37, 10, 20, 0xF7];
+    if (bytes[6] === 0x7A) {
+      assert.equal(bytes[7], 1);
+      const listing = [
+        0x10, 0, 0, 0, 0, 0, 0, ...encodeUnsigned70(0), ...Buffer.from("presets"), 0,
+        0, 0, 0, 0, 0, 0, 0, ...encodeUnsigned70(1536), ...Buffer.from("Live Set.json"), 0
+      ];
+      reply = [...header, 0x7A, 0, 1, ...listing, 0xF7];
+    }
     assert.ok(reply, `missing reply fixture for 0x${bytes[6].toString(16)}`);
     queueMicrotask(() => input.onmidimessage({ data: Uint8Array.from(reply) }));
   }
@@ -350,6 +373,11 @@ global.navigator = { requestMIDIAccess: async options => {
   assert.deepEqual(loadPluginCommand.slice(6, 11), [0x38, 5, 6, 7, 8]);
   transport.removeAlgorithm(1);
   assert.deepEqual(removeCommand.slice(6, 8), [0x33, 1]);
+  transport.loadPreset("/presets/Live Set.json", { append: true });
+  assert.deepEqual(loadPresetCommand.slice(6, 8), [0x34, 1]);
+  assert.equal(loadPresetCommand.at(-2), 0);
+  const directory = await transport.readSDDirectory("/presets");
+  assert.deepEqual(directory.map(entry => [entry.name, entry.isDirectory, entry.size]), [["presets", true, 0], ["Live Set.json", false, 1536]]);
   const routing = await transport.readRoutingSnapshot(await transport.readSnapshot());
   assert.equal(routing.slots.length, 2);
   assert.equal(routing.slots[0].outputModeStatus, "fixed");
