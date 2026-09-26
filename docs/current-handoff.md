@@ -4,23 +4,24 @@ Last updated: 26 September 2026
 
 ## Tomorrow: start here
 
-- Current pushed commit: `b042f13` (`Use routing assignment flow directly from editor`).
-- The user stopped for the night immediately after requesting an architecture audit. Do **not** resume feature work or apply another routing UI patch first.
-- The immediate bug was that Editor had acquired its own routing-popup adapter. It performed a full routing scan before showing a reduced popup, making iOS slow and inconsistent with Routing.
-- Commit `b042f13` removed that adapter. Editor now creates a routing selection and hands it directly to the same `assignRoutingPort()` path used by Routing.
-- The user has not yet hardware-tested `b042f13`. First confirm on the iPad that an Editor bus choice opens promptly and presents the same appropriate decision UI as the Routing page.
-- The user explicitly wants structural correction rather than more band-aids. Discuss and perform the refactor incrementally, with behaviour-locking tests first and small reversible commits.
-- During the audit no application files were changed or pushed. This handoff is the only subsequent local edit.
+- Current UI milestone: pushed commit `fd738fa` (`Add live CPU risk spectrum`).
+- Standalone-only recovery snapshot: `/home/nymph/DistingNT/ntpilot-standalone-snapshot-ui-milestone-20260926-120311` at UI commit `fd738fa`, including this refreshed handoff and no VS Code extension files.
+- **Hard scope boundary:** the VS Code extension is abandoned/out of scope. Do not inspect, edit, sync, port to, test, package or document `vscode-webmidi/**`. Its existing uncommitted files belong to the user and must remain untouched. All future work targets only the standalone browser app.
+- The user has hardware-tested the shared Editor/Routing connection popup, iPad routing list, popup retargeting, immediate verified routing writes, dark mode and reconnect flow. The routing interaction is now substantially usable on the real NT and iPad Web MIDI browser.
+- Recent work removed the blocking full routing scan from the connection transaction. Each parameter write still receives targeted NT readback; the local port updates immediately and a quiet debounced full reconciliation follows.
+- Recent UI polish added bus-aware popup/sidebar colours for Aux, physical input and physical output selections; reliable touch radio choices; calmer severity-aware notifications with adaptive reading time; and independent Audio/Overall CPU colour spectra with larger dots.
+- Do **not** start the algorithm/plug-in lifecycle feature by adding UI directly to `app.js`. The user explicitly wants an architecture audit and canonical systems rather than another parallel implementation.
+- Next session should begin with behaviour-locking routing tests and the incremental controller extraction below. Preserve the current visuals while restructuring.
 
 ### Audit findings
 
 1. Routing still has two transaction implementations: `finishRoutingConnection()` and `assignRoutingPort()`. Both perform mode writes, route removal, rollback, history, full refresh, polling restart and notifications. They must converge on one transaction executor.
-2. A single routing assignment currently calls `loadLiveRouting()`, which rereads all slots and output-mode metadata. This is a major source of iOS latency. Use targeted local/readback updates where correctness permits; reserve a complete snapshot rebuild for entry, explicit refresh and recovery.
+2. The routing latency problem is mitigated, not architecturally finished. Assignments now update the verified parameter locally and debounce a full reconciliation, but snapshot mutation, targeted DOM updates and reconciliation policy still live inside UI-heavy `app.js` functions.
 3. Editor, Performance, routing, bypass and history have separate parameter-write pipelines. They share `state.parameterWriteQueue`, but duplicate mutation, error, history and UI synchronization policy.
 4. `state.liveRouting` and `state.routingSnapshot` are competing owners of effectively the same routing model. Consolidate to one canonical routing state.
 5. Some routing decisions are reconstructed from DOM elements. Routing selections and port metadata must be model objects independent of whether desktop graph or iPad list has rendered.
 6. Popup rendering, connection policy, NT mutation, rollback and notification copy are interleaved. The popup should render a pure connection plan; one controller should validate and execute that plan.
-7. `app.js` is approximately 3,900 lines and contains unrelated Editor, Routing, Performance, history, polling, reconnect and layout behaviour.
+7. `app.js` is now over 4,100 lines and contains unrelated Editor, Routing, Performance, history, polling, reconnect, notification and layout behaviour.
 8. There is no routing transaction test suite. Existing automated coverage is primarily the Web MIDI transport.
 
 ### Safe refactor order
@@ -72,8 +73,9 @@ Before implementation, reread the latest official disting NT manual and API/SysE
 - Browser target: desktop Chrome at `http://localhost:8766`
 - Hardware target: Expert Sleepers disting NT over Web MIDI/SysEx
 - Recovery snapshot made before the routing-truth work: `/home/nymph/DistingNT/ntpilot-snapshot-before-routing-truth-20260925-162514`
+- Current standalone-only UI milestone snapshot: `/home/nymph/DistingNT/ntpilot-standalone-snapshot-ui-milestone-20260926-120311`
 
-This checkout is in the `NymphsCore_Lite` WSL development environment. The standalone browser build is the active target. Do not copy these changes into the VS Code bridge until the user explicitly resumes that work.
+This checkout is in the `NymphsCore_Lite` WSL development environment. The standalone browser build is the only active target. The VS Code bridge is permanently out of scope unless the user explicitly reverses that decision in a future request.
 
 ## Product direction
 
@@ -123,7 +125,9 @@ The central model is the NT bus universe:
 - The entire Knowledge card opens a built-in, searchable, text-first NT wiki.
 - The wiki condenses the official firmware 1.18 manual into 15 operational sections with a contents column and page-specific links back to the official PDF.
 - The header uses the supplied transparent NT Pilot emblem from `assets/nt-pilot-emblem.png`.
-- The default interface accent is neutral mint. Selecting an Aux chip previews that bus colour across the interface, and a confirmed Aux assignment retains it. Selecting a port alone does not imply an Aux colour.
+- The default interface accent is neutral mint. Bus selection previews and retains the semantic bus colour across the sidebar and popup: blue for physical inputs, coral/red for physical outputs and the individual rainbow hue for Aux buses.
+- Routine notifications are compact, calm pills rather than black technical banners. Guidance follows the current bus accent, genuine errors receive a distinct treatment, common transport failures are translated into useful actions, and display time scales with message length and severity. Raw diagnostic detail remains in the browser console.
+- Audio and Overall CPU values each have a larger dot and matching text colour on a continuous teal-to-red 0–90% spectrum. The built-in wiki reflects the firmware 1.18 guidance to keep total algorithm/audio CPU below about 90%; Overall also includes MicroSD and background work and has no separately documented hard limit.
 
 ## Current Routing behaviour
 
@@ -139,7 +143,8 @@ The central model is the NT bus universe:
 - Add/Replace chips are always visible on output rows. Editable chips are backed by a real NT mode-controller parameter; fixed or unresolved chips are read-only.
 - Output-mode chips explicitly distinguish editable Add/Replace, known fixed mode, disconnected fixed mode, metadata loading and metadata failure. A missing `0x55` association never fabricates an editable Replace option.
 - New assignments are confirmed in a compact popup positioned beside the pointer/touch target. Outputs keep NT Add/Replace visibly separate from “Keep existing”/“Disconnect other routes.” Input confirmation states the old and new sources and makes clear that only that input changes, because Add/Replace does not apply to reads.
-- While a connection confirmation is open, selecting another Aux chip in either Routing or Editor retargets the same pending algorithm port and refreshes the popup; users do not need to cancel and select the port again.
+- While a connection confirmation is open, selecting another Aux or physical bus chip in either Routing or Editor retargets the same pending algorithm port and refreshes the popup; users do not need to cancel and select the port again.
+- Enabled popup choices use explicit touch handling for the iPad Web MIDI browser. Input reassignment hides irrelevant output-mode/route-removal decisions. Add/Replace is enabled only when the NT exposes an authoritative editable mode parameter, while Disconnect other routes is enabled only when other editable outputs target the destination.
 - Routing-mask-only reads are presented as derived routing rather than exposing internal “implicit read” terminology. Standard polysynth gate inputs show their editable Pitch CV count directly on the parent gate row, with automatically consecutive Pitch CV buses indented underneath. Unrecognised derived reads use a safe “Also uses” fallback and remain non-editable.
 - Replace has repeatedly confused users because it sounds like a routing replacement. It is not: no parameter assignment is disconnected. Replace overwrites the signal accumulated on that bus at the algorithm's ordered slot position. Writes from earlier slots remain configured but are inaudible downstream of that Replace; writes from later slots still contribute.
 - The graph makes that signal-order result explicit. A route whose contribution is masked by a later Replace remains present as a faded dashed cable, the effective Replace writer is emphasized, and its native SVG hover text explains the state. A truly disconnected route has no cable. Apply this consistently to physical-output and Aux-bus paths.
@@ -169,8 +174,8 @@ The implementation now follows NT Helper's hardware-truth path:
 3. Query SysEx `0x55` for each marked mode parameter.
 4. Cache `mode parameter -> affected output parameters` for the connected preset shape.
 5. Derive each output chip from the actual mode parameter value (`0 = Add`, `1 = Replace`).
-6. On output-to-Aux assignment, present the choice immediately.
-7. Pause live polling, write the selected mode, write the bus assignment, then rebuild from NT readback.
+6. On output-to-bus assignment, present the choice immediately for both physical outputs and Aux buses.
+7. Pause live polling, write and read back the selected mode and bus assignment, update only the verified local port, then reconcile a complete authoritative snapshot quietly in the background.
 
 Do not restore name-based mode guessing. A critical parser bug was fixed: parameter names are null-terminated and are not limited to 24 characters. The former 24-character cap interpreted long-name bytes as metadata, generated false mode flags, caused many `0x55` timeouts and made Routing extremely slow.
 
@@ -196,7 +201,11 @@ Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 
 ## Verified in this session
 
-- The user supplied a screenshot confirming that the Add/Replace popover now appears for an output connection.
+- The user hardware-tested the unified connection popup from both Routing and Editor, including retargeting an open popup to another bus.
+- The user confirmed that removing the blocking complete post-write scan made connection completion substantially faster.
+- The user confirmed automatic NT reconnection/reload after a hardware reboot works.
+- The user confirmed the iPad routing list, bottom bus dock, dark mode and current styling on the real iPad Web MIDI browser.
+- The user supplied screenshots confirming the Add/Replace popover appears for output connections and that derived Pitch CV routing is understandable in the iPad list.
 - Physical input/output labels now show numbers only; Aux retains `A`.
 - JavaScript syntax checks pass.
 - `web-midi-transport.test.cjs` passes, including SysEx `0x55` parsing.
@@ -210,8 +219,8 @@ Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 2. Assign the same output to an occupied Aux bus in both modes and confirm audible/graph behaviour.
 3. Confirm a controller shared by multiple outputs updates every affected chip.
 4. Confirm Mod-only filtering shows the known modulation route with Input, Output and Aux disabled and Signals enabled.
-5. Reboot the NT while Routing is open and verify automatic recovery without a manual browser refresh.
-6. Compare first-load and post-edit routing load time now that long parameter names parse correctly and `0x55` relationships are cached.
+5. Confirm the new explicit touch radio handling actually changes Add/Replace and Keep/Disconnect choices in the iPad Web MIDI browser.
+6. Test physical-input and physical-output popup accent colours and retargeting after the latest cache-bumped build.
 7. Test USB Audio From Host and USB Audio To Host placement in a blank patch containing those factory algorithms.
 
 ## Known boundaries and risks
@@ -220,7 +229,7 @@ Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 - Output-mode metadata is optional on older firmware. An output without an authoritative `0x55` association must remain fixed/read-only rather than guessed.
 - The routing graph uses the aggregate `0x61` masks for overview cables and individual parameter metadata/values for editable ports. Keep those concepts separate.
 - Routing hydration is intentionally non-blocking, but the single-request transport remains a performance constraint.
-- The standalone and VS Code copies have diverged. Do not mechanically overwrite either copy when bridge work resumes; port reviewed changes deliberately.
+- Ignore the divergent VS Code copy completely. It is not a release target and must not be modified as part of standalone NT Pilot work.
 
 ## Checks
 
@@ -233,4 +242,4 @@ git diff --check
 
 ## Next recommended step
 
-Hardware-test pushed commit `b042f13` first. If its Editor popup is still not identical to Routing, diagnose the single shared path rather than adding an Editor adapter. Then begin the test-first routing consolidation described at the top of this document.
+Begin the test-first routing consolidation described at the top of this document. Lock down current hardware semantics for input reassignment, Add/Replace, Keep/Disconnect, rollback and compound Undo before extracting a canonical `ConnectionIntent`/transaction executor. Once both Editor and Routing use that controller and one routing store, research the latest official SysEx/API contract for algorithm and plug-in discovery plus add/replace/remove, then build the slot lifecycle on the canonical mutation layer rather than directly in either page.
