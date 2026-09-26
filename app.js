@@ -1167,6 +1167,22 @@
     };
     routingConnectionPanel.classList.remove("hidden");
     const panelRect = routingConnectionPanel.getBoundingClientRect();
+    if (state.ipadMode) {
+      const anchorRect = destination.element?.getBoundingClientRect();
+      const anchorX = anchorRect ? anchorRect.left + anchorRect.width / 2 : window.innerWidth / 2;
+      const anchorY = anchorRect ? anchorRect.top : window.innerHeight / 2;
+      const left = Math.min(window.innerWidth - panelRect.width - 12, Math.max(12, anchorX - panelRect.width / 2));
+      const top = anchorY - panelRect.height - 12 >= 12
+        ? anchorY - panelRect.height - 12
+        : Math.min(window.innerHeight - panelRect.height - 12, (anchorRect?.bottom ?? anchorY) + 12);
+      routingConnectionPanel.style.right = "auto";
+      routingConnectionPanel.style.bottom = "auto";
+      routingConnectionPanel.style.left = `${left}px`;
+      routingConnectionPanel.style.top = `${Math.max(12, top)}px`;
+      return;
+    }
+    routingConnectionPanel.style.right = "auto";
+    routingConnectionPanel.style.bottom = "auto";
     const pointer = state.lastRoutingPointer;
     const preferredLeft = pointer
       ? (pointer.x + panelRect.width + 22 <= window.innerWidth ? pointer.x + 12 : pointer.x - panelRect.width - 12)
