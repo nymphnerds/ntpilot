@@ -111,6 +111,7 @@
     interfaceScale: 100,
     ipadMode: false,
     darkMode: false,
+    pilotAccentHue: 164,
     routingCanvasSize: { width: 1180, height: 760 },
     routingSnapshot: null,
     routingSelection: null,
@@ -655,15 +656,27 @@
     return `hsl(${Math.round((auxIndex * 360) / snapshot.auxBusCount)} 78% 48%)`;
   }
 
+  function applyPilotAccentHue(hue) {
+    state.pilotAccentHue = hue;
+    const pilot = `hsl(${hue} 78% 48%)`;
+    const deep = state.darkMode
+      ? `color-mix(in srgb, ${pilot} 72%, white)`
+      : `hsl(${hue} 65% 31%)`;
+    const soft = state.darkMode
+      ? `color-mix(in srgb, ${pilot} 18%, #102033)`
+      : `hsl(${hue} 48% 92%)`;
+    [document.documentElement, document.body, deviceFrame].forEach(element => {
+      element.style.setProperty("--pilot", pilot);
+      element.style.setProperty("--pilot-deep", deep);
+      element.style.setProperty("--pilot-soft", soft);
+    });
+    document.documentElement.style.setProperty("--mint-deep", `hsl(${hue} 65% 31%)`);
+  }
+
   function applyPilotAccentFromAux(bus, identity = state.routingSnapshot || state.liveIdentity) {
     if (!identity || routingBusKind(bus, identity) !== "aux") return;
     const auxIndex = bus - identity.inputBusCount - identity.outputBusCount;
-    const hue = Math.round((auxIndex * 360) / identity.auxBusCount);
-    const root = document.documentElement.style;
-    root.setProperty("--pilot", `hsl(${hue} 78% 48%)`);
-    root.setProperty("--pilot-deep", `hsl(${hue} 65% 31%)`);
-    root.setProperty("--pilot-soft", `hsl(${hue} 48% 92%)`);
-    root.setProperty("--mint-deep", `hsl(${hue} 65% 31%)`);
+    applyPilotAccentHue(Math.round((auxIndex * 360) / identity.auxBusCount));
   }
 
   function editorBusDescriptor(value, identity = state.liveIdentity) {
@@ -829,6 +842,7 @@
     deviceFrame.classList.toggle("dark-mode", state.darkMode);
     document.body.classList.toggle("dark-mode", state.darkMode);
     document.documentElement.style.colorScheme = state.darkMode ? "dark" : "light";
+    applyPilotAccentHue(state.pilotAccentHue);
     if (save) {
       try {
         localStorage.setItem("ntPilotDarkMode", state.darkMode ? "true" : "false");
