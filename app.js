@@ -3198,6 +3198,10 @@
   document.addEventListener("pointerdown", event => {
     state.lastRoutingPointer = { x: event.clientX, y: event.clientY };
   }, true);
+  document.addEventListener("touchstart", event => {
+    const touch = event.changedTouches?.[0] || event.touches?.[0];
+    if (touch) state.lastRoutingPointer = { x: touch.clientX, y: touch.clientY };
+  }, { capture: true, passive: true });
   routingViewport.addEventListener("pointerdown", event => {
     if (routingNativeTouch) return;
     if (event.pointerType === "touch") {
