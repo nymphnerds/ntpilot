@@ -244,6 +244,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.ipad-mode .editor-physical-bus-row .editor-bus-chip { font-size: 12px; letter-spacing: 0; }
 .device-frame.ipad-mode .editor-physical-bus-row .editor-bus-group-label { font-size: 14px; }
 .device-frame.ipad-mode .editor-physical-bus-row .editor-bus-none { font-size: 15px; }
+.device-frame.ipad-mode .editor-aux-bus-row,
+.device-frame.ipad-mode .editor-physical-bus-strip { row-gap: 5px; }
 .editor-bus-dock-row { overflow: hidden; }
 .editor-physical-bus-row { overflow: visible; }
 .editor-aux-bus-row { min-height: 41px; padding: 7px var(--chrome-gutter); display: grid; grid-template-columns: repeat(var(--bus-grid-columns, 44), minmax(0, 1fr)); align-items: center; gap: 2px; border-bottom: 0; }

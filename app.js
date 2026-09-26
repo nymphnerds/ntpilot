@@ -657,6 +657,7 @@
     } else {
       statusSyncAnchor.parentNode.insertBefore(statusSyncControl, statusSyncAnchor.nextSibling);
     }
+    if (state.liveIdentity) renderEditorBusDock(state.liveIdentity);
     updateBottomBusDockHeight();
   }
 
@@ -718,28 +719,47 @@
     editorOutputBusRow.replaceChildren(...nativeOutputs, ...firstExpanderBank);
     editorAuxBusRow.replaceChildren(...auxes);
     const firstRowOutputs = [...nativeOutputs, ...firstExpanderBank];
-    const gridColumns = Math.max(1, identity.auxBusCount, identity.inputBusCount + firstRowOutputs.length + 11);
+    const gridColumns = state.ipadMode
+      ? 22
+      : Math.max(1, identity.auxBusCount, identity.inputBusCount + firstRowOutputs.length + 11);
     editorAuxBusRow.style.setProperty("--bus-grid-columns", String(gridColumns));
     const physicalStrip = $(".editor-physical-bus-strip");
     physicalStrip.style.setProperty("--bus-grid-columns", String(gridColumns));
     const inputLabel = $(".editor-bus-group-label.input", physicalStrip);
     const outputLabel = $(".editor-bus-group-label.output", physicalStrip);
     const none = $(".editor-bus-none", physicalStrip);
-    inputLabel.style.gridColumn = `${identity.inputBusCount + 1} / span 3`;
-    const outputStart = identity.inputBusCount + 4;
-    inputs.forEach((chip, index) => {
-      chip.style.gridColumn = String(index + 1);
-      chip.style.gridRow = "1";
-    });
-    firstRowOutputs.forEach((chip, index) => {
-      chip.style.gridColumn = String(outputStart + index);
-      chip.style.gridRow = "1";
-    });
-    inputLabel.style.gridRow = "1";
-    outputLabel.style.gridRow = "1";
-    none.style.gridRow = "1";
-    outputLabel.style.gridColumn = `${outputStart + firstRowOutputs.length} / span 3`;
-    none.style.gridColumn = `${outputStart + firstRowOutputs.length + 3} / span 5`;
+    if (state.ipadMode) {
+      inputs.forEach((chip, index) => {
+        chip.style.gridColumn = String(index + 1);
+        chip.style.gridRow = "1";
+      });
+      inputLabel.style.gridColumn = "13 / span 4";
+      inputLabel.style.gridRow = "1";
+      none.style.gridColumn = "17 / span 6";
+      none.style.gridRow = "1";
+      firstRowOutputs.forEach((chip, index) => {
+        chip.style.gridColumn = String(index + 1);
+        chip.style.gridRow = "2";
+      });
+      outputLabel.style.gridColumn = "17 / span 6";
+      outputLabel.style.gridRow = "2";
+    } else {
+      inputLabel.style.gridColumn = `${identity.inputBusCount + 1} / span 3`;
+      const outputStart = identity.inputBusCount + 4;
+      inputs.forEach((chip, index) => {
+        chip.style.gridColumn = String(index + 1);
+        chip.style.gridRow = "1";
+      });
+      firstRowOutputs.forEach((chip, index) => {
+        chip.style.gridColumn = String(outputStart + index);
+        chip.style.gridRow = "1";
+      });
+      inputLabel.style.gridRow = "1";
+      outputLabel.style.gridRow = "1";
+      none.style.gridRow = "1";
+      outputLabel.style.gridColumn = `${outputStart + firstRowOutputs.length} / span 3`;
+      none.style.gridColumn = `${outputStart + firstRowOutputs.length + 3} / span 5`;
+    }
 
     const rows = Array.from({ length: Math.max(0, totalBankCount - 1) }, (_, rowIndex) => {
       const bankIndex = rowIndex + 1;
