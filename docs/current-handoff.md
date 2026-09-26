@@ -17,7 +17,7 @@ Last updated: 26 September 2026
 - The NT SysEx add command only appends. NT Pilot turns **Add before**, **Add after** and **Add at end** into one transaction: append, native move if needed, then reread the complete preset and verify the requested GUID at its target slot.
 - This slice refuses a full 40-slot preset. Do not add destructive replacement by chaining remove/add: the old slot's complete specification state cannot yet be restored safely. Implement replacement only as a previewable, tested, reversible lifecycle plan.
 - An algorithm add is represented as one Undo/Redo history action; Undo removes only the exact verified newly-added slot, and Redo recreates it at the original target position.
-- The standalone app now has a **Presets** page between Performance and Assistant. It reads the NT SD card with the official `0x7A` directory operation, supports folder navigation plus native new-folder, rename and delete actions, and lets a selected `.json` preset either replace the working preset (`0x34 append=0`) or append after its final algorithm (`0x34 append=1`). Both operations stop live polling, clear history, then reread the NT before the UI resumes. The API has no native insert-in-the-middle preset operation; do not imply one in future UI.
+- The standalone app now has a **Presets** page between Performance and Assistant. It is a preset library rooted at `/presets`, never a general SD-card browser: it shows preset JSON files and folders only. It uses the official `0x7A` directory operation with a dedicated, operation-matched ten-second transaction while live parameter and CPU polling are paused. It supports folder navigation plus native new-folder, rename and delete actions, and lets a selected `.json` preset either replace the working preset (`0x34 append=0`) or append after its final algorithm (`0x34 append=1`). Loading has no native ACK, so the UI waits for the NT to become readable and then refreshes its snapshot before returning control. The API has no native insert-in-the-middle preset operation; do not imply one in future UI.
 
 ### Audit findings
 
@@ -209,9 +209,9 @@ Initial routing content renders before output-mode hydration completes. If a use
 ## Current asset versions
 
 - `styles.css?v=20260926-249`
-- `web-midi-transport.js?v=20260926-48`
+- `web-midi-transport.js?v=20260926-51`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-187`
+- `app.js?v=20260926-188`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

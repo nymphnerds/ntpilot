@@ -717,13 +717,28 @@
     async readSDDirectory(path = "/") {
       const operation = 1;
       const data = [operation, ...sdPathBytes(path)];
-      const payload = await this.request(0x7A, 0x7A, [...data, sdChecksum(data)], null, 5000);
+      const payload = await this.requestSDOperation(operation, data);
       return parseSDDirectoryEntries(payload);
+    }
+
+    // File-operation replies share the same command byte.  Attribute them by
+    // sub-operation (or accept a documented error reply, which has no
+    // sub-operation byte) and give the card the longer timeout it needs.
+    // This must not use the normal live-read timeout: a card directory can
+    // legitimately take several seconds to wake and enumerate.
+    requestSDOperation(operation, data) {
+      return this.request(
+        0x7A,
+        0x7A,
+        [...data, sdChecksum(data)],
+        bytes => bytes[7] !== 0 || bytes[8] === operation,
+        10000
+      );
     }
 
     async sdOperation(operation, data = []) {
       const payloadData = [operation, ...data];
-      const payload = await this.request(0x7A, 0x7A, [...payloadData, sdChecksum(payloadData)], null, 5000);
+      const payload = await this.requestSDOperation(operation, payloadData);
       if ((payload[0] ?? 1) !== 0) throw new Error(decodeText(payload.slice(1)) || "The NT rejected that SD-card operation.");
       if (payload[1] !== operation) throw new Error("The NT returned an unexpected SD-card response.");
     }

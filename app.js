@@ -158,6 +158,7 @@
   }
 
   const MAX_ALGORITHM_SLOTS = 40;
+  const PRESET_LIBRARY_ROOT = "/presets";
   const state = {
     ntTransport: null,
     transportOnline: false,
@@ -210,6 +211,7 @@
     redoHistory: [],
     historyBusy: false,
     cpuTimer: null,
+    cpuInFlight: null,
     midiEvents: [],
     midiRenderPending: false,
     midiCounts: { all: 0, channel: 0, sysex: 0 },
@@ -221,10 +223,13 @@
     pendingPluginLoad: null,
     slotMutationBusy: false,
     memoryReadTail: Promise.resolve(),
-    presetPath: "/",
+    presetPath: PRESET_LIBRARY_ROOT,
     presetEntries: [],
     selectedPresetEntry: null,
     presetBrowserBusy: false,
+    presetBrowserError: null,
+    presetTransportBusy: false,
+    presetTransportTail: Promise.resolve(),
     pendingPresetLoad: null,
     pendingPresetFileOperation: null,
   };
@@ -678,12 +683,14 @@
     const overallMeter = $("#overall-cpu-meter");
     const poll = async () => {
       if (!state.ntTransport || !state.transportOnline || document.hidden) return;
-      if (state.pollInFlight || state.routingReadPromise || state.performanceReadPromise) {
+      if (state.presetTransportBusy || state.pollInFlight || state.routingReadPromise || state.performanceReadPromise) {
         state.cpuTimer = setTimeout(poll, 2000);
         return;
       }
+      const request = state.ntTransport.readCpuUsage();
+      state.cpuInFlight = request;
       try {
-        const usage = await state.ntTransport.readCpuUsage();
+        const usage = await request;
         updateCpuMeter(audioMeter, usage.audioThread);
         updateCpuMeter(overallMeter, usage.overall);
         audioMeter.title = `Algorithm/audio CPU ${usage.audioThread}%. Expert Sleepers recommends keeping this below about 90%.`;
@@ -692,6 +699,7 @@
       } catch (_) {
         // Other live reads have priority on the NT's single-request transport.
       } finally {
+        if (state.cpuInFlight === request) state.cpuInFlight = null;
         if (state.ntTransport && state.transportOnline) state.cpuTimer = setTimeout(poll, 1000);
       }
     };
@@ -2577,15 +2585,50 @@
     if (view === "presets") loadPresetDirectory();
   }
 
+  function wait(milliseconds) {
+    return new Promise(resolve => setTimeout(resolve, milliseconds));
+  }
+
+  // The NT has one SysEx conversation at a time.  Card operations are slow
+  // enough that background parameter/CPU polls can otherwise steal their
+  // response, so preset work gets an explicit quiet transport window.
+  function runPresetTransportOperation(task) {
+    const operation = state.presetTransportTail.catch(() => {}).then(async () => {
+      const activeSlotIndex = state.activeLiveSlotIndex;
+      const pendingPoll = stopLivePolling();
+      stopCpuPolling();
+      state.presetTransportBusy = true;
+      try {
+        await pendingPoll?.catch(() => {});
+        await state.cpuInFlight?.catch(() => {});
+        await state.parameterReadQueue.catch(() => {});
+        await state.parameterWriteQueue.catch(() => {});
+        await state.routingReadPromise?.catch(() => {});
+        await state.performanceReadPromise?.catch(() => {});
+        if (!state.ntTransport || !state.transportOnline) throw new Error("The NT is no longer connected.");
+        return await task();
+      } finally {
+        state.presetTransportBusy = false;
+        if (state.ntTransport && state.transportOnline) {
+          startCpuPolling();
+          if (activeSlotIndex != null) startLivePolling(activeSlotIndex);
+        }
+      }
+    });
+    state.presetTransportTail = operation.catch(() => {});
+    return operation;
+  }
+
   function presetPathJoin(path, name) {
     return `${path.endsWith("/") ? path : `${path}/`}${name}`;
   }
 
   function presetParentPath(path) {
-    if (path === "/") return "/";
+    if (path === PRESET_LIBRARY_ROOT) return PRESET_LIBRARY_ROOT;
     const pieces = path.split("/").filter(Boolean);
     pieces.pop();
-    return pieces.length ? `/${pieces.join("/")}` : "/";
+    const parent = pieces.length ? `/${pieces.join("/")}` : PRESET_LIBRARY_ROOT;
+    return parent.startsWith(PRESET_LIBRARY_ROOT) ? parent : PRESET_LIBRARY_ROOT;
   }
 
   function formatPresetSize(bytes) {
@@ -2599,11 +2642,11 @@
     presetBreadcrumbs.replaceChildren();
     const root = document.createElement("button");
     root.type = "button";
-    root.textContent = "SD card";
-    root.dataset.presetPath = "/";
+    root.textContent = "Preset library";
+    root.dataset.presetPath = PRESET_LIBRARY_ROOT;
     presetBreadcrumbs.append(root);
-    let current = "";
-    state.presetPath.split("/").filter(Boolean).forEach(part => {
+    let current = PRESET_LIBRARY_ROOT;
+    state.presetPath.slice(PRESET_LIBRARY_ROOT.length).split("/").filter(Boolean).forEach(part => {
       const separator = document.createElement("span");
       separator.textContent = "/";
       const crumb = document.createElement("button");
@@ -2613,7 +2656,7 @@
       crumb.textContent = part;
       presetBreadcrumbs.append(separator, crumb);
     });
-    presetUp.disabled = state.presetPath === "/" || state.presetBrowserBusy;
+    presetUp.disabled = state.presetPath === PRESET_LIBRARY_ROOT || state.presetBrowserBusy;
   }
 
   function renderPresetInspector() {
@@ -2640,7 +2683,7 @@
     if (!selected) {
       kicker.textContent = "Select a preset";
       title.textContent = "Preset library";
-      copy.textContent = "Choose a .json preset from the NT's microSD card. Loading replaces the working preset; appending adds its algorithms after the current last slot.";
+      copy.textContent = "Choose a .json preset from the NT's preset library. Loading replaces the working preset; appending adds its algorithms after the current last slot.";
       append.disabled = true;
       load.disabled = true;
     } else {
@@ -2682,13 +2725,35 @@
       empty.className = "preset-library-empty";
       empty.textContent = "Connect to browse presets saved on your NT's microSD card.";
       presetFileList.append(empty);
+    } else if (state.presetBrowserError) {
+      const error = document.createElement("div");
+      error.className = "preset-library-empty";
+      const copy = document.createElement("p");
+      copy.textContent = "Couldn’t read the NT preset library.";
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "secondary-button";
+      retry.textContent = "Try again";
+      retry.addEventListener("click", () => loadPresetDirectory());
+      error.append(copy, retry);
+      presetFileList.append(error);
     } else if (!state.presetEntries.length) {
       const empty = document.createElement("p");
       empty.className = "preset-library-empty";
-      empty.textContent = "This folder is empty.";
+      empty.textContent = state.presetPath === PRESET_LIBRARY_ROOT
+        ? "No saved presets are in this library yet."
+        : "This preset folder is empty.";
       presetFileList.append(empty);
     } else {
-      const entries = [...state.presetEntries].sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name));
+      const entries = state.presetEntries
+        .filter(entry => entry.isDirectory || /\.json$/i.test(entry.name))
+        .sort((a, b) => Number(b.isDirectory) - Number(a.isDirectory) || a.name.localeCompare(b.name));
+      if (!entries.length) {
+        const empty = document.createElement("p");
+        empty.className = "preset-library-empty";
+        empty.textContent = "No saved presets are in this folder.";
+        presetFileList.append(empty);
+      }
       entries.forEach(entry => {
         const row = document.createElement("button");
         row.type = "button";
@@ -2730,14 +2795,16 @@
       renderPresetLibrary();
       return;
     }
-    state.presetPath = path;
+    state.presetPath = path.startsWith(PRESET_LIBRARY_ROOT) ? path : PRESET_LIBRARY_ROOT;
     state.presetBrowserBusy = true;
+    state.presetBrowserError = null;
     renderPresetLibrary();
     try {
-      state.presetEntries = await state.ntTransport.readSDDirectory(path);
-    } catch (error) {
+      state.presetEntries = await runPresetTransportOperation(() => state.ntTransport.readSDDirectory(state.presetPath));
+    } catch (_) {
       state.presetEntries = [];
-      showToast(`Could not read ${path} · ${error.message}`);
+      state.presetBrowserError = true;
+      showToast("Couldn’t read the NT preset library. Try again.", "guidance");
     } finally {
       state.presetBrowserBusy = false;
       renderPresetLibrary();
@@ -2803,15 +2870,15 @@
     try {
       if (mode === "new-folder") {
         const name = validatedPresetItemName(presetFileDialogInput.value);
-        await state.ntTransport.createSDDirectory(presetPathJoin(state.presetPath, name));
+        await runPresetTransportOperation(() => state.ntTransport.createSDDirectory(presetPathJoin(state.presetPath, name)));
         showToast(`Created ${name}`);
       } else if (mode === "rename") {
         const name = validatedPresetItemName(presetFileDialogInput.value);
         if (name === entry.name) throw new Error("That item already has this name.");
-        await state.ntTransport.renameSDPath(presetPathJoin(state.presetPath, entry.name), presetPathJoin(state.presetPath, name));
+        await runPresetTransportOperation(() => state.ntTransport.renameSDPath(presetPathJoin(state.presetPath, entry.name), presetPathJoin(state.presetPath, name)));
         showToast(`Renamed ${entry.name} to ${name}`);
       } else {
-        await state.ntTransport.deleteSDPath(presetPathJoin(state.presetPath, entry.name));
+        await runPresetTransportOperation(() => state.ntTransport.deleteSDPath(presetPathJoin(state.presetPath, entry.name)));
         showToast(`Deleted ${entry.name}`);
       }
       state.selectedPresetEntry = null;
@@ -2831,25 +2898,28 @@
     const pending = state.pendingPresetLoad;
     if (!pending || !state.ntTransport || !state.transportOnline || state.presetBrowserBusy) return;
     const priorSlotCount = state.liveIdentity?.slots?.length ?? 0;
-    const pendingPoll = stopLivePolling();
     state.presetBrowserBusy = true;
     confirmPresetLoad.disabled = true;
     try {
-      if (pendingPoll) await pendingPoll.catch(() => {});
-      await state.parameterReadQueue.catch(() => {});
-      state.ntTransport.loadPreset(pending.path, { append: pending.append });
-      await new Promise(resolve => setTimeout(resolve, 450));
-      let verified = null;
-      let lastError = null;
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        try {
-          verified = await state.ntTransport.readSnapshot();
-          if (!pending.append || verified.slots.length >= priorSlotCount) break;
-        } catch (error) { lastError = error; }
-        await new Promise(resolve => setTimeout(resolve, 350));
-      }
-      if (!verified) throw lastError || new Error("The NT did not return a readable preset after loading.");
-      if (pending.append && verified.slots.length < priorSlotCount) throw new Error("The NT did not confirm that the preset was appended.");
+      const verified = await runPresetTransportOperation(async () => {
+        state.ntTransport.loadPreset(pending.path, { append: pending.append });
+        // Loading has no ACK.  Let the NT rebuild the working preset, then
+        // reread until it answers normally rather than treating a fixed short
+        // delay as confirmation.
+        const deadline = Date.now() + 12000;
+        let lastError = null;
+        await wait(700);
+        while (Date.now() < deadline) {
+          try {
+            const snapshot = await state.ntTransport.readSnapshot();
+            if (!pending.append || snapshot.slots.length >= priorSlotCount) return snapshot;
+          } catch (error) {
+            lastError = error;
+          }
+          await wait(450);
+        }
+        throw lastError || new Error("The NT did not become ready after loading this preset.");
+      });
       state.liveIdentity = verified;
       state.liveRouting = null;
       state.performanceItems = [];
@@ -2864,7 +2934,7 @@
       updateHistoryControls();
       updateWorkingState();
       presetLoadDialog.close();
-      showToast(`${pending.append ? "Appended" : "Loaded"} ${pending.name} and verified it from the NT`);
+      showToast(`${pending.append ? "Appended" : "Loaded"} ${pending.name} and refreshed it from the NT`);
     } catch (error) {
       showToast(`Could not ${pending.append ? "append" : "load"} ${pending.name} · ${error.message}`);
     } finally {
@@ -2872,7 +2942,6 @@
       confirmPresetLoad.disabled = false;
       state.pendingPresetLoad = null;
       renderPresetLibrary();
-      if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
     }
   }
 
@@ -4509,7 +4578,7 @@
   refreshPresets.addEventListener("click", () => loadPresetDirectory());
   newPresetFolder.addEventListener("click", () => openPresetFileDialog("new-folder"));
   presetUp.addEventListener("click", () => {
-    if (state.presetPath !== "/") {
+    if (state.presetPath !== PRESET_LIBRARY_ROOT) {
       state.presetPath = presetParentPath(state.presetPath);
       state.selectedPresetEntry = null;
       loadPresetDirectory();
