@@ -2738,7 +2738,9 @@
       remove.addEventListener("click", () => openPresetFileDialog("delete", selected));
       manage.append(rename, remove);
     }
-    actions.append(append, load);
+    // The destructive/primary controls live in the fixed inspector, so the
+    // currently selected preset always has an obvious next action.
+    actions.append(load, append);
     presetInspector.append(kicker, title, copy, actions, manage);
   }
 
