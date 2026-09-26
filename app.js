@@ -3762,7 +3762,7 @@
   }
 
   async function loadPluginFromBrowser(algorithm) {
-    if (!state.ntTransport || state.slotMutationBusy) return;
+    if (!state.ntTransport || state.slotMutationBusy) return null;
     state.slotMutationBusy = true;
     renderAlgorithmBrowser();
     try {
@@ -3779,8 +3779,10 @@
       state.liveIdentity = { ...state.liveIdentity, algorithms: state.liveIdentity.algorithms.map(item => item.index === loaded.index ? loaded : item) };
       state.pendingAlgorithm = loaded;
       showToast(`${loaded.name} loaded and ready to add`);
+      return loaded;
     } catch (error) {
       showToast(`Could not load ${algorithm.name} · ${error.message}`);
+      return null;
     } finally {
       state.slotMutationBusy = false;
       renderAlgorithmBrowser();
@@ -4456,9 +4458,17 @@
     const algorithm = state.pendingPluginLoad;
     if (!algorithm) return;
     confirmAlgorithmLoad.disabled = true;
-    await loadPluginFromBrowser(algorithm);
+    const loaded = await loadPluginFromBrowser(algorithm);
     confirmAlgorithmLoad.disabled = false;
-    if (state.pendingAlgorithm?.guidKey === algorithm.guidKey && state.pendingAlgorithm.isLoaded) closeAlgorithmLoadDialog();
+    if (!loaded) return;
+    closeAlgorithmLoadDialog();
+    state.pendingAlgorithm = loaded;
+    renderAlgorithmBrowser();
+    requestAnimationFrame(() => {
+      const placement = $("[data-algorithm-placement=\"after\"]", algorithmBrowserPlacement)
+        || $("[data-algorithm-placement]", algorithmBrowserPlacement);
+      placement?.focus();
+    });
   });
   confirmAlgorithmSpec.addEventListener("click", async () => {
     const algorithm = state.pendingAlgorithm;
