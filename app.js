@@ -158,9 +158,8 @@
   }
 
   const MAX_ALGORITHM_SLOTS = 40;
-  // The official SD tool and NT Helper both preserve a trailing slash for
-  // directory listing requests (for example `/presets/`). The NT firmware
-  // distinguishes that directory form from a bare path on some cards.
+  // The official browser and NT Helper's preset scanner enter the card's
+  // conventional preset directory as `/presets/`.
   const PRESET_LIBRARY_ROOT = "/presets/";
   const state = {
     ntTransport: null,
@@ -2760,7 +2759,7 @@
       const error = document.createElement("div");
       error.className = "preset-library-empty";
       const copy = document.createElement("p");
-      copy.textContent = "Couldn’t read the NT preset library.";
+      copy.textContent = state.presetBrowserError;
       const retry = document.createElement("button");
       retry.type = "button";
       retry.className = "secondary-button";
@@ -2832,10 +2831,11 @@
     renderPresetLibrary();
     try {
       state.presetEntries = await runPresetTransportOperation(() => state.ntTransport.readSDDirectory(state.presetPath));
-    } catch (_) {
+    } catch (error) {
       state.presetEntries = [];
-      state.presetBrowserError = true;
-      showToast("Couldn’t read the NT preset library. Try again.", "guidance");
+      const detail = error?.message || "The NT did not return a preset-library response.";
+      state.presetBrowserError = `Couldn’t read the NT preset library: ${detail}`;
+      showToast(state.presetBrowserError, "guidance");
     } finally {
       state.presetBrowserBusy = false;
       renderPresetLibrary();

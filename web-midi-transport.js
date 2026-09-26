@@ -780,6 +780,8 @@
 
     async readSDDirectory(path = "/") {
       const operation = 1;
+      // The official browser and NT Helper's preset scanner both enter a
+      // directory with its trailing slash (for example `/presets/`).
       const data = [operation, ...sdPathBytes(sdDirectoryPath(path))];
       const payload = await this.requestSDOperation(operation, data);
       return parseSDDirectoryEntries(payload);
