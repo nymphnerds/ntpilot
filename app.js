@@ -303,11 +303,26 @@
     return text;
   }
 
-  function showToast(message) {
+  function friendlyToastMessage(message) {
+    const text = userFacingText(message);
+    if (/null is not an object|undefined is not an object|cannot read propert/i.test(text)) return "That view changed unexpectedly. Refresh and try again.";
+    if (/readback did not match/i.test(text)) return "The NT did not confirm that change. Refresh and try again.";
+    if (/timed? out|timeout/i.test(text)) return "The NT did not respond. Try again.";
+    if (/unknown bus|bus unavailable/i.test(text)) return "That bus is no longer available. Refresh Routing.";
+    return text;
+  }
+
+  function showToast(message, tone = "status") {
     clearTimeout(state.toastTimer);
-    $("span", toast).textContent = userFacingText(message);
+    const raw = userFacingText(message);
+    const inferredError = /failed|could not|did not|no longer|unexpected|invalid|timed? out|unavailable|\berror\b/i.test(raw);
+    const resolvedTone = tone === "error" || inferredError ? "error" : tone;
+    if (resolvedTone === "error") console.warn("NT Pilot:", raw);
+    $("span", toast).textContent = friendlyToastMessage(raw);
+    toast.classList.toggle("error", resolvedTone === "error");
+    toast.classList.toggle("guidance", resolvedTone === "guidance");
     toast.classList.add("visible");
-    state.toastTimer = setTimeout(() => toast.classList.remove("visible"), 2400);
+    state.toastTimer = setTimeout(() => toast.classList.remove("visible"), resolvedTone === "error" ? 3600 : 1800);
   }
 
   function formatMonitorTime(wallTime) {
@@ -624,7 +639,7 @@
       } catch (error) {
         if (token === state.pollToken && error.message !== state.lastPollError) {
           state.lastPollError = error.message;
-          showToast(`Live refresh delayed · ${error.message}`);
+          console.warn("NT Pilot live refresh delayed:", error);
         }
       } finally {
         if (state.pollInFlight === request) state.pollInFlight = null;
@@ -1899,7 +1914,7 @@
       state.routingSelection = selection;
       port.classList.add("routing-selected-source");
       refreshRoutingPaletteAvailability(selection);
-      showToast(selection.parameterIndex == null ? "Now choose an algorithm port" : "Now choose a compatible port or bus");
+      showToast(selection.parameterIndex == null ? "Choose an algorithm port" : "Choose a compatible port or bus", "guidance");
       return true;
     }
     const source = state.routingSelection;
@@ -1913,7 +1928,7 @@
         await loadLiveRouting({ preserveView: true });
         markWorkingEdit();
         recordRoutingHistory(historyBefore, `disconnect ${routingSelectionLabel(source)}`);
-        showToast("Connection removed and verified from the NT");
+        showToast("Connection removed");
       } catch (error) {
         showToast(error.message);
       }
@@ -2011,7 +2026,7 @@
       recordRoutingHistory(historyBefore, `change routing for ${routingSelectionLabel(connectingOutput || first)}`);
       const routeCopy = routesToRemove.length ? ` · removed ${routesToRemove.length} previous route${routesToRemove.length === 1 ? "" : "s"}` : "";
       const modeCopy = modeChoice ? ` · ${modeChoice.mode === "replace" ? "Replace" : "Add"} mode` : "";
-      showToast(`Routing changed${routeCopy}${modeCopy} and verified from the NT`);
+      showToast(`Connected${routeCopy}${modeCopy}`);
       scheduleRoutingReconciliation();
     } catch (error) {
       if (removedRoutes.length) {
@@ -2152,7 +2167,7 @@
       await writeRoutingSelection(selection, bus);
       markWorkingEdit();
       recordRoutingHistory(historyBefore, `route ${routingSelectionLabel(selection)} to ${bus < 0 ? "None" : routingBusLabel(bus, state.routingSnapshot)}`);
-      showToast(`${bus < 0 ? "Disconnected" : `Assigned ${routingBusLabel(bus, state.routingSnapshot)}`} and verified from the NT`);
+      showToast(bus < 0 ? "Disconnected" : `Connected to ${routingBusContextLabel(bus)}`);
       scheduleRoutingReconciliation();
     } catch (error) {
       if (removedRoutes.length) {
@@ -2241,7 +2256,7 @@
     state.routingBusSelection = bus;
     $$(".routing-aux-chip", routingAuxPalette).forEach(item => item.classList.toggle("selected", item === chip));
     [routingNodes, routingIpadList].forEach(surface => $$(".routing-port", surface).forEach(port => port.classList.toggle("bus-match", Number(port.dataset.bus) === bus)));
-    showToast(bus < 0 ? "Now choose a port to disconnect" : `Now choose a port for ${routingBusLabel(bus, state.routingSnapshot)}`);
+    showToast(bus < 0 ? "Choose a port to disconnect" : `Choose a port for ${routingBusContextLabel(bus)}`, "guidance");
     return true;
   }
 
@@ -2402,13 +2417,13 @@
       renderRoutingGraph(snapshot, { live: true, preserveView });
       if (!background) {
         routingLoading.classList.add("hidden");
-        showToast(`Read NT routing · discovering Add/Replace controls…`);
+        // The loading treatment already communicates this foreground read.
       }
       state.routingModeHydrationPromise = state.ntTransport.hydrateRoutingOutputModes(snapshot);
       await state.routingModeHydrationPromise;
       if (token !== state.routingReadToken) return;
       renderRoutingGraph(snapshot, { live: true, preserveView: true });
-      if (!background) showToast(`Read complete NT routing · ${snapshot.slots.length} slots`);
+      if (!background) showToast("Routing ready");
     })().catch(error => {
       if (token === state.routingReadToken) {
         showToast(background ? `Routing reconciliation failed · ${error.message}` : error.message);
@@ -3198,7 +3213,7 @@
           algorithmName: slot.dataset.algorithm
         });
         const mappedCount = editorState.mappings.filter(mapping => mapping.midi.enabled).length;
-        showToast(`Read ${editorState.parameters.filter(parameter => parameter.name).length} parameters · ${mappedCount} mappings`);
+        // Selecting a slot is routine; the populated editor is sufficient feedback.
         startLivePolling(slotIndex);
       } catch (error) {
         if (token !== state.parameterReadToken) return;
