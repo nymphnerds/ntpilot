@@ -46,6 +46,8 @@ Do not claim zero regression risk. Keep every stage testable and reversible, do 
 
 NT Pilot can now browse live factory algorithms and installed plug-ins, load an installed plug-in, then add it before, after or at the end of the selected slot. The browser always exposes those three placement choices after an algorithm is selected; it does not pre-judge slot capacity or imply a replacement. Each add mutation is read back from the NT before the UI accepts it.
 
+Every live Editor algorithm card also has an explicit remove control: a compact red × on desktop hover and a touch-sized control in iPad mode. Its confirmation names the exact algorithm and explains that later slots shift up. NT Pilot sends the official `0x33 <slot>` command, then rereads and requires the slot count to decrease before accepting the delete. Removal clears local Undo/Redo because a removed algorithm's specification state cannot yet be reconstructed safely.
+
 Required user workflow:
 
 - Add a factory algorithm or installed plug-in to an empty slot.
@@ -197,10 +199,10 @@ Initial routing content renders before output-mode hydration completes. If a use
 
 ## Current asset versions
 
-- `styles.css?v=20260926-239`
+- `styles.css?v=20260926-240`
 - `web-midi-transport.js?v=20260926-45`
 - `routing-logic.js?v=20260925-2`
-- `app.js?v=20260926-173`
+- `app.js?v=20260926-174`
 
 Increment the relevant query whenever browser-visible JavaScript or CSS changes.
 

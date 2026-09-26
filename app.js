@@ -98,6 +98,11 @@
   const algorithmBrowserList = $("#algorithm-browser-list");
   const algorithmBrowserPlacement = $("#algorithm-browser-placement");
   const algorithmBrowserPlacementActions = $("#algorithm-browser-placement-actions");
+  const algorithmRemoveDialog = $("#algorithm-remove-dialog");
+  const closeAlgorithmRemove = $("#close-algorithm-remove");
+  const algorithmRemoveName = $("#algorithm-remove-name");
+  const cancelAlgorithmRemove = $("#cancel-algorithm-remove");
+  const confirmAlgorithmRemove = $("#confirm-algorithm-remove");
 
   let rebootRecovery = null;
   try {
@@ -164,6 +169,7 @@
     midiCounts: { all: 0, channel: 0, sysex: 0 },
     algorithmBrowserFilter: "all",
     pendingAlgorithm: null,
+    pendingSlotRemoval: null,
     slotMutationBusy: false,
   };
 
@@ -3283,9 +3289,16 @@
       algorithm.textContent = slot.algorithmName;
       copy.append(name, algorithm);
       copy.appendChild(makeBypassToggle("slot-bypass-toggle", slot.index, slot.bypassed));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "slot-remove";
+      remove.dataset.removeSlot = String(slot.index);
+      remove.setAttribute("aria-label", `Remove ${slot.name}`);
+      remove.title = `Remove ${slot.name}`;
+      remove.textContent = "×";
       const colour = document.createElement("i");
       colour.className = `slot-colour ${colourName}`;
-      button.append(number, copy, colour);
+      button.append(number, copy, remove, colour);
       slotList.appendChild(button);
     });
     mappingSlotSelect.replaceChildren(...slots.map((slot, index) => {
@@ -3477,6 +3490,63 @@
     } finally {
       state.slotMutationBusy = false;
       addAlgorithmButton.disabled = !state.transportOnline;
+    }
+  }
+
+  function closeAlgorithmRemoveDialog() {
+    if (algorithmRemoveDialog.open) algorithmRemoveDialog.close();
+    state.pendingSlotRemoval = null;
+  }
+
+  function openAlgorithmRemoveDialog(slotIndex) {
+    const slot = state.liveIdentity?.slots?.[slotIndex];
+    if (!slot || state.slotMutationBusy) return;
+    state.pendingSlotRemoval = { index: slot.index, name: slot.name, guidKey: slot.guidKey };
+    algorithmRemoveName.textContent = `Remove ${slot.name}?`;
+    algorithmRemoveDialog.showModal();
+  }
+
+  async function removeLiveAlgorithm(slotToRemove) {
+    if (!state.ntTransport || !state.transportOnline || state.slotMutationBusy || !slotToRemove) return false;
+    const existing = state.liveIdentity?.slots?.[slotToRemove.index];
+    if (!existing || existing.guidKey !== slotToRemove.guidKey) {
+      showToast("The slot changed before it could be removed. Please try again.");
+      return false;
+    }
+    const previousCount = state.liveIdentity.slots.length;
+    const pendingPoll = stopLivePolling();
+    state.slotMutationBusy = true;
+    confirmAlgorithmRemove.disabled = true;
+    try {
+      if (pendingPoll) await pendingPoll.catch(() => {});
+      await state.parameterReadQueue.catch(() => {});
+      state.ntTransport.removeAlgorithm(existing.index);
+      await new Promise(resolve => setTimeout(resolve, 160));
+      const verified = await state.ntTransport.readSnapshot();
+      if (verified.slots.length !== previousCount - 1) throw new Error("The NT did not confirm removal of that slot.");
+      state.liveIdentity = verified;
+      state.performanceItems = [];
+      state.performanceEntries.clear();
+      state.undoHistory.length = 0;
+      state.redoHistory.length = 0;
+      updateHistoryControls();
+      showLiveIdentity(verified);
+      const nextSlot = verified.slots[Math.min(existing.index, verified.slots.length - 1)];
+      const nextCard = nextSlot ? $(`.slot[data-index="${nextSlot.index}"]`, slotList) : null;
+      if (nextCard) displaySlot(nextCard);
+      if (state.liveRouting || state.view === "routing") await loadLiveRouting({ preserveView: true });
+      markWorkingEdit();
+      showToast(`Removed ${existing.name} and verified from the NT`);
+      return true;
+    } catch (error) {
+      showToast(`Could not remove ${existing.name} · ${error.message}`);
+      try { await refreshIdentityAfterSlotMutation({ selectSlot: existing.index }); } catch (_) {}
+      return false;
+    } finally {
+      state.slotMutationBusy = false;
+      confirmAlgorithmRemove.disabled = false;
+      addAlgorithmButton.disabled = !state.transportOnline;
+      if (state.activeLiveSlotIndex != null) startLivePolling(state.activeLiveSlotIndex);
     }
   }
 
@@ -4170,6 +4240,13 @@
     const added = await addLiveAlgorithm(algorithm, action.dataset.algorithmPlacement);
     if (added) closeAlgorithmBrowserDialog();
   });
+  closeAlgorithmRemove.addEventListener("click", closeAlgorithmRemoveDialog);
+  cancelAlgorithmRemove.addEventListener("click", closeAlgorithmRemoveDialog);
+  algorithmRemoveDialog.addEventListener("close", () => { state.pendingSlotRemoval = null; });
+  confirmAlgorithmRemove.addEventListener("click", async () => {
+    const removed = await removeLiveAlgorithm(state.pendingSlotRemoval);
+    if (removed) closeAlgorithmRemoveDialog();
+  });
   undoEdit.addEventListener("click", () => stepEditHistory("undo"));
   redoEdit.addEventListener("click", () => stepEditHistory("redo"));
   document.addEventListener("keydown", event => {
@@ -4192,6 +4269,13 @@
   });
 
   slotList.addEventListener("click", event => {
+    const remove = event.target.closest("[data-remove-slot]");
+    if (remove) {
+      event.preventDefault();
+      event.stopPropagation();
+      openAlgorithmRemoveDialog(Number(remove.dataset.removeSlot));
+      return;
+    }
     if (activateBypassToggle(event.target)) return;
     const slot = event.target.closest(".slot:not(.muted)");
     if (slot) displaySlot(slot);
@@ -4204,7 +4288,7 @@
     $$(".slot", slotList).forEach(slot => slot.classList.remove("dragging", "drop-before", "drop-after"));
   };
   slotList.addEventListener("dragstart", event => {
-    if (event.target.closest("[data-bypass-slot]")) {
+    if (event.target.closest("[data-bypass-slot], [data-remove-slot]")) {
       event.preventDefault();
       return;
     }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>NT Pilot</title>
-  <link rel="stylesheet" href="styles.css?v=20260926-239">
+  <link rel="stylesheet" href="styles.css?v=20260926-240">
 </head>
 <body>
   <main class="stage">
@@ -503,8 +503,23 @@
     </footer>
   </dialog>
 
+  <dialog class="algorithm-remove-dialog" id="algorithm-remove-dialog" aria-labelledby="algorithm-remove-title">
+    <header>
+      <div><span>Algorithm management</span><h2 id="algorithm-remove-title">Remove algorithm?</h2></div>
+      <button id="close-algorithm-remove" type="button" aria-label="Close remove confirmation">×</button>
+    </header>
+    <div class="algorithm-remove-copy">
+      <strong id="algorithm-remove-name"></strong>
+      <p>This removes this algorithm and its settings from the working preset. Algorithms below it move up one slot.</p>
+    </div>
+    <footer>
+      <button id="cancel-algorithm-remove" type="button">Cancel</button>
+      <button id="confirm-algorithm-remove" type="button">Remove algorithm</button>
+    </footer>
+  </dialog>
+
   <script src="web-midi-transport.js?v=20260926-45"></script>
   <script src="routing-logic.js?v=20260925-2"></script>
-  <script src="app.js?v=20260926-173"></script>
+  <script src="app.js?v=20260926-174"></script>
 </body>
 </html>
