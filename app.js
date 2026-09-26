@@ -1210,10 +1210,8 @@
   }
 
   let routingConnectionAction = null;
-  let routingConnectionLoadToken = 0;
 
   function closeRoutingConnectionPanel() {
-    routingConnectionLoadToken += 1;
     routingConnectionAction = null;
     routingConnectionPanel.classList.add("hidden");
   }
@@ -1247,29 +1245,10 @@
     routingConnectionPanel.style.top = `${Math.min(window.innerHeight - panelRect.height - 10, Math.max(10, preferredTop))}px`;
   }
 
-  function showRoutingConnectionLoading(entry, value, anchorElement) {
-    const token = ++routingConnectionLoadToken;
-    routingConnectionPanel.classList.toggle("ipad-panel", state.ipadMode);
-    routingConnectionPanel.classList.add("loading-choices");
-    routingConnectionTitle.textContent = "Reading routing";
-    routingConnectionPath.textContent = `${entry.slotInfo.name} · ${entry.parameter.name} → ${editorBusDescriptor(value).label}`;
-    routingInputSourceField.classList.remove("hidden");
-    $("#routing-input-new-label").textContent = "Reading choices…";
-    $("#routing-input-current-label").textContent = "Reading current source…";
-    routingInputSourceHelp.textContent = "Reading this port's live routing state from the NT…";
-    $$('input[name="routing-input-source"]', routingConnectionPanel).forEach(control => { control.disabled = true; });
-    routingOutputModeField.classList.add("hidden");
-    routingExistingRoutesField.classList.add("hidden");
-    const apply = $("#routing-connection-apply");
-    apply.disabled = true;
-    apply.textContent = "Reading…";
-    routingConnectionPanel.classList.remove("hidden");
-    positionRoutingConnectionPanel(anchorElement);
-    return token;
-  }
-
   function routingSelectionLabel(selection) {
-    if (selection.parameterIndex == null) return routingBusLabel(selection.bus, state.routingSnapshot);
+    const routingIdentity = state.routingSnapshot || state.liveIdentity;
+    if (selection.parameterIndex == null) return routingBusLabel(selection.bus, routingIdentity);
+    if (selection.label) return selection.label;
     const slot = state.routingSnapshot?.slots.find(item => item.index === selection.slotIndex);
     const parameter = slot?.parameters?.find(item => item.index === selection.parameterIndex);
     return `${slot?.name || `Slot ${selection.slotIndex + 1}`} · ${parameter?.name || `Parameter ${selection.parameterIndex + 1}`}`;
@@ -1277,7 +1256,6 @@
 
   async function openRoutingConnectionPanel({ source, destination, output, destinationBus, onApply, title = "New connection", submitLabel = "Connect", allowRouteChanges = true }) {
     routingConnectionPanel.classList.toggle("ipad-panel", state.ipadMode);
-    routingConnectionPanel.classList.remove("loading-choices");
     const details = output?.parameterIndex != null ? routingModeDetails(output) : null;
     const existing = allowRouteChanges && output?.parameterIndex != null && destinationBus >= 0
       ? existingWritableOutputRoutes(destinationBus, output)
@@ -1293,8 +1271,9 @@
     const isInputAssignment = !output && source?.side === "input";
     routingInputSourceField.classList.toggle("hidden", !isInputAssignment);
     if (isInputAssignment) {
-      const nextLabel = routingBusLabel(destinationBus, state.routingSnapshot);
-      const currentLabel = source.bus >= 0 ? routingBusLabel(source.bus, state.routingSnapshot) : "None";
+      const routingIdentity = state.routingSnapshot || state.liveIdentity;
+      const nextLabel = routingBusLabel(destinationBus, routingIdentity);
+      const currentLabel = source.bus >= 0 ? routingBusLabel(source.bus, routingIdentity) : "None";
       $("#routing-input-new-label").textContent = `Use ${nextLabel}`;
       $("#routing-input-current-label").textContent = `Keep ${currentLabel}`;
       const inputControls = $$('input[name="routing-input-source"]', routingConnectionPanel);
@@ -1965,36 +1944,28 @@
     return true;
   }
 
-  async function assignEditorBusWithPopup(entry, value, anchorElement) {
-    let loadingToken = null;
-    if (!state.routingSnapshot) {
-      loadingToken = showRoutingConnectionLoading(entry, value, anchorElement);
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      await loadLiveRouting({ preserveView: true });
-      if (loadingToken !== routingConnectionLoadToken) return false;
-    }
-    if (!state.routingSnapshot) {
-      closeRoutingConnectionPanel();
-      showToast("Routing choices are unavailable until the NT routing state is read");
-      return false;
-    }
-    const port = [...$$(".routing-port", routingIpadList), ...$$(".routing-port", routingNodes)]
-      .find(candidate => Number(candidate.dataset.slotIndex) === entry.slotInfo.index
-        && Number(candidate.dataset.parameterIndex) === entry.parameter.index);
-    if (!port) {
-      closeRoutingConnectionPanel();
-      showToast("This port could not be matched to the live routing state");
-      return false;
-    }
-    const selection = {
-      element: port,
-      side: port.dataset.routingSide,
-      bus: Number(port.dataset.bus),
+  function editorRoutingSelection(entry, anchorElement) {
+    const side = Number(entry.parameter.ioFlags) & 0x02 ? "output" : "input";
+    const port = state.routingSnapshot
+      ? [...$$(".routing-port", routingIpadList), ...$$(".routing-port", routingNodes)]
+        .find(candidate => candidate.dataset.routingSide === side
+          && Number(candidate.dataset.slotIndex) === entry.slotInfo.index
+          && Number(candidate.dataset.parameterIndex) === entry.parameter.index)
+      : null;
+    return {
+      element: port || anchorElement,
+      side,
+      bus: port ? Number(port.dataset.bus) : Number(entry.confirmedValue) - 1,
       slotIndex: entry.slotInfo.index,
       parameterIndex: entry.parameter.index,
       minimum: Number(entry.parameter.min),
-      maximum: Number(entry.parameter.max)
+      maximum: Number(entry.parameter.max),
+      label: `${entry.slotInfo.name} · ${entry.parameter.name}`
     };
+  }
+
+  async function assignEditorBusWithPopup(entry, value, anchorElement) {
+    const selection = editorRoutingSelection(entry, anchorElement);
     await assignRoutingPort(selection, value - 1, null, [], false, anchorElement);
     disarmEditorBusAssignment();
     previewLiveParameterEntry(entry, entry.confirmedValue);
