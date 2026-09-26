@@ -3515,6 +3515,9 @@
     state.pendingPluginLoad = algorithm;
     state.algorithmLoadStep = "load";
     state.pendingAlgorithmPlacement = selectedLiveSlot() ? null : "end";
+    algorithmLoadSpecList.replaceChildren();
+    algorithmLoadSpecNotice.textContent = "";
+    algorithmLoadSpecNotice.className = "algorithm-spec-notice";
     renderAlgorithmLoadPage();
     algorithmLoadDialog.showModal();
   }
