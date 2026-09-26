@@ -241,6 +241,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .device-frame.ipad-mode .parameter-name strong { font-size: 14px; }
 .device-frame.ipad-mode .parameter-name span { margin-top: 4px; font-size: 11px; }
 .device-frame.ipad-mode .live-parameter-row .map-shortcut { min-width: 30px; height: 30px; padding-inline: 7px; font-size: 10px; }
+.device-frame.ipad-mode .editor-columns { grid-template-columns: minmax(240px, 30%) minmax(0, 1fr); }
+.device-frame.ipad-mode .slot { min-height: 82px; padding: 12px; grid-template-columns: 42px minmax(0, 1fr) 7px; gap: 11px; border-radius: 14px; }
+.device-frame.ipad-mode .slot-number { width: 40px; height: 40px; border-radius: 10px; font-size: 15px; }
+.device-frame.ipad-mode .slot strong { font-size: 16px; }
+.device-frame.ipad-mode .slot small { margin-top: 4px; font-size: 13px; }
+.device-frame.ipad-mode .slot-colour { width: 7px; height: 47px; }
+.device-frame.ipad-mode .slot-bypass-toggle { margin-top: 5px; padding: 3px 7px; font-size: 10px; }
 .device-frame.ipad-mode .editor-physical-bus-row .editor-bus-chip { font-size: 15px; letter-spacing: 0; }
 .device-frame.ipad-mode .editor-physical-bus-row .editor-bus-group-label { display: none; }
 .device-frame.ipad-mode .editor-physical-bus-row .editor-bus-none { font-size: 16px; }
