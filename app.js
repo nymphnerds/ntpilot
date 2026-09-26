@@ -684,9 +684,18 @@
     document.documentElement.style.setProperty("--mint-deep", `hsl(${hue} 65% 31%)`);
   }
 
-  function applyPilotAccentFromAux(bus, identity = state.routingSnapshot || state.liveIdentity) {
-    if (!identity || !Number.isInteger(Number(bus)) || routingBusKind(Number(bus), identity) !== "aux") return;
+  function applyPilotAccentFromBus(bus, identity = state.routingSnapshot || state.liveIdentity) {
+    if (!identity || !Number.isInteger(Number(bus))) return;
     bus = Number(bus);
+    const kind = routingBusKind(bus, identity);
+    if (kind === "input") {
+      applyPilotAccentHue(212);
+      return;
+    }
+    if (kind === "output") {
+      applyPilotAccentHue(0);
+      return;
+    }
     const auxIndex = bus - identity.inputBusCount - identity.outputBusCount;
     applyPilotAccentHue(Math.round((auxIndex * 360) / identity.auxBusCount));
   }
@@ -1450,7 +1459,7 @@
   }
 
   async function openRoutingConnectionPanel({ source, destination, output, destinationBus, onApply, onRetarget = null, title = "New connection", submitLabel = "Connect", allowRouteChanges = true }) {
-    applyPilotAccentFromAux(destinationBus, state.routingSnapshot || state.liveIdentity);
+    applyPilotAccentFromBus(destinationBus, state.routingSnapshot || state.liveIdentity);
     routingConnectionPanel.classList.toggle("ipad-panel", state.ipadMode);
     const isInputAssignment = !output && source?.side === "input";
     const details = output?.parameterIndex != null ? routingModeDetails(output) : null;
@@ -1883,7 +1892,7 @@
       const bus = state.routingBusSelection;
       state.routingBusSelection = null;
       const result = await assignRoutingPort(selection, bus);
-      applyPilotAccentFromAux(bus, state.routingSnapshot);
+      applyPilotAccentFromBus(bus, state.routingSnapshot);
       return result;
     }
     if (!state.routingSelection) {
@@ -2204,7 +2213,7 @@
     closeRoutingConnectionPanel();
     $$(".routing-aux-chip", routingAuxPalette).forEach(item =>
       item.classList.toggle("selected", Number(item.dataset.bus) === bus));
-    applyPilotAccentFromAux(bus, state.routingSnapshot || state.liveIdentity);
+    applyPilotAccentFromBus(bus, state.routingSnapshot || state.liveIdentity);
     await retarget(bus, anchorElement);
     return true;
   }
@@ -2213,7 +2222,7 @@
     const chip = target.closest(".routing-aux-chip");
     if (!chip || !state.routingSnapshot) return false;
     const bus = Number(chip.dataset.bus);
-    applyPilotAccentFromAux(bus, state.routingSnapshot);
+    applyPilotAccentFromBus(bus, state.routingSnapshot);
     if (await retargetOpenRoutingConnection(bus, chip)) return true;
     if (state.routingSelection?.parameterIndex != null) {
       const selection = state.routingSelection;
@@ -2221,7 +2230,7 @@
       state.routingSelection = null;
       refreshRoutingPaletteAvailability(null);
       const result = await assignRoutingPort(selection, bus);
-      applyPilotAccentFromAux(bus, state.routingSnapshot);
+      applyPilotAccentFromBus(bus, state.routingSnapshot);
       return result;
     }
     if (state.routingSelection) {
@@ -3918,7 +3927,7 @@
         if (state.liveRouting) await loadLiveRouting({ preserveView: true });
       },
       onSuccess: () => {
-        if (descriptor.kind === "aux") applyPilotAccentFromAux(descriptor.bus, state.liveIdentity);
+        applyPilotAccentFromBus(descriptor.bus, state.liveIdentity);
         disarmEditorBusAssignment();
       }
     });
